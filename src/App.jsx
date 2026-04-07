@@ -1876,65 +1876,68 @@ export default function StudyPlannerApp() {
               </nav>
             </div>
 
-            <div className={cn("mt-auto pt-6", sidebarCollapsed ? "" : "flex justify-center")}>
+            <div className="mt-auto pt-6">
               <Separator className="mb-4" />
-              <div className={cn("w-full rounded-3xl border p-3 shadow-sm", sidebarCollapsed ? "" : "max-w-[220px]", getSoftSurfaceClass(darkMode))}>
-                <div className={cn("flex gap-3", sidebarCollapsed ? "flex-col items-center" : "flex-col items-center text-center")}>
-                  {!sidebarCollapsed ? (
-                    <div className="min-w-0 pr-2">
-                      <p className="text-sm font-medium text-white">Darstellung</p>
-                      <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
-                        Hell, dunkel oder systemabhängig
-                      </p>
-                    </div>
-                  ) : null}
+              <div className={cn("mx-auto w-full", sidebarCollapsed ? "" : "max-w-[220px]")}>
+                <div className={cn("rounded-3xl border p-3 shadow-sm", getSoftSurfaceClass(darkMode))}>
+                  <div className={cn("flex gap-3", sidebarCollapsed ? "flex-col items-center" : "flex-col items-center text-center")}>
+                    {!sidebarCollapsed ? (
+                      <div className="min-w-0">
+                        <p className={cn("text-sm font-medium", darkMode ? "text-white" : "text-slate-900")}>Darstellung</p>
+                        <p className={cn("text-xs", darkMode ? "text-slate-400" : "text-slate-500")}>
+                          Hell, dunkel oder systemabhängig
+                        </p>
+                      </div>
+                    ) : null}
 
-                  <div className="flex w-full flex-col gap-2">
-                    <button
-                      type="button"
-                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "light"), "w-full")}
-                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "light" } }))}
-                      title="Hell"
-                    >
-                      <Sun className="h-4 w-4 shrink-0" />
-                      {!sidebarCollapsed ? <span>Hell</span> : null}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "dark"), "w-full")}
-                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "dark" } }))}
-                      title="Dunkel"
-                    >
-                      <Moon className="h-4 w-4 shrink-0" />
-                      {!sidebarCollapsed ? <span>Dunkel</span> : null}
-                    </button>
-                    <button
-                      type="button"
-                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "system"), "w-full")}
-                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "system" } }))}
-                      title="System"
-                    >
-                      <Monitor className="h-4 w-4 shrink-0" />
-                      {!sidebarCollapsed ? <span>System</span> : null}
-                    </button>
+                    <div className="flex w-full flex-col gap-2">
+                      <button
+                        type="button"
+                        className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "light"), "w-full")}
+                        onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "light" } }))}
+                        title="Hell"
+                      >
+                        <Sun className="h-4 w-4 shrink-0" />
+                        {!sidebarCollapsed ? <span>Hell</span> : null}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "dark"), "w-full")}
+                        onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "dark" } }))}
+                        title="Dunkel"
+                      >
+                        <Moon className="h-4 w-4 shrink-0" />
+                        {!sidebarCollapsed ? <span>Dunkel</span> : null}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "system"), "w-full")}
+                        onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "system" } }))}
+                        title="System"
+                      >
+                        <Monitor className="h-4 w-4 shrink-0" />
+                        {!sidebarCollapsed ? <span>System</span> : null}
+                      </button>
+                    </div>
                   </div>
+                </div>
+
+                <div className={cn("mt-4 pt-4 border-t", darkMode ? "border-slate-700" : "border-slate-200")}>
+                  <div className={cn("flex items-center gap-2 rounded-xl p-3 text-xs font-medium", darkMode ? "bg-slate-800/50 text-slate-400" : "bg-slate-100/50 text-slate-600")}>
+                    {session?.user?.email || "User"}
+                  </div>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 w-full rounded-xl border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {!sidebarCollapsed ? "Logout" : ""}
+                  </Button>
                 </div>
               </div>
             </div>
-             <div className="mt-4 pt-4 border-t border-slate-700">
-                <div className={cn("flex items-center gap-2 rounded-xl p-3 text-xs font-medium", darkMode ? "bg-slate-800/50 text-slate-400" : "bg-slate-100/50 text-slate-600")}>
-                  {session?.user?.email || "User"}
-                </div>
-                <Button
-                  onClick={handleLogout}
-                  variant="outline"
-                  size="sm"
-                  className="w-full mt-2 rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
-                >
-                  <LogOut className="h-4 w-4 mr-2" />
-                  {!sidebarCollapsed ? "Logout" : ""}
-                </Button>
-              </div>
           </div>
         </aside>
 
