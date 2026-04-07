@@ -33,6 +33,23 @@ function ensureSupabaseConfig() {
   }
 }
 
+function normalizeAuthSession(data) {
+  const session = data?.session || (data?.access_token ? {
+    access_token: data.access_token,
+    token_type: data.token_type,
+    expires_in: data.expires_in,
+    refresh_token: data.refresh_token,
+    user: data.user,
+    expires_at: data.expires_at || (data.expires_in ? Math.floor(Date.now() / 1000) + Number(data.expires_in) : undefined),
+  } : null);
+
+  if (session?.access_token && session?.user) {
+    localStorage.setItem("sb-auth-session", JSON.stringify(session));
+  }
+
+  return session;
+}
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn(
     "⚠️ Supabase credentials missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env"
@@ -121,7 +138,8 @@ export async function signUpWithEmail(email, password) {
       );
     }
 
-    return { user: data.user, session: data.session };
+    const session = normalizeAuthSession(data);
+    return { user: session?.user || data.user, session };
   } catch (error) {
     console.error("Sign up error:", error);
     throw error;
@@ -156,12 +174,9 @@ export async function signInWithEmail(email, password) {
       );
     }
 
-    // Save session to localStorage
-    if (data.session) {
-      localStorage.setItem("sb-auth-session", JSON.stringify(data.session));
-    }
+    const session = normalizeAuthSession(data);
 
-    return { user: data.user, session: data.session };
+    return { user: session?.user || data.user, session };
   } catch (error) {
     console.error("Sign in error:", error);
     throw error;
