@@ -184,25 +184,28 @@ function buildSessionSeedFromEntry(entry) {
 }
 
 function formatMinutes(minutes) {
-  if (!minutes) return "0min";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const totalMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+  if (!totalMinutes) return "0min";
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   if (h && m) return `${h}h ${m}min`;
   if (h) return `${h}h`;
   return `${m}min`;
 }
 
 function formatMinutesCompact(minutes) {
-  if (!minutes) return "–";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const totalMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+  if (!totalMinutes) return "–";
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   return `${h},${String(m).padStart(2, "0")}h`;
 }
 
 function formatMinutesAsHourComma(minutes, withSuffix = true) {
-  if (!minutes) return withSuffix ? "0,00h" : "0,00";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
+  const totalMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+  if (!totalMinutes) return withSuffix ? "0,00h" : "0,00";
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
   const value = `${h},${String(m).padStart(2, "0")}`;
   return withSuffix ? `${value}h` : value;
 }
@@ -287,7 +290,7 @@ function getSurfaceClass(darkMode) {
 
 function getSoftSurfaceClass(darkMode) {
   return darkMode
-    ? "border-slate-800 bg-slate-900/80 text-slate-50"
+    ? "border-slate-800 bg-[#141b2b] text-slate-50"
     : "border-slate-200 bg-white/90 text-slate-900";
 }
 
@@ -489,11 +492,27 @@ function ChartValueLabel({ x, y, value, color, strokeColor = "#1e212b" }) {
 
 function SubjectHoursChart({ data, darkMode }) {
   const [activeTab, setActiveTab] = useState("diagramm");
-  const chartData = useMemo(() => data.map((subject) => ({
-    ...subject,
-    shortName: subject.name.length > 15 ? `${subject.name.substring(0, 15)}...` : subject.name,
-    learnedHours: subject.hours,
-  })), [data]);
+
+  const shortNameMap = {
+    "Mathematik 2": "Mathe 2",
+    Betriebssysteme: "Betriebssyst.",
+    "Diskrete Mathematik": "Diskrete Mathe",
+    Labormathematik: "Labor Mathe",
+    Laborstatistik: "Labor Statistik",
+    "Objektorientierte Systeme": "OOS",
+    "Offene Sicherheit": "Offene Sich.",
+    Statistik: "Statistik",
+  };
+
+  const chartData = useMemo(
+    () =>
+      data.map((subject) => ({
+        ...subject,
+        shortName: shortNameMap[subject.name] || subject.name,
+        learnedHours: subject.hours,
+      })),
+    [data]
+  );
 
   const chartBg = darkMode ? "border-slate-800 bg-[#1e212b] text-slate-200" : "border-slate-200 bg-slate-50 text-slate-900";
   const tabBg = darkMode ? "bg-[#2a2d39]" : "bg-slate-200";
