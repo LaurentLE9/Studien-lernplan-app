@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Download,
   GraduationCap,
   HelpCircle,
   LayoutDashboard,
@@ -21,8 +22,10 @@ import {
   Play,
   Plus,
   Search,
+  Settings,
   Sun,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import {
@@ -1442,6 +1445,9 @@ export default function StudyPlannerApp() {
                 </button>
               );
             })}
+            <button onClick={() => setSettingsDialogOpen(true)} className={cn("flex items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-muted")}>
+              <Settings className="h-4 w-4" />Einstellungen & Backup
+            </button>
           </nav>
           <Separator className="my-5" />
           <div className={cn("grid gap-3 rounded-3xl border p-4 shadow-sm", getSoftSurfaceClass(data.settings.darkMode))}>
@@ -1488,33 +1494,55 @@ export default function StudyPlannerApp() {
                 </Dialog>
 
                 <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Einstellungen</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xl rounded-3xl">
-                    <DialogHeader><DialogTitle>Datenverwaltung</DialogTitle></DialogHeader>
-                    <div className="grid gap-4">
+                  <DialogContent className="max-w-lg rounded-3xl">
+                    <DialogHeader><DialogTitle>Datenverwaltung & Backup</DialogTitle></DialogHeader>
+                    <div className="grid gap-5">
                       <div className="space-y-2">
-                        <Label className="text-base font-semibold">Backup & Wiederherstellung</Label>
-                        <p className="text-sm text-gray-500">Exportiere oder importiere deine kompletten Daten.</p>
+                        <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
                       </div>
+                      
                       <div className="grid grid-cols-2 gap-3">
-                        <Button onClick={handleExportData} variant="outline" className="rounded-xl">
-                          📥 Exportieren
+                        <Button onClick={handleExportData} variant="default" className="rounded-xl h-12 flex items-center gap-2">
+                          <Download className="h-4 w-4" />Exportieren
                         </Button>
-                        <label>
-                          <Button asChild variant="outline" className="rounded-xl w-full cursor-pointer">
-                            <span>📤 Importieren</span>
+                        <label className="contents">
+                          <Button asChild variant="outline" className="rounded-xl h-12 flex items-center gap-2 cursor-pointer">
+                            <span><Upload className="h-4 w-4" />Importieren</span>
                           </Button>
                           <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
                         </label>
                       </div>
-                      {importError && <p className="text-sm text-red-500">{importError}</p>}
+                      
+                      {importError && <div className="bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm">{importError}</div>}
+                      
                       <Separator />
-                      <div className="text-xs text-gray-500">
-                        <p>Fächer: {data.subjects.length}</p>
-                        <p>Aufgaben: {data.tasks.length}</p>
-                        <p>Lernzeiten: {data.studySessions.length}</p>
+                      
+                      <div className="bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl space-y-2">
+                        <p className="text-sm font-semibold">📊 Deine Daten</p>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-400">Fächer</p>
+                            <p className="text-lg font-bold">{data.subjects.length}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-400">Aufgaben</p>
+                            <p className="text-lg font-bold">{data.tasks.length}</p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 dark:text-gray-400">Lernzeiten</p>
+                            <p className="text-lg font-bold">{data.studySessions.length}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg text-sm">
+                        <p className="font-semibold text-blue-900 dark:text-blue-300">💡 Neue Features:</p>
+                        <ul className="text-xs text-blue-800 dark:text-blue-400 space-y-1 list-disc list-inside">
+                          <li>Wiederholende Aufgaben (wöchentlich/monatlich)</li>
+                          <li>Automatische Backup-Funktion</li>
+                          <li>Volle Datenverwaltung</li>
+                        </ul>
                       </div>
                     </div>
                   </DialogContent>
