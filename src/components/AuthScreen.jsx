@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { signUpWithEmail, signInWithEmail, requestPasswordReset } from "@/lib/cloudStore";
+import { signUpWithEmail, signInWithEmail, requestPasswordReset, resendSignupConfirmation } from "@/lib/cloudStore";
 import { BookOpen } from "lucide-react";
 
 export default function AuthScreen({ onAuthSuccess }) {
@@ -12,12 +12,19 @@ export default function AuthScreen({ onAuthSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
+  const [showResendConfirm, setShowResendConfirm] = useState(false);
 
   const getFriendlyAuthError = (message) => {
     const text = String(message || "");
     const lower = text.toLowerCase();
     if (lower.includes("email rate limit exceeded") || lower.includes("rate limit")) {
       return "Zu viele Bestätigungs-E-Mails in kurzer Zeit. Warte ein paar Minuten und versuche es erneut. Wenn der Account schon erstellt wurde, wechsle auf Sign In.";
+    }
+    if (lower.includes("already registered") || lower.includes("already been registered") || lower.includes("user already")) {
+      return "Diese E-Mail ist bereits registriert. Bitte melde dich mit Sign In an oder sende die Bestätigungs-E-Mail erneut.";
+    }
+    if (lower.includes("email not confirmed") || lower.includes("not confirmed")) {
+      return "E-Mail noch nicht bestätigt. Bitte bestätige die E-Mail oder sende sie erneut.";
     }
     if (lower.includes("is invalid") || lower.includes("email address")) {
       return "Bitte verwende eine echte, gültige E-Mail-Adresse (z. B. deine normale Mailadresse statt test@example.com).";
@@ -29,6 +36,7 @@ export default function AuthScreen({ onAuthSuccess }) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    setShowResendConfirm(false);
     setLoading(true);
 
     try {
@@ -53,7 +61,18 @@ export default function AuthScreen({ onAuthSuccess }) {
         setInfo("Account erstellt. Bitte prüfe dein E-Mail-Postfach zur Bestätigung und melde dich danach an.");
       }
     } catch (err) {
-      setError(getFriendlyAuthError(err.message));
+      const friendly = getFriendlyAuthError(err.message);
+      const lower = String(err?.message || "").toLowerCase();
+      setError(friendly);
+      if (
+        lower.includes("already registered") ||
+        lower.includes("already been registered") ||
+        lower.includes("email not confirmed") ||
+        lower.includes("not confirmed")
+      ) {
+        setShowResendConfirm(true);
+        setIsSignUp(false);
+      }
       console.error("Auth error:", err);
     } finally {
       setLoading(false);
@@ -73,6 +92,27 @@ export default function AuthScreen({ onAuthSuccess }) {
     try {
       await requestPasswordReset(email);
       setInfo("Passwort-Reset gesendet. Bitte prüfe dein E-Mail-Postfach.");
+    } catch (err) {
+      setError(getFriendlyAuthError(err.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setError(null);
+    setInfo(null);
+
+    if (!email) {
+      setError("Bitte gib zuerst deine E-Mail-Adresse ein.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await resendSignupConfirmation(email);
+      setInfo("Bestätigungs-E-Mail erneut gesendet. Bitte prüfe Posteingang und Spam-Ordner.");
+      setShowResendConfirm(false);
     } catch (err) {
       setError(getFriendlyAuthError(err.message));
     } finally {
@@ -135,6 +175,17 @@ export default function AuthScreen({ onAuthSuccess }) {
                 {info}
               </div>
             )}
+
+            {showResendConfirm ? (
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                className="text-xs text-slate-200 underline underline-offset-4 hover:text-white"
+                disabled={loading}
+              >
+                Bestätigungs-E-Mail erneut senden
+              </button>
+            ) : null}
 
             <Button
               type="submit"

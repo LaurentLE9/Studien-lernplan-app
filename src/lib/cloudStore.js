@@ -92,7 +92,13 @@ export async function signUpWithEmail(email, password) {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+        options: {
+          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        },
+      }),
     });
 
     const data = await response.json();
@@ -167,7 +173,10 @@ export async function requestPasswordReset(email) {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email,
+        redirect_to: typeof window !== "undefined" ? window.location.origin : undefined,
+      }),
     });
 
     let data = null;
@@ -190,6 +199,52 @@ export async function requestPasswordReset(email) {
     return true;
   } catch (error) {
     console.error("Password reset error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Resend signup confirmation email
+ */
+export async function resendSignupConfirmation(email) {
+  ensureSupabaseConfig();
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        type: "signup",
+        email,
+        options: {
+          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        },
+      }),
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+        data?.error_description ||
+        data?.msg ||
+        data?.error ||
+        `Resend confirmation failed (${response.status})`
+      );
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Resend confirmation error:", error);
     throw error;
   }
 }
