@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { signUpWithEmail, signInWithEmail } from "@/lib/cloudStore";
+import { signUpWithEmail, signInWithEmail, requestPasswordReset } from "@/lib/cloudStore";
 import { BookOpen } from "lucide-react";
 
 export default function AuthScreen({ onAuthSuccess }) {
@@ -55,6 +55,26 @@ export default function AuthScreen({ onAuthSuccess }) {
     } catch (err) {
       setError(getFriendlyAuthError(err.message));
       console.error("Auth error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError(null);
+    setInfo(null);
+
+    if (!email) {
+      setError("Bitte gib zuerst deine E-Mail-Adresse ein und klicke dann auf Passwort vergessen.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await requestPasswordReset(email);
+      setInfo("Passwort-Reset gesendet. Bitte prüfe dein E-Mail-Postfach.");
+    } catch (err) {
+      setError(getFriendlyAuthError(err.message));
     } finally {
       setLoading(false);
     }
@@ -123,6 +143,17 @@ export default function AuthScreen({ onAuthSuccess }) {
             >
               {loading ? "Loading..." : isSignUp ? "Create Account" : "Sign In"}
             </Button>
+
+            {!isSignUp ? (
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs text-slate-300 underline underline-offset-4 hover:text-white"
+                disabled={loading}
+              >
+                Passwort vergessen?
+              </button>
+            ) : null}
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">

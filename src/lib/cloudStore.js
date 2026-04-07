@@ -155,6 +155,46 @@ export async function signInWithEmail(email, password) {
 }
 
 /**
+ * Send password reset email
+ */
+export async function requestPasswordReset(email) {
+  ensureSupabaseConfig();
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message ||
+        data?.error_description ||
+        data?.msg ||
+        data?.error ||
+        `Password reset failed (${response.status})`
+      );
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Password reset error:", error);
+    throw error;
+  }
+}
+
+/**
  * Get active session from localStorage
  */
 export async function getActiveSession() {
