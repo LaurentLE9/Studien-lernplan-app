@@ -1299,17 +1299,33 @@ export default function StudyPlannerApp() {
     return () => media.removeEventListener("change", handleChange);
   }, []);
 
+  useEffect(() => {
+    const loadCloudDataForSession = async () => {
+      if (!session?.user?.id) return;
+
+      try {
+        const cloudData = await loadUserPlannerData(session.user.id);
+        if (cloudData) {
+          setData(cloudData);
+        }
+      } catch (err) {
+        console.error("Cloud data load after login failed:", err);
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    if (session?.user?.id) {
+      loadCloudDataForSession();
+    }
+  }, [session?.user?.id, setData]);
+
     useEffect(() => {
       const initSession = async () => {
         try {
           const activeSession = await getActiveSession();
           if (activeSession && activeSession.user) {
             setSession(activeSession);
-            const userId = activeSession.user.id;
-            const cloudData = await loadUserPlannerData(userId);
-            if (cloudData) {
-              setData(cloudData);
-            }
           }
         } catch (err) {
           console.error("Session initialization error:", err);
@@ -1751,7 +1767,7 @@ export default function StudyPlannerApp() {
     }
 
     if (!session || !session.user) {
-      return <AuthScreen onAuthSuccess={() => window.location.reload()} />;
+      return <AuthScreen onAuthSuccess={(authResult) => setSession(authResult?.session || authResult)} />;
     }
 
   const navItems = [
