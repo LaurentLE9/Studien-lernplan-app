@@ -30,7 +30,10 @@ import {
   Trash2,
   Upload,
   X,
-} from "lucide-react";
+    LogOut,
+  } from "lucide-react";
+  import AuthScreen from "@/components/AuthScreen";
+  import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData } from "@/lib/cloudStore";
 import {
   Card,
   CardContent,
@@ -1268,6 +1271,9 @@ export default function StudyPlannerApp() {
     if (typeof window === "undefined") return true;
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+    const [session, setSession] = useState(null);
+    const [isLoadingSession, setIsLoadingSession] = useState(true);
+    const cloudSyncTimeoutRef = useRef(null);
   const [page, setPage] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
@@ -1292,6 +1298,49 @@ export default function StudyPlannerApp() {
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, []);
+
+    useEffect(() => {
+      const initSession = async () => {
+        try {
+          const activeSession = await getActiveSession();
+          if (activeSession && activeSession.user) {
+            setSession(activeSession);
+            const userId = activeSession.user.id;
+            const cloudData = await loadUserPlannerData(userId);
+            if (cloudData) {
+              setData(cloudData);
+            }
+          }
+        } catch (err) {
+          console.error("Session initialization error:", err);
+        } finally {
+          setIsLoadingSession(false);
+        }
+      };
+      initSession();
+    }, []);
+
+    useEffect(() => {
+      if (!session || !session.user) return;
+    
+      if (cloudSyncTimeoutRef.current) {
+        clearTimeout(cloudSyncTimeoutRef.current);
+      }
+
+      cloudSyncTimeoutRef.current = setTimeout(async () => {
+        try {
+          await saveUserPlannerData(session.user.id, data);
+        } catch (err) {
+          console.error("Cloud sync error:", err);
+        }
+      }, 2000);
+
+      return () => {
+        if (cloudSyncTimeoutRef.current) {
+          clearTimeout(cloudSyncTimeoutRef.current);
+        }
+      };
+    }, [data, session]);
 
   const darkMode = data.settings.appearance === "system"
     ? systemPrefersDark
@@ -1670,6 +1719,41 @@ export default function StudyPlannerApp() {
     }));
   }
 
+    const handleLogout = async () => {
+      try {
+        await signOutCurrentSession();
+        setSession(null);
+        setData({
+          subjects: [],
+          tasks: [],
+          studySessions: [],
+          todayFocus: [],
+          settings: { appearance: "light", sidebarCollapsed: false },
+          seeds: { tasks: false, sessions: false },
+        });
+      } catch (err) {
+        console.error("Logout error:", err);
+      }
+    };
+
+    if (isLoadingSession) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950">
+          <div className="text-center">
+            <div className="rounded-2xl bg-primary/10 p-4 text-primary mx-auto mb-4 w-fit">
+              <BookOpen className="h-8 w-8" />
+            </div>
+            <h1 className="text-xl font-semibold text-white mb-2">Studien- & Lernplan</h1>
+            <p className="text-slate-400">Loading session...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!session || !session.user) {
+      return <AuthScreen onAuthSuccess={() => window.location.reload()} />;
+    }
+
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "subjects", label: "Fächer", icon: GraduationCap },
@@ -1771,6 +1855,20 @@ export default function StudyPlannerApp() {
                 </div>
               </div>
             </div>
+             <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className={cn("flex items-center gap-2 rounded-xl p-3 text-xs font-medium", darkMode ? "bg-slate-800/50 text-slate-400" : "bg-slate-100/50 text-slate-600")}>
+                  {session?.user?.email || "User"}
+                </div>
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-2 rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  {!sidebarCollapsed ? "Logout" : ""}
+                </Button>
+              </div>
           </div>
         </aside>
 

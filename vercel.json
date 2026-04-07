@@ -1,0 +1,19 @@
+# Vercel Deployment Configuration
+# Configures SPA routing for single page application
+
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "routes": [
+    {
+      "src": "/assets/.*",
+      "dest": "/assets/$1",
+      "continue": true
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ]
+}
