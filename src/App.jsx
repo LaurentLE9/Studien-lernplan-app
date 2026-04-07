@@ -364,6 +364,15 @@ function getNextTaskMilestone(task) {
   return milestones[0] || null;
 }
 
+function isTaskArchived(task) {
+  if (task.archived) return true;
+  if (task.status !== "erledigt") return false;
+  if (!task.acceptanceDate) return false;
+  const acceptance = startOfDay(new Date(task.acceptanceDate));
+  const today = startOfDay(new Date());
+  return acceptance.getTime() <= today.getTime();
+}
+
 function usePersistentState() {
   const [data, setData] = useState(() => {
     try {
