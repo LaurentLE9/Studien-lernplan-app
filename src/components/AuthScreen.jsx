@@ -11,10 +11,12 @@ export default function AuthScreen({ onAuthSuccess }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [info, setInfo] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setLoading(true);
 
     try {
@@ -35,6 +37,8 @@ export default function AuthScreen({ onAuthSuccess }) {
 
       if (result.session) {
         onAuthSuccess(result);
+      } else if (isSignUp) {
+        setInfo("Account erstellt. Bitte prüfe dein E-Mail-Postfach zur Bestätigung und melde dich danach an.");
       }
     } catch (err) {
       setError(err.message || "Authentication failed");
@@ -91,6 +95,12 @@ export default function AuthScreen({ onAuthSuccess }) {
             {error && (
               <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-sm text-red-400">
                 {error}
+              </div>
+            )}
+
+            {info && (
+              <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3 text-sm text-emerald-300">
+                {info}
               </div>
             )}
 

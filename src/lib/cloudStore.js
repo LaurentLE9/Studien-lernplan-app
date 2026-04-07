@@ -215,7 +215,24 @@ export async function loadUserPlannerData(userId) {
     );
 
     if (data.length > 0) {
-      return data[0].data;
+      const rawData = data[0].data || {};
+      const rawSettings = rawData.settings || {};
+      const appearance = rawSettings.appearance || (typeof rawSettings.darkMode === "boolean" ? (rawSettings.darkMode ? "dark" : "light") : "light");
+
+      return {
+        ...normalizeDefaultData(),
+        ...rawData,
+        settings: {
+          ...normalizeDefaultData().settings,
+          ...rawSettings,
+          appearance,
+          sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
+        },
+        seeds: {
+          ...normalizeDefaultData().seeds,
+          ...(rawData.seeds || {}),
+        },
+      };
     }
 
     // No data yet, return defaults
@@ -287,7 +304,8 @@ export function normalizeDefaultData() {
     subjects: [],
     tasks: [],
     studySessions: [],
-    settings: { darkMode: true },
+    todayFocus: [],
+    settings: { appearance: "light", sidebarCollapsed: false },
     seeds: { tasks: false, sessions: false },
   };
 }
