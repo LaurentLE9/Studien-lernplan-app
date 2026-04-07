@@ -13,6 +13,14 @@ export default function AuthScreen({ onAuthSuccess }) {
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
 
+  const getFriendlyAuthError = (message) => {
+    const text = String(message || "");
+    if (text.toLowerCase().includes("is invalid") || text.toLowerCase().includes("email address")) {
+      return "Bitte verwende eine echte, gültige E-Mail-Adresse (z. B. deine normale Mailadresse statt test@example.com).";
+    }
+    return text || "Authentication failed";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -41,7 +49,7 @@ export default function AuthScreen({ onAuthSuccess }) {
         setInfo("Account erstellt. Bitte prüfe dein E-Mail-Postfach zur Bestätigung und melde dich danach an.");
       }
     } catch (err) {
-      setError(err.message || "Authentication failed");
+      setError(getFriendlyAuthError(err.message));
       console.error("Auth error:", err);
     } finally {
       setLoading(false);
@@ -135,7 +143,7 @@ export default function AuthScreen({ onAuthSuccess }) {
             </Button>
 
             <p className="text-xs text-slate-500 text-center mt-2">
-              Demo mode: Use test@example.com / password123
+              Verwende für die Registrierung eine echte E-Mail-Adresse.
             </p>
           </form>
         </CardContent>
