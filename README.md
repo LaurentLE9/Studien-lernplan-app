@@ -41,6 +41,11 @@ React/Vite App fuer Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro
 	VITE_SUPABASE_ANON_KEY=eyJhbGc...your-anon-key...
 	```
 
+3. Für Vercel: Setze dieselben Werte in **Project Settings → Environment Variables**
+	- `VITE_SUPABASE_URL`
+	- `VITE_SUPABASE_ANON_KEY`
+	Danach ein neues Deployment starten (Redeploy).
+
 ### 3. Datenbank-Schema einrichten
 
 1. Öffne Supabase Console → SQL Editor

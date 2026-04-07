@@ -7,6 +7,24 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+function hasPlaceholderConfig() {
+  const url = String(SUPABASE_URL || "").trim();
+  const key = String(SUPABASE_ANON_KEY || "").trim();
+  return (
+    !url ||
+    !key ||
+    url.includes("your-project") ||
+    key.includes("your-anon-key") ||
+    key.endsWith("...")
+  );
+}
+
+function ensureSupabaseConfig() {
+  if (hasPlaceholderConfig()) {
+    throw new Error("Supabase nicht konfiguriert: Bitte echte VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in Vercel Project Settings -> Environment Variables setzen.");
+  }
+}
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn(
     "⚠️ Supabase credentials missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env"
@@ -65,9 +83,7 @@ async function supabaseRequest(endpoint, options = {}) {
  * Sign up a new user with email and password
  */
 export async function signUpWithEmail(email, password) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Supabase credentials not configured");
-  }
+  ensureSupabaseConfig();
 
   try {
     const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -96,9 +112,7 @@ export async function signUpWithEmail(email, password) {
  * Sign in with email and password
  */
 export async function signInWithEmail(email, password) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Supabase credentials not configured");
-  }
+  ensureSupabaseConfig();
 
   try {
     const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -165,9 +179,7 @@ export async function getActiveSession() {
  * Refresh authentication token
  */
 async function refreshSession(session) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Supabase credentials not configured");
-  }
+  ensureSupabaseConfig();
 
   try {
     const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
