@@ -1274,6 +1274,7 @@ export default function StudyPlannerApp() {
   });
     const [session, setSession] = useState(null);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
+    const [isCloudHydrated, setIsCloudHydrated] = useState(false);
     const cloudSyncTimeoutRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
@@ -1303,28 +1304,38 @@ export default function StudyPlannerApp() {
   }, []);
 
   useEffect(() => {
-    const loadCloudDataForSession = async () => {
-      if (!session?.user?.id) return;
+    if (!session?.user?.id) {
+      setIsCloudHydrated(false);
+      return;
+    }
 
+    let cancelled = false;
+
+    const loadCloudDataForSession = async () => {
       try {
         const cloudData = await loadUserPlannerData(session.user.id);
-        if (cloudData) {
+        if (!cancelled && cloudData) {
           setData(cloudData);
         }
       } catch (err) {
         console.error("Cloud data load after login failed:", err);
       } finally {
-        setIsLoadingSession(false);
+        if (!cancelled) {
+          setIsCloudHydrated(true);
+          setIsLoadingSession(false);
+        }
       }
     };
 
-    if (session?.user?.id) {
-      loadCloudDataForSession();
-    }
+    loadCloudDataForSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id, setData]);
 
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !isCloudHydrated) return;
 
     let isMounted = true;
 
@@ -1366,7 +1377,7 @@ export default function StudyPlannerApp() {
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [session?.user?.id, setData]);
+  }, [session?.user?.id, isCloudHydrated, setData]);
 
     useEffect(() => {
       const initSession = async () => {
@@ -1385,7 +1396,7 @@ export default function StudyPlannerApp() {
     }, []);
 
     useEffect(() => {
-      if (!session || !session.user) return;
+      if (!session || !session.user || !isCloudHydrated) return;
 
       hasPendingCloudSaveRef.current = true;
     
@@ -1411,7 +1422,7 @@ export default function StudyPlannerApp() {
           cloudSyncTimeoutRef.current = null;
         }
       };
-    }, [data, session]);
+    }, [data, session, isCloudHydrated]);
 
   const darkMode = data.settings.appearance === "system"
     ? systemPrefersDark
