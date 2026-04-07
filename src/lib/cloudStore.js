@@ -34,11 +34,31 @@ async function supabaseRequest(endpoint, options = {}) {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || `Request failed: ${response.status}`);
+    let errorMessage = `Request failed: ${response.status}`;
+    try {
+      const error = await response.json();
+      errorMessage = error.message || error.error_description || errorMessage;
+    } catch {
+      // Ignore non-JSON error bodies and use the fallback message.
+    }
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  const text = await response.text();
+  if (!text.trim()) {
+    return null;
+  }
+
+  return JSON.parse(text);
 }
 
 /**
