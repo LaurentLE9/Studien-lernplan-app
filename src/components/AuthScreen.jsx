@@ -15,7 +15,11 @@ export default function AuthScreen({ onAuthSuccess }) {
 
   const getFriendlyAuthError = (message) => {
     const text = String(message || "");
-    if (text.toLowerCase().includes("is invalid") || text.toLowerCase().includes("email address")) {
+    const lower = text.toLowerCase();
+    if (lower.includes("email rate limit exceeded") || lower.includes("rate limit")) {
+      return "Zu viele Bestätigungs-E-Mails in kurzer Zeit. Warte ein paar Minuten und versuche es erneut. Wenn der Account schon erstellt wurde, wechsle auf Sign In.";
+    }
+    if (lower.includes("is invalid") || lower.includes("email address")) {
       return "Bitte verwende eine echte, gültige E-Mail-Adresse (z. B. deine normale Mailadresse statt test@example.com).";
     }
     return text || "Authentication failed";
