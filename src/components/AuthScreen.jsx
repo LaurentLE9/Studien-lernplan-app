@@ -20,6 +20,9 @@ export default function AuthScreen({ onAuthSuccess }) {
     if (lower.includes("email rate limit exceeded") || lower.includes("rate limit")) {
       return "Zu viele Bestätigungs-E-Mails in kurzer Zeit. Warte ein paar Minuten und versuche es erneut. Wenn der Account schon erstellt wurde, wechsle auf Sign In.";
     }
+    if (lower.includes("invalid login credentials") || lower.includes("wrong credentials")) {
+      return "Anmeldung fehlgeschlagen. Prüfe E-Mail und Passwort. Wenn du gerade erst einen Account angelegt hast, ist die E-Mail möglicherweise noch nicht bestätigt.";
+    }
     if (lower.includes("already registered") || lower.includes("already been registered") || lower.includes("user already")) {
       return "Diese E-Mail ist bereits registriert. Bitte melde dich mit Sign In an oder sende die Bestätigungs-E-Mail erneut.";
     }
@@ -68,7 +71,8 @@ export default function AuthScreen({ onAuthSuccess }) {
         lower.includes("already registered") ||
         lower.includes("already been registered") ||
         lower.includes("email not confirmed") ||
-        lower.includes("not confirmed")
+        lower.includes("not confirmed") ||
+        lower.includes("invalid login credentials")
       ) {
         setShowResendConfirm(true);
         setIsSignUp(false);
