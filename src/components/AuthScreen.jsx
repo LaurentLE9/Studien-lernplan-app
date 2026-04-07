@@ -164,18 +164,17 @@ export default function AuthScreen({ onAuthSuccess }) {
               </div>
             </div>
 
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => {
                 setIsSignUp(!isSignUp);
                 setError(null);
               }}
-              className="w-full rounded-lg border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700 hover:text-white disabled:bg-slate-800/70 disabled:text-slate-400"
+              className="w-full rounded-lg h-10 border border-slate-500 bg-slate-800 text-slate-100 font-medium transition-colors hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500"
               disabled={loading}
             >
               {isSignUp ? "Already have an account? Sign In" : "Create new account"}
-            </Button>
+            </button>
 
             <p className="text-xs text-slate-500 text-center mt-2">
               Verwende für die Registrierung eine echte E-Mail-Adresse.
