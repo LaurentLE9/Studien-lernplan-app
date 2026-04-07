@@ -98,7 +98,13 @@ export async function signUpWithEmail(email, password) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "Signup failed");
+      throw new Error(
+        data?.message ||
+        data?.error_description ||
+        data?.msg ||
+        data?.error ||
+        `Signup failed (${response.status})`
+      );
     }
 
     return { user: data.user, session: data.session };
@@ -127,7 +133,13 @@ export async function signInWithEmail(email, password) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.error_description || "Login failed");
+      throw new Error(
+        data?.error_description ||
+        data?.message ||
+        data?.msg ||
+        data?.error ||
+        `Login failed (${response.status})`
+      );
     }
 
     // Save session to localStorage
