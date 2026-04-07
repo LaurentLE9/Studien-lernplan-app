@@ -1275,6 +1275,7 @@ export default function StudyPlannerApp() {
     const [session, setSession] = useState(null);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     const cloudSyncTimeoutRef = useRef(null);
+    const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
@@ -1329,6 +1330,9 @@ export default function StudyPlannerApp() {
 
     const refreshFromCloud = async () => {
       try {
+        // Never pull remote state over local data while a local save is still pending.
+        if (hasPendingCloudSaveRef.current) return;
+
         const cloudData = await loadUserPlannerData(session.user.id);
         if (!isMounted || !cloudData) return;
 
@@ -1382,9 +1386,12 @@ export default function StudyPlannerApp() {
 
     useEffect(() => {
       if (!session || !session.user) return;
+
+      hasPendingCloudSaveRef.current = true;
     
       if (cloudSyncTimeoutRef.current) {
         clearTimeout(cloudSyncTimeoutRef.current);
+        cloudSyncTimeoutRef.current = null;
       }
 
       cloudSyncTimeoutRef.current = setTimeout(async () => {
@@ -1392,12 +1399,16 @@ export default function StudyPlannerApp() {
           await saveUserPlannerData(session.user.id, data);
         } catch (err) {
           console.error("Cloud sync error:", err);
+        } finally {
+          hasPendingCloudSaveRef.current = false;
+          cloudSyncTimeoutRef.current = null;
         }
       }, 2000);
 
       return () => {
         if (cloudSyncTimeoutRef.current) {
           clearTimeout(cloudSyncTimeoutRef.current);
+          cloudSyncTimeoutRef.current = null;
         }
       };
     }, [data, session]);
