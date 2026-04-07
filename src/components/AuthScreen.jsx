@@ -93,11 +93,13 @@ export default function AuthScreen({ onAuthSuccess }) {
     }
 
     setLoading(true);
+    setInfo("Passwort-Reset wird gesendet...");
     try {
       await requestPasswordReset(email);
       setInfo("Passwort-Reset gesendet. Bitte prüfe dein E-Mail-Postfach.");
     } catch (err) {
       setError(getFriendlyAuthError(err.message));
+      setInfo(null);
     } finally {
       setLoading(false);
     }
@@ -206,7 +208,7 @@ export default function AuthScreen({ onAuthSuccess }) {
                 className="text-xs text-slate-200 underline underline-offset-4 hover:text-white"
                 disabled={loading}
               >
-                Passwort vergessen?
+                {loading ? "Sende Reset-Mail..." : "Passwort vergessen?"}
               </button>
             ) : null}
 
