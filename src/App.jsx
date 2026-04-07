@@ -19,6 +19,7 @@ import {
   Maximize2,
   Monitor,
   Moon,
+  Menu,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -1289,6 +1290,7 @@ export default function StudyPlannerApp() {
   const [todaySubjectDialogOpen, setTodaySubjectDialogOpen] = useState(false);
   const [todaySubjectDraft, setTodaySubjectDraft] = useState({ subjectId: "", note: "" });
   const [importError, setImportError] = useState(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1318,6 +1320,48 @@ export default function StudyPlannerApp() {
     if (session?.user?.id) {
       loadCloudDataForSession();
     }
+  }, [session?.user?.id, setData]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    let isMounted = true;
+
+    const refreshFromCloud = async () => {
+      try {
+        const cloudData = await loadUserPlannerData(session.user.id);
+        if (!isMounted || !cloudData) return;
+
+        setData((current) => {
+          const currentJson = JSON.stringify(current);
+          const cloudJson = JSON.stringify(cloudData);
+          if (currentJson === cloudJson) {
+            return current;
+          }
+          return cloudData;
+        });
+      } catch (err) {
+        console.error("Cloud polling refresh failed:", err);
+      }
+    };
+
+    const intervalId = window.setInterval(refreshFromCloud, 15000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshFromCloud();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    refreshFromCloud();
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [session?.user?.id, setData]);
 
     useEffect(() => {
@@ -1778,10 +1822,16 @@ export default function StudyPlannerApp() {
     { id: "stats", label: "Statistik", icon: BarChart3 },
   ];
 
+  const currentPageLabel = navItems.find((n) => n.id === page)?.label;
+  const handlePageChange = (nextPage) => {
+    setPage(nextPage);
+    setMobileNavOpen(false);
+  };
+
   return (
     <div className={cn("min-h-screen transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
-      <div className={cn("mx-auto grid min-h-screen max-w-7xl", sidebarCollapsed ? "lg:grid-cols-[88px_1fr]" : "lg:grid-cols-[260px_1fr]")}>
-        <aside className={cn("border-r p-4 backdrop-blur", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
+      <div className={cn("mx-auto min-h-screen max-w-7xl", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_1fr]" : "lg:grid lg:grid-cols-[260px_1fr]")}>
+        <aside className={cn("hidden border-r p-4 backdrop-blur lg:block", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
           <div className="flex h-full flex-col">
             <div>
               <div className={cn("flex items-center px-2 py-3", sidebarCollapsed ? "justify-center" : "justify-between gap-3")}>
@@ -1806,7 +1856,7 @@ export default function StudyPlannerApp() {
                   return (
                     <button
                       key={item.id}
-                      onClick={() => setPage(item.id)}
+                      onClick={() => handlePageChange(item.id)}
                       title={sidebarCollapsed ? item.label : undefined}
                       className={cn(
                         "flex rounded-2xl px-3 py-3 text-left text-sm transition",
@@ -1826,10 +1876,10 @@ export default function StudyPlannerApp() {
               </nav>
             </div>
 
-            <div className="mt-auto pt-6">
+            <div className={cn("mt-auto pt-6", sidebarCollapsed ? "" : "flex justify-center")}>
               <Separator className="mb-4" />
-              <div className={cn("rounded-3xl border p-3 shadow-sm", getSoftSurfaceClass(darkMode))}>
-                <div className={cn("flex gap-3", sidebarCollapsed ? "flex-col items-center" : "items-center justify-between")}>
+              <div className={cn("w-full rounded-3xl border p-3 shadow-sm", sidebarCollapsed ? "" : "max-w-[220px]", getSoftSurfaceClass(darkMode))}>
+                <div className={cn("flex gap-3", sidebarCollapsed ? "flex-col items-center" : "flex-col items-center text-center")}>
                   {!sidebarCollapsed ? (
                     <div className="min-w-0 pr-2">
                       <p className="text-sm font-medium text-white">Darstellung</p>
@@ -1839,10 +1889,10 @@ export default function StudyPlannerApp() {
                     </div>
                   ) : null}
 
-                  <div className={cn("flex gap-2", sidebarCollapsed ? "w-full flex-col" : "flex-row items-center") }>
+                  <div className="flex w-full flex-col gap-2">
                     <button
                       type="button"
-                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "light")}
+                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "light"), "w-full")}
                       onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "light" } }))}
                       title="Hell"
                     >
@@ -1851,7 +1901,7 @@ export default function StudyPlannerApp() {
                     </button>
                     <button
                       type="button"
-                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "dark")}
+                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "dark"), "w-full")}
                       onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "dark" } }))}
                       title="Dunkel"
                     >
@@ -1860,7 +1910,7 @@ export default function StudyPlannerApp() {
                     </button>
                     <button
                       type="button"
-                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "system")}
+                      className={cn(getAppearanceOptionClass(darkMode, data.settings.appearance === "system"), "w-full")}
                       onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "system" } }))}
                       title="System"
                     >
@@ -1888,10 +1938,107 @@ export default function StudyPlannerApp() {
           </div>
         </aside>
 
-        <main className="p-4 md:p-6 lg:p-8">
+        <div className="min-w-0">
+          <header className={cn("sticky top-0 z-30 border-b px-4 py-3 backdrop-blur lg:hidden", darkMode ? "border-slate-800 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Studien- & Lernplan</p>
+                <h1 className="truncate text-base font-semibold">{currentPageLabel}</h1>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-xl"
+                onClick={() => setMobileNavOpen((prev) => !prev)}
+                aria-label="Menü umschalten"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {mobileNavOpen ? (
+              <div className="mt-3 grid gap-2 border-t pt-3">
+                <nav className="grid grid-cols-2 gap-2">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handlePageChange(item.id)}
+                        className={cn(
+                          "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
+                          page === item.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </nav>
+
+                <div className="grid gap-2 border-t pt-3">
+                  <div className={cn("rounded-xl px-3 py-2 text-xs font-medium", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
+                    {session?.user?.email || "User"}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "light")}
+                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "light" } }))}
+                    >
+                      <Sun className="h-4 w-4 shrink-0" />
+                      <span>Hell</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "dark")}
+                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "dark" } }))}
+                    >
+                      <Moon className="h-4 w-4 shrink-0" />
+                      <span>Dunkel</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={getAppearanceOptionClass(darkMode, data.settings.appearance === "system")}
+                      onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance: "system" } }))}
+                    >
+                      <Monitor className="h-4 w-4 shrink-0" />
+                      <span>System</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => {
+                        setSettingsDialogOpen(true);
+                        setMobileNavOpen(false);
+                      }}
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      Einstellungen
+                    </Button>
+                    <Button
+                      onClick={handleLogout}
+                      variant="outline"
+                      className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Logout
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </header>
+
+          <main className="p-4 md:p-6 lg:p-8">
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">{navItems.find((n) => n.id === page)?.label}</h2>
+              <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
               <p className="text-sm text-muted-foreground">Klare Übersicht über Fächer, Aufgaben und Lernzeiten</p>
             </div>
 
@@ -2355,7 +2502,8 @@ export default function StudyPlannerApp() {
             <ChevronUp className="h-4 w-4" />
             Nach oben
           </button>
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );
