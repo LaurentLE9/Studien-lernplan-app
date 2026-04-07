@@ -6,6 +6,14 @@
 // Supabase URL and Key from environment variables
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
+
+function getAuthRedirectUrl() {
+  const configured = String(PUBLIC_APP_URL || "").trim();
+  if (configured) return configured;
+  if (typeof window !== "undefined") return window.location.origin;
+  return undefined;
+}
 
 function hasPlaceholderConfig() {
   const url = String(SUPABASE_URL || "").trim();
@@ -96,7 +104,7 @@ export async function signUpWithEmail(email, password) {
         email,
         password,
         options: {
-          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+          emailRedirectTo: getAuthRedirectUrl(),
         },
       }),
     });
@@ -175,7 +183,7 @@ export async function requestPasswordReset(email) {
       },
       body: JSON.stringify({
         email,
-        redirect_to: typeof window !== "undefined" ? window.location.origin : undefined,
+        redirect_to: getAuthRedirectUrl(),
       }),
     });
 
@@ -220,7 +228,7 @@ export async function resendSignupConfirmation(email) {
         type: "signup",
         email,
         options: {
-          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+          emailRedirectTo: getAuthRedirectUrl(),
         },
       }),
     });
