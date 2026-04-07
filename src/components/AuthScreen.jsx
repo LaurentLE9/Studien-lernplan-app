@@ -148,7 +148,7 @@ export default function AuthScreen({ onAuthSuccess }) {
               <button
                 type="button"
                 onClick={handleForgotPassword}
-                className="text-xs text-slate-300 underline underline-offset-4 hover:text-white"
+                className="text-xs text-slate-200 underline underline-offset-4 hover:text-white"
                 disabled={loading}
               >
                 Passwort vergessen?
@@ -171,7 +171,7 @@ export default function AuthScreen({ onAuthSuccess }) {
                 setIsSignUp(!isSignUp);
                 setError(null);
               }}
-              className="w-full rounded-lg border-slate-600 text-slate-200 hover:bg-slate-800"
+              className="w-full rounded-lg border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700 hover:text-white disabled:bg-slate-800/70 disabled:text-slate-400"
               disabled={loading}
             >
               {isSignUp ? "Already have an account? Sign In" : "Create new account"}
