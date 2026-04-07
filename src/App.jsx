@@ -373,6 +373,69 @@ function isTaskArchived(task) {
   return acceptance.getTime() <= today.getTime();
 }
 
+// Export/Import functionality
+function exportDataToJSON(data) {
+  const exportData = {
+    version: "1.0",
+    exportedAt: new Date().toISOString(),
+    data: {
+      subjects: data.subjects,
+      tasks: data.tasks,
+      studySessions: data.studySessions,
+      settings: data.settings,
+    },
+  };
+  return JSON.stringify(exportData, null, 2);
+}
+
+function importDataFromJSON(jsonString, existingData) {
+  try {
+    const imported = JSON.parse(jsonString);
+    if (!imported.data) throw new Error("Invalid export format");
+    
+    return {
+      subjects: imported.data.subjects || existingData.subjects,
+      tasks: imported.data.tasks || existingData.tasks,
+      studySessions: imported.data.studySessions || existingData.studySessions,
+      settings: { ...existingData.settings, ...(imported.data.settings || {}) },
+      seeds: existingData.seeds,
+    };
+  } catch (error) {
+    throw new Error(`Import failed: ${error.message}`);
+  }
+}
+
+function generateRecurringTask(originalTask, pattern) {
+  if (pattern === "none" || !pattern) return null;
+  
+  const newTask = { ...originalTask };
+  newTask.id = crypto.randomUUID();
+  newTask.status = "offen";
+  newTask.createdAt = formatDateInput(new Date());
+  
+  if (pattern === "weekly" && originalTask.dueDate) {
+    const dueDate = new Date(originalTask.dueDate);
+    dueDate.setDate(dueDate.getDate() + 7);
+    newTask.dueDate = formatDateInput(dueDate);
+    if (originalTask.acceptanceDate) {
+      const acceptDate = new Date(originalTask.acceptanceDate);
+      acceptDate.setDate(acceptDate.getDate() + 7);
+      newTask.acceptanceDate = formatDateInput(acceptDate);
+    }
+  } else if (pattern === "monthly" && originalTask.dueDate) {
+    const dueDate = new Date(originalTask.dueDate);
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    newTask.dueDate = formatDateInput(dueDate);
+    if (originalTask.acceptanceDate) {
+      const acceptDate = new Date(originalTask.acceptanceDate);
+      acceptDate.setMonth(acceptDate.getMonth() + 1);
+      newTask.acceptanceDate = formatDateInput(acceptDate);
+    }
+  }
+  
+  return newTask;
+}
+
 function usePersistentState() {
   const [data, setData] = useState(() => {
     try {
@@ -991,7 +1054,7 @@ function SubjectForm({ onSave, initialValue, onDone }) {
 }
 
 function TaskForm({ subjects, onSave, initialValue, onDone }) {
-  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: subjects[0]?.id || "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false });
+  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: subjects[0]?.id || "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
@@ -1006,9 +1069,10 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
         <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} /></div>
         <div className="grid gap-2"><Label>Status</Label><Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent></Select></div>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Heute lernen</span><Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm({ ...form, flaggedToday: checked })} /></label>
         <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Dringend markieren</span><Switch checked={form.urgent} onCheckedChange={(checked) => setForm({ ...form, urgent: checked })} /></label>
+        <div className="grid gap-2"><Label>Wiederholen</Label><Select value={form.recurringPattern} onValueChange={(value) => setForm({ ...form, recurringPattern: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Nicht wiederholen</SelectItem><SelectItem value="weekly">Wöchentlich</SelectItem><SelectItem value="monthly">Monatlich</SelectItem></SelectContent></Select></div>
       </div>
       <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={() => { if (!form.title.trim() || !form.subjectId) return; onSave({ ...initialValue, ...form }); onDone?.(); }}>Speichern</Button></div>
     </div>
@@ -1054,9 +1118,11 @@ export default function StudyPlannerApp() {
   const [taskFilter, setTaskFilter] = useState({ subjectId: "all", priority: "all", status: "all", sort: "deadline" });
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
+  const [importError, setImportError] = useState(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", data.settings.darkMode);
@@ -1273,12 +1339,22 @@ export default function StudyPlannerApp() {
   }
 
   function saveTask(task) {
-    setData((prev) => ({
-      ...prev,
-      tasks: prev.tasks.some((t) => t.id === task.id)
-        ? prev.tasks.map((t) => (t.id === task.id ? task : t))
-        : [...prev.tasks, { ...task, id: crypto.randomUUID() }],
-    }));
+    setData((prev) => {
+      const isNewTask = !prev.tasks.some((t) => t.id === task.id);
+      const updatedTasks = isNewTask
+        ? [...prev.tasks, { ...task, id: crypto.randomUUID() }]
+        : prev.tasks.map((t) => (t.id === task.id ? task : t));
+      
+      // Auto-generate recurring task when a task is marked as done
+      if (task.status === "erledigt" && task.recurringPattern && task.recurringPattern !== "none") {
+        const recurringTask = generateRecurringTask(task, task.recurringPattern);
+        if (recurringTask) {
+          updatedTasks.push(recurringTask);
+        }
+      }
+      
+      return { ...prev, tasks: updatedTasks };
+    });
     setEditingTask(null);
   }
 
@@ -1305,6 +1381,40 @@ export default function StudyPlannerApp() {
 
   function toggleTaskDone(task) {
     saveTask({ ...task, status: task.status === "erledigt" ? "offen" : "erledigt" });
+  }
+
+  function handleExportData() {
+    const jsonString = exportDataToJSON(data);
+    const blob = new Blob([jsonString], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `studienplan-export-${formatDateInput(new Date())}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImportData(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result;
+        if (typeof content !== "string") throw new Error("Invalid file format");
+        
+        const imported = importDataFromJSON(content, data);
+        setData(imported);
+        setImportError(null);
+        setSettingsDialogOpen(false);
+      } catch (error) {
+        setImportError((error instanceof Error) ? error.message : "Import failed");
+      }
+    };
+    reader.readAsText(file);
   }
 
   const navItems = [
@@ -1374,6 +1484,39 @@ export default function StudyPlannerApp() {
                   <DialogContent className="max-w-2xl rounded-3xl">
                     <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
                     <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Einstellungen</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xl rounded-3xl">
+                    <DialogHeader><DialogTitle>Datenverwaltung</DialogTitle></DialogHeader>
+                    <div className="grid gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-base font-semibold">Backup & Wiederherstellung</Label>
+                        <p className="text-sm text-gray-500">Exportiere oder importiere deine kompletten Daten.</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Button onClick={handleExportData} variant="outline" className="rounded-xl">
+                          📥 Exportieren
+                        </Button>
+                        <label>
+                          <Button asChild variant="outline" className="rounded-xl w-full cursor-pointer">
+                            <span>📤 Importieren</span>
+                          </Button>
+                          <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
+                        </label>
+                      </div>
+                      {importError && <p className="text-sm text-red-500">{importError}</p>}
+                      <Separator />
+                      <div className="text-xs text-gray-500">
+                        <p>Fächer: {data.subjects.length}</p>
+                        <p>Aufgaben: {data.tasks.length}</p>
+                        <p>Lernzeiten: {data.studySessions.length}</p>
+                      </div>
+                    </div>
                   </DialogContent>
                 </Dialog>
               </div>
