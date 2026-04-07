@@ -1276,6 +1276,7 @@ export default function StudyPlannerApp() {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     const [isCloudHydrated, setIsCloudHydrated] = useState(false);
     const cloudSyncTimeoutRef = useRef(null);
+    const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
   const [search, setSearch] = useState("");
@@ -1317,12 +1318,18 @@ export default function StudyPlannerApp() {
         if (!cancelled && cloudData) {
           setData(cloudData);
         }
-      } catch (err) {
-        console.error("Cloud data load after login failed:", err);
-      } finally {
         if (!cancelled) {
           setIsCloudHydrated(true);
           setIsLoadingSession(false);
+        }
+      } catch (err) {
+        console.error("Cloud data load after login failed:", err);
+        if (!cancelled) {
+          setIsLoadingSession(false);
+          setIsCloudHydrated(false);
+          cloudHydrationRetryRef.current = window.setTimeout(() => {
+            loadCloudDataForSession();
+          }, 4000);
         }
       }
     };
@@ -1331,6 +1338,10 @@ export default function StudyPlannerApp() {
 
     return () => {
       cancelled = true;
+      if (cloudHydrationRetryRef.current) {
+        window.clearTimeout(cloudHydrationRetryRef.current);
+        cloudHydrationRetryRef.current = null;
+      }
     };
   }, [session?.user?.id, setData]);
 
