@@ -34,7 +34,12 @@ import {
     LogOut,
   } from "lucide-react";
   import AuthScreen from "@/components/AuthScreen";
-  import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData } from "@/lib/cloudStore";
+  
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
+import { SortableTile } from "@/components/SortableTile";
+
+import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData } from "@/lib/cloudStore";
 import {
   Card,
   CardContent,
@@ -1279,6 +1284,34 @@ export default function StudyPlannerApp() {
     const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
+  const [dashboardLayout, setDashboardLayout] = useState(() => {
+    try {
+      const saved = localStorage.getItem("study_planner_dashboard_layout");
+      return saved ? JSON.parse(saved) : ["stats", "deadlines", "hours", "today", "recent", "done"];
+    } catch {
+      return ["stats", "deadlines", "hours", "today", "recent", "done"];
+    }
+  });
+  const [isEditingDashboard, setIsEditingDashboard] = useState(false);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (active.id !== over.id) {
+      setDashboardLayout((items) => {
+        const oldIndex = items.indexOf(active.id);
+        const newIndex = items.indexOf(over.id);
+        const newLayout = arrayMove(items, oldIndex, newIndex);
+        localStorage.setItem("study_planner_dashboard_layout", JSON.stringify(newLayout));
+        return newLayout;
+      });
+    }
+  };
+
   const [search, setSearch] = useState("");
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
   const [showArchive, setShowArchive] = useState(false);
@@ -2085,6 +2118,12 @@ export default function StudyPlannerApp() {
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen nach Aufgabe oder Fach" className="pl-9" />
                 </div>
                 <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} />
+                
+<Button variant="outline" className="rounded-xl flex gap-2 items-center" onClick={() => setIsEditingDashboard(!isEditingDashboard)}>
+  <Pencil className="w-4 h-4" />
+  {isEditingDashboard ? "Fertig" : "Dashboard bearbeiten"}
+</Button>
+
               </div>
 
               <div className="flex w-full flex-wrap gap-3 lg:justify-end">
@@ -2166,59 +2205,97 @@ export default function StudyPlannerApp() {
             </div>
           </div>
 
+          
           {page === "dashboard" ? (
-            <div className="grid gap-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
-                <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
-                <StatCard darkMode={darkMode} title="Überfällig" value={taskSummary.overdue} sub="Sofort im Blick behalten" icon={AlertTriangle} />
-                <StatCard darkMode={darkMode} title="Erledigte Aufgaben" value={taskSummary.done} sub="Bereits abgeschlossen" icon={CheckCircle2} />
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                  <CardHeader><CardTitle>Nächste Deadlines</CardTitle><CardDescription>Offene Fristen und erledigte Deadline-Aufgaben</CardDescription></CardHeader>
-                  <CardContent className="grid max-h-[760px] gap-4 overflow-y-auto pr-2">
-                    <div className="grid gap-3">
-                      {taskSummary.nextDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : taskSummary.nextDeadlines.map((task) => (
-                        <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
-                          <div>
-                            <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
-                            <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={dashboardLayout} strategy={rectSortingStrategy}>
+                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-6 auto-rows-max">
+                  {dashboardLayout.map((widgetId) => {
+                    if (widgetId === "stats") {
+                      return (
+                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} className="col-span-full">
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
+                            <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
+                            <StatCard darkMode={darkMode} title="Überfällig" value={taskSummary.overdue} sub="Sofort im Blick behalten" icon={AlertTriangle} />
+                            <StatCard darkMode={darkMode} title="Erledigte Aufgaben" value={taskSummary.done} sub="Bereits abgeschlossen" icon={CheckCircle2} />
                           </div>
-                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="rounded-2xl border p-3">
-                      <button type="button" onClick={() => setShowCompletedDeadlines((prev) => !prev)} className="flex w-full items-center justify-between text-left"><div><p className="text-sm font-medium">Fällig, aber erledigt</p><p className="text-xs text-muted-foreground">Erledigte Aufgaben mit vorhandener Abgabe oder Abnahme</p></div><ChevronDown className={cn("h-4 w-4 transition-transform", showCompletedDeadlines ? "rotate-180" : "")} /></button>
-                      {showCompletedDeadlines ? (
-                        <div className="mt-4 grid gap-3">
-                          {taskSummary.completedDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : taskSummary.completedDeadlines.map((task) => (
-                            <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
-                              <div><div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p></div>
-                              <div className="flex flex-wrap gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge></div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                  <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
-                  <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
-                </Card>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-3">
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</CardContent></Card>
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</CardContent></Card>
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</CardContent></Card>
-              </div>
-            </div>
-          ) : null}
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "deadlines") {
+                      return (
+                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                          <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                            <CardHeader><CardTitle>Nächste Deadlines</CardTitle><CardDescription>Offene Fristen und erledigte Deadline-Aufgaben</CardDescription></CardHeader>
+                            <CardContent className="grid max-h-[760px] gap-4 overflow-y-auto pr-2">
+                              <div className="grid gap-3">
+                                {taskSummary.nextDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : taskSummary.nextDeadlines.map((task) => (
+                                  <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
+                                    <div>
+                                      <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
+                                      <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="rounded-2xl border p-3">
+                                <button type="button" onClick={() => setShowCompletedDeadlines((prev) => !prev)} className="flex w-full items-center justify-between text-left"><div><p className="text-sm font-medium">Fällig, aber erledigt</p><p className="text-xs text-muted-foreground">Erledigte Aufgaben mit vorhandener Abgabe oder Abnahme</p></div><ChevronDown className={cn("h-4 w-4 transition-transform", showCompletedDeadlines ? "rotate-180" : "")} /></button>
+                                {showCompletedDeadlines ? (
+                                  <div className="mt-4 grid gap-3">
+                                    {taskSummary.completedDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : taskSummary.completedDeadlines.map((task) => (
+                                      <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
+                                        <div><div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p></div>
+                                        <div className="flex flex-wrap gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge></div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "hours") {
+                      return (
+                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                          <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                            <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
+                            <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
+                          </Card>
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "today") {
+                      return (
+                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                          <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</CardContent></Card>
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "recent") {
+                      return (
+                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                          <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</CardContent></Card>
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "done") {
+                      return (
+                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                        <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</CardContent></Card>
+                      </SortableTile>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          
+) : null}
 
           {page === "subjects" ? (
             <div className="grid gap-6">
