@@ -7,6 +7,14 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+
+function normalizeDashboardLayout(layout) {
+  if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
+  const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
+  const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
+  return [...filtered, ...missing];
+}
 
 function getAuthRedirectUrl() {
   const configured = String(PUBLIC_APP_URL || "").trim();
@@ -389,6 +397,7 @@ export async function loadUserPlannerData(userId) {
           ...rawSettings,
           appearance,
           sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
+          dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
         },
         seeds: {
           ...normalizeDefaultData().seeds,
@@ -413,43 +422,18 @@ export async function saveUserPlannerData(userId, plannerData) {
     const session = await getActiveSession();
     if (!session) throw new Error("No active session");
 
-    // First check if record exists
-    const existing = await supabaseRequest(
-      `/user_plans?user_id=eq.${userId}&select=id`,
+    // Upsert avoids race conditions between SELECT->INSERT/PATCH.
+    await supabaseRequest(
+      `/user_plans?on_conflict=user_id`,
       {
-        method: "GET",
+        method: "POST",
         headers: {
           apikey: SUPABASE_ANON_KEY,
+          Prefer: "resolution=merge-duplicates,return=minimal",
         },
+        body: JSON.stringify({ user_id: userId, data: plannerData }),
       }
     );
-
-    if (existing.length > 0) {
-      // Update existing
-      await supabaseRequest(
-        `/user_plans?user_id=eq.${userId}`,
-        {
-          method: "PATCH",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ data: plannerData }),
-        }
-      );
-    } else {
-      // Create new
-      await supabaseRequest(
-        `/user_plans`,
-        {
-          method: "POST",
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Prefer: "return=minimal",
-          },
-          body: JSON.stringify({ user_id: userId, data: plannerData }),
-        }
-      );
-    }
 
     return true;
   } catch (error) {
@@ -467,7 +451,7 @@ export function normalizeDefaultData() {
     tasks: [],
     studySessions: [],
     todayFocus: [],
-    settings: { appearance: "light", sidebarCollapsed: false },
+    settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
     seeds: { tasks: false, sessions: false },
   };
 }

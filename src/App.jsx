@@ -95,6 +95,14 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "study_planner_app_v3";
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+
+function normalizeDashboardLayout(layout) {
+  if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
+  const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
+  const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
+  return [...filtered, ...missing];
+}
 
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -481,12 +489,11 @@ function usePersistentState() {
           tasks: [],
           studySessions: [],
           todayFocus: [],
-          settings: { appearance: "light", sidebarCollapsed: false },
+          settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
           seeds: { tasks: false, sessions: false },
         };
       }
       const parsed = JSON.parse(raw);
-      const legacyDarkMode = parsed.settings?.darkMode;
       return {
         subjects: parsed.subjects?.length ? parsed.subjects : makeInitialSubjects(),
         tasks: parsed.tasks || [],
@@ -495,6 +502,7 @@ function usePersistentState() {
         settings: {
           appearance: parsed.settings?.appearance || "light",
           sidebarCollapsed: parsed.settings?.sidebarCollapsed || false,
+          dashboardLayout: normalizeDashboardLayout(parsed.settings?.dashboardLayout),
         },
         seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
       };
@@ -504,7 +512,7 @@ function usePersistentState() {
         tasks: [],
         studySessions: [],
         todayFocus: [],
-        settings: { appearance: "light", sidebarCollapsed: false },
+        settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
         seeds: { tasks: false, sessions: false },
       };
     }
@@ -1284,14 +1292,7 @@ export default function StudyPlannerApp() {
     const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
-  const [dashboardLayout, setDashboardLayout] = useState(() => {
-    try {
-      const saved = localStorage.getItem("study_planner_dashboard_layout");
-      return saved ? JSON.parse(saved) : ["stats", "deadlines", "hours", "today", "recent", "done"];
-    } catch {
-      return ["stats", "deadlines", "hours", "today", "recent", "done"];
-    }
-  });
+  const dashboardLayout = useMemo(() => normalizeDashboardLayout(data.settings?.dashboardLayout), [data.settings?.dashboardLayout]);
   const [isEditingDashboard, setIsEditingDashboard] = useState(false);
 
   const dndSensors = useSensors(
@@ -1301,16 +1302,63 @@ export default function StudyPlannerApp() {
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
-    if (active.id !== over.id) {
-      setDashboardLayout((items) => {
-        const oldIndex = items.indexOf(active.id);
-        const newIndex = items.indexOf(over.id);
-        const newLayout = arrayMove(items, oldIndex, newIndex);
-        localStorage.setItem("study_planner_dashboard_layout", JSON.stringify(newLayout));
-        return newLayout;
-      });
+    if (!over || active.id === over.id) return;
+
+    setData((prev) => {
+      const items = normalizeDashboardLayout(prev.settings?.dashboardLayout);
+      const oldIndex = items.indexOf(active.id);
+      const newIndex = items.indexOf(over.id);
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      const newLayout = arrayMove(items, oldIndex, newIndex);
+      return {
+        ...prev,
+        settings: {
+          ...prev.settings,
+          dashboardLayout: newLayout,
+        },
+      };
+    });
+  };
+
+  const flushCloudSaveNow = async (snapshot = data) => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+
+    if (cloudSyncTimeoutRef.current) {
+      clearTimeout(cloudSyncTimeoutRef.current);
+      cloudSyncTimeoutRef.current = null;
+    }
+
+    hasPendingCloudSaveRef.current = true;
+    try {
+      await saveUserPlannerData(session.user.id, snapshot);
+    } catch (err) {
+      console.error("Immediate cloud sync error:", err);
+    } finally {
+      hasPendingCloudSaveRef.current = false;
     }
   };
+
+  useEffect(() => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        flushCloudSaveNow(data);
+      }
+    };
+
+    const handlePageHide = () => {
+      flushCloudSaveNow(data);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
+  }, [data, session?.user?.id, isCloudHydrated]);
 
   const [search, setSearch] = useState("");
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
@@ -1450,14 +1498,8 @@ export default function StudyPlannerApp() {
       }
 
       cloudSyncTimeoutRef.current = setTimeout(async () => {
-        try {
-          await saveUserPlannerData(session.user.id, data);
-        } catch (err) {
-          console.error("Cloud sync error:", err);
-        } finally {
-          hasPendingCloudSaveRef.current = false;
-          cloudSyncTimeoutRef.current = null;
-        }
+        await flushCloudSaveNow(data);
+        cloudSyncTimeoutRef.current = null;
       }, 2000);
 
       return () => {
@@ -1847,6 +1889,7 @@ export default function StudyPlannerApp() {
 
     const handleLogout = async () => {
       try {
+        await flushCloudSaveNow(data);
         await signOutCurrentSession();
         setSession(null);
         setData({
@@ -1854,7 +1897,7 @@ export default function StudyPlannerApp() {
           tasks: [],
           studySessions: [],
           todayFocus: [],
-          settings: { appearance: "light", sidebarCollapsed: false },
+          settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
           seeds: { tasks: false, sessions: false },
         });
       } catch (err) {
