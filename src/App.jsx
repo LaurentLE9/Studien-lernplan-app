@@ -3112,49 +3112,78 @@ export default function StudyPlannerApp() {
                             );
                           }
 
-                          const semesterSubjects = data.subjects.filter((s) => s.semesterId === semester.id || s.groupId === semester.id);
-                          const semesterTasks = data.tasks.filter((t) => t.semesterId === semester.id);
-                          const semesterMinutes = data.studySessions
-                            .filter((s) => semesterSubjects.find((sub) => sub.id === s.subjectId))
-                            .reduce((sum, s) => sum + s.durationMinutes, 0);
-                          const startDate = new Date(semester.start_date);
-                          const endDate = new Date(semester.end_date);
-                          const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-                          const remainingDays = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
-                          const progress = totalDays > 0 ? Math.max(0, Math.min(100, Math.round(((totalDays - remainingDays) / totalDays) * 100))) : 0;
+                          try {
+                            const semesterSubjects = data.subjects?.filter((s) => s && (s.semesterId === semester.id || s.groupId === semester.id)) || [];
+                            const semesterTasks = data.tasks?.filter((t) => t && (t.semesterId === semester.id)) || [];
+                            const semesterMinutes = data.studySessions
+                              ?.filter((s) => s && semesterSubjects.some((sub) => sub && sub.id === s.subjectId))
+                              .reduce((sum, s) => sum + (s?.durationMinutes || 0), 0) || 0;
+                            const startDate = new Date(semester.start_date);
+                            const endDate = new Date(semester.end_date);
+                            
+                            if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                              return (
+                                <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                                  <CardHeader>
+                                    <CardTitle className="text-lg">{semester.name}</CardTitle>
+                                    <CardDescription className="text-xs">Ungültige Daten</CardDescription>
+                                  </CardHeader>
+                                  <CardContent className="text-sm text-muted-foreground">
+                                    Die Semester-Daten sind ungültig.
+                                  </CardContent>
+                                </Card>
+                              );
+                            }
 
-                          return (
-                            <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                              <CardHeader>
-                                <CardTitle className="text-lg">{semester.name}</CardTitle>
-                                <CardDescription className="text-xs">
-                                  {formatDateDisplay(semester.start_date)} - {formatDateDisplay(semester.end_date)}
-                                </CardDescription>
-                              </CardHeader>
-                              <CardContent className="grid gap-3 text-sm">
-                                <div className="rounded-lg border p-3">
-                                  <p className="text-muted-foreground">Fächer</p>
-                                  <p className="font-semibold">{semesterSubjects.length}</p>
-                                </div>
-                                <div className="rounded-lg border p-3">
-                                  <p className="text-muted-foreground">Aufgaben</p>
-                                  <p className="font-semibold">{semesterTasks.length}</p>
-                                </div>
-                                <div className="rounded-lg border p-3">
-                                  <p className="text-muted-foreground">Lernzeit</p>
-                                  <p className="font-semibold">{formatMinutes(semesterMinutes)}</p>
-                                </div>
-                                <div className="rounded-lg border p-3">
-                                  <p className="text-muted-foreground">Resttage</p>
-                                  <p className="font-semibold">{remainingDays >= 0 ? remainingDays : `${Math.abs(remainingDays)} vorbei`}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-2">Fortschritt: {progress}%</p>
-                                  <Progress value={progress} className="h-2" />
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
+                            const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                            const remainingDays = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+                            const progress = totalDays > 0 ? Math.max(0, Math.min(100, Math.round(((totalDays - remainingDays) / totalDays) * 100))) : 0;
+
+                            return (
+                              <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                                <CardHeader>
+                                  <CardTitle className="text-lg">{semester.name}</CardTitle>
+                                  <CardDescription className="text-xs">
+                                    {formatDateDisplay(semester.start_date)} - {formatDateDisplay(semester.end_date)}
+                                  </CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid gap-3 text-sm">
+                                  <div className="rounded-lg border p-3">
+                                    <p className="text-muted-foreground">Fächer</p>
+                                    <p className="font-semibold">{semesterSubjects.length}</p>
+                                  </div>
+                                  <div className="rounded-lg border p-3">
+                                    <p className="text-muted-foreground">Aufgaben</p>
+                                    <p className="font-semibold">{semesterTasks.length}</p>
+                                  </div>
+                                  <div className="rounded-lg border p-3">
+                                    <p className="text-muted-foreground">Lernzeit</p>
+                                    <p className="font-semibold">{formatMinutes(semesterMinutes)}</p>
+                                  </div>
+                                  <div className="rounded-lg border p-3">
+                                    <p className="text-muted-foreground">Resttage</p>
+                                    <p className="font-semibold">{remainingDays >= 0 ? remainingDays : `${Math.abs(remainingDays)} vorbei`}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-2">Fortschritt: {progress}%</p>
+                                    <Progress value={progress} className="h-2" />
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          } catch (err) {
+                            console.error("Error rendering semester card:", err);
+                            return (
+                              <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                                <CardHeader>
+                                  <CardTitle className="text-lg">{semester.name}</CardTitle>
+                                </CardHeader>
+                                <CardContent className="text-sm text-red-600">
+                                  Fehler beim Laden der Semester-Daten.
+                                </CardContent>
+                              </Card>
+                            );
+                          }
                         })}
                       </div>
                     </>
