@@ -2032,10 +2032,12 @@ export default function StudyPlannerApp() {
       if (selectedSemesterId) setSelectedSemesterId("");
       return;
     }
-    if (!selectedSemesterId || !semesters.some((semester) => semester.id === selectedSemesterId)) {
+    if (!selectedSemesterId) {
+      setSelectedSemesterId(semesters[0].id);
+    } else if (!semesters.some((semester) => semester.id === selectedSemesterId)) {
       setSelectedSemesterId(semesters[0].id);
     }
-  }, [semesters, selectedSemesterId]);
+  }, [semesters]);
 
   async function saveSubject(subject) {
     const userId = session?.user?.id;
