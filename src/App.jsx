@@ -1073,12 +1073,15 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualSeed, setManualSeed] = useState(null);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [timerDialogOpen, setTimerDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
   const [seconds, setSeconds] = useState(Number(storedTimer.seconds || 0));
   const [running, setRunning] = useState(Boolean(storedTimer.running));
+  const [paused, setPaused] = useState(Boolean(storedTimer.paused));
+  const [timerStartCount, setTimerStartCount] = useState(0);
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
 
@@ -1095,19 +1098,43 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
       timerPreset,
       seconds,
       running,
+      paused,
     }));
-  }, [manualSubjectId, timerSubjectId, timerMode, timerPreset, seconds, running]);
+  }, [manualSubjectId, timerSubjectId, timerMode, timerPreset, seconds, running, paused]);
 
+  // Automatischer Start der Stoppuhr beim Fach-Wechsel
   useEffect(() => {
-    if (!running) return;
+    if (!timerSubjectId || running || paused || seconds > 0) return;
+    // Automatisch starten wenn Fach gewählt und Timer nicht läuft
+    setRunning(true);
+    setTimerStartCount((prev) => prev + 1);
+  }, [timerSubjectId]);
+
+  // Timer-Interval
+  useEffect(() => {
+    if (!running || paused) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
     intervalRef.current = setInterval(() => {
       setSeconds((prev) => (timerMode === "pomodoro" ? Math.max(0, prev - 1) : prev + 1));
     }, 1000);
-    return () => clearInterval(intervalRef.current);
-  }, [running, timerMode]);
 
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [running, paused, timerMode]);
+
+  // Pomodoro-Ende automatisch speichern
   useEffect(() => {
-    if (timerMode === "pomodoro" && running && seconds === 0) {
+    if (timerMode === "pomodoro" && running && !paused && seconds === 0) {
       onSaveSession({
         id: crypto.randomUUID(),
         subjectId: timerSubjectId,
@@ -1117,33 +1144,14 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
         note: `Pomodoro ${timerPreset} Minuten`,
       });
       setRunning(false);
+      setSeconds(0);
     }
-  }, [seconds, running, timerMode, timerPreset, timerSubjectId, onSaveSession]);
+  }, [seconds, running, paused, timerMode, timerPreset, timerSubjectId, onSaveSession]);
 
   function openManualWithSeed(subjectId, seed = null) {
     setManualSubjectId(subjectId || subjects[0]?.id || "");
     setManualSeed(seed);
     setManualDialogOpen(true);
-  }
-
-  function openRunningTimerForManualEdit({ pauseFirst = false } = {}) {
-    const now = new Date();
-    const durationMinutes = timerMode === "pomodoro"
-      ? Math.max(1, Math.round(((timerPreset * 60) - seconds) / 60))
-      : Math.max(1, Math.round(seconds / 60));
-    const start = new Date(now.getTime() - Math.max(0, durationMinutes) * 60000);
-    if (pauseFirst) {
-      setRunning(false);
-    }
-    openManualWithSeed(timerSubjectId, {
-      date: formatDateInput(now),
-      startTime: toTimeInputValue(start),
-      endTime: toTimeInputValue(now),
-      breakMinutes: "0",
-      activity: timerMode === "pomodoro" ? "Pomodoro" : "Stoppuhr",
-      note: timerMode === "pomodoro" ? `Pomodoro ${timerPreset} Minuten` : "Stoppuhr-Sitzung",
-      source: timerMode,
-    });
   }
 
   function startQuickTimer() {
@@ -1152,31 +1160,48 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
       setSeconds((prev) => (prev === 0 ? timerPreset * 60 : prev));
     }
     setRunning(true);
+    setPaused(false);
     setTimerOpen(false);
   }
 
   function pauseQuickTimer() {
     setRunning(false);
+    setPaused(true);
   }
 
-  function stopQuickTimer(save = true) {
-    setRunning(false);
-    clearInterval(intervalRef.current);
-    const minutes = timerMode === "pomodoro"
-      ? Math.max(1, Math.round(((timerPreset * 60) - seconds) / 60))
-      : Math.max(1, Math.round(seconds / 60));
-    const hasTime = timerMode === "pomodoro" ? (timerPreset * 60) - seconds > 0 : seconds > 0;
-    if (save && hasTime && timerSubjectId) {
-      onSaveSession({
-        id: crypto.randomUUID(),
-        subjectId: timerSubjectId,
-        durationMinutes: minutes,
-        createdAt: new Date().toISOString(),
-        source: timerMode,
-        note: timerMode === "pomodoro" ? `Pomodoro ${timerPreset} Minuten` : "Stoppuhr-Sitzung",
-      });
+  function resumeQuickTimer() {
+    setRunning(true);
+    setPaused(false);
+  }
+
+  function closeTimerDialog(save = false) {
+    if (save) {
+      // Speichern: Timer-Zeit wird gespeichert
+      const minutes = timerMode === "pomodoro"
+        ? Math.max(1, Math.round(((timerPreset * 60) - seconds) / 60))
+        : Math.max(1, Math.round(seconds / 60));
+      const hasTime = timerMode === "pomodoro" ? (timerPreset * 60) - seconds > 0 : seconds > 0;
+      if (hasTime && timerSubjectId) {
+        onSaveSession({
+          id: crypto.randomUUID(),
+          subjectId: timerSubjectId,
+          durationMinutes: minutes,
+          createdAt: new Date().toISOString(),
+          source: timerMode,
+          note: timerMode === "pomodoro" ? `Pomodoro ${timerPreset} Minuten` : "Stoppuhr-Sitzung",
+        });
+      }
+      setSeconds(0);
+      setRunning(false);
+      setPaused(false);
+    } else {
+      // Abbrechen: Timer wird verworfen
+      setSeconds(0);
+      setRunning(false);
+      setPaused(false);
     }
-    setSeconds(0);
+    // Schließen: Timer läuft weiter (kein reset)
+    setTimerDialogOpen(false);
   }
 
   const timerDisplay = `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -1185,6 +1210,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
   return (
     <>
       <div className="relative flex flex-row flex-nowrap gap-3">
+        {/* "Lerneinheit anlegen" Button */}
         <div className="relative">
           <Button type="button" onClick={() => { setManualPickerOpen((prev) => !prev); setTimerOpen(false); }} className="shrink-0 rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100">
             <Plus className="mr-2 h-4 w-4" />Lerneinheit anlegen<ChevronDown className="ml-2 h-4 w-4" />
@@ -1203,6 +1229,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
           ) : null}
         </div>
 
+        {/* Timer Button */}
         <div className="relative">
           <Button type="button" onClick={() => { setTimerOpen((prev) => !prev); setManualPickerOpen(false); }} className="shrink-0 rounded-full bg-blue-600 px-5 text-white hover:bg-blue-500">
             <Play className="mr-2 h-4 w-4" />Timer<ChevronDown className="ml-2 h-4 w-4" />
@@ -1224,7 +1251,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
                   <TabsContent value="pomodoro" className="m-0">
                     <div className="grid grid-cols-6 gap-2">
                       {[25, 45, 60, 90, 120].map((preset) => (
-                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => { setTimerPreset(preset); if (!running) setSeconds(preset * 60); }}>{preset}</Button>
+                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => { setTimerPreset(preset); if (!running && !paused) setSeconds(preset * 60); }}>{preset}</Button>
                       ))}
                       <div className={cn("flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold", darkMode ? "bg-slate-100 text-slate-700" : "bg-slate-200 text-slate-700")}>
                         <button type="button" onClick={() => setTimerPreset((prev) => Math.max(5, prev - 5))}>-</button>
@@ -1247,14 +1274,22 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
                   </div>
 
                   <div className="flex gap-2">
-                    {!running ? (
+                    {!running && !paused ? (
                       <Button type="button" onClick={startQuickTimer} className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-500" disabled={!timerSubjectId}>
                         <Play className="mr-2 h-4 w-4" />{timerMode === "pomodoro" ? "Pomodoro starten" : "Stoppuhr starten"}
                       </Button>
+                    ) : paused ? (
+                      <Button type="button" onClick={resumeQuickTimer} className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-500">
+                        <Play className="mr-2 h-4 w-4" />Fortsetzen
+                      </Button>
                     ) : (
-                      <Button type="button" variant="secondary" onClick={pauseQuickTimer} className="flex-1 rounded-xl"><Pause className="mr-2 h-4 w-4" />Pause</Button>
+                      <Button type="button" onClick={pauseQuickTimer} className="flex-1 rounded-xl variant-secondary">
+                        <Pause className="mr-2 h-4 w-4" />Pausieren
+                      </Button>
                     )}
-                    <Button type="button" variant="outline" onClick={() => openManualWithSeed(timerSubjectId || subjects[0]?.id || "", { source: timerMode })} className="rounded-xl">Manuell</Button>
+                    <Button type="button" variant="outline" onClick={() => setTimerDialogOpen(true)} className="rounded-xl">
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               </Tabs>
@@ -1263,17 +1298,128 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
         </div>
       </div>
 
-      {(running || seconds > 0) ? (
+      {/* Floating Timer Display */}
+      {(running || paused || seconds > 0) ? (
         <div className="fixed left-1/2 top-4 z-[80] -translate-x-1/2">
           <div className={cn("flex items-center gap-3 rounded-full border px-4 py-3 shadow-2xl", floatingClass)}>
-            <button type="button" onClick={() => openRunningTimerForManualEdit({ pauseFirst: true })} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500"><Pause className="h-4 w-4" /></button>
-            <button type="button" onClick={() => openRunningTimerForManualEdit({ pauseFirst: false })} className="flex items-center gap-3"><span className="h-3 w-3 rounded-full bg-emerald-400" /><span className="font-semibold">{timerSubject?.name || "Fach"}</span><span className="font-mono text-lg font-semibold">{timerDisplay}</span></button>
-            <button type="button" onClick={() => openRunningTimerForManualEdit({ pauseFirst: false })} className="text-slate-400 hover:text-slate-200"><Maximize2 className="h-4 w-4" /></button>
-            <button type="button" onClick={() => stopQuickTimer(true)} className="text-slate-400 hover:text-slate-200"><X className="h-4 w-4" /></button>
+            {paused ? (
+              <button type="button" onClick={resumeQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500">
+                <Play className="h-4 w-4" />
+              </button>
+            ) : (
+              <button type="button" onClick={pauseQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500">
+                <Pause className="h-4 w-4" />
+              </button>
+            )}
+            <button type="button" onClick={() => setTimerDialogOpen(true)} className="flex items-center gap-3">
+              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: paused ? "#f59e0b" : "#10b981" }} />
+              <span className="font-semibold">{timerSubject?.name || "Fach"}</span>
+              <span className="font-mono text-lg font-semibold">{timerDisplay}</span>
+            </button>
+            <button type="button" onClick={() => setTimerDialogOpen(true)} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+              <Maximize2 className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => closeTimerDialog(false)} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       ) : null}
 
+      {/* Timer Detail Dialog */}
+      <Dialog open={timerDialogOpen} onOpenChange={setTimerDialogOpen}>
+        <DialogContent className={cn("max-w-md rounded-2xl", darkMode ? "bg-[#1b2237] border-slate-800" : "bg-white border-slate-200")}>
+          <DialogHeader>
+            <DialogTitle className={darkMode ? "text-white" : "text-slate-900"}>
+              {timerMode === "stopwatch" ? "Stoppuhr" : "Pomodoro"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className={cn("space-y-6 py-4", darkMode ? "text-slate-50" : "text-slate-900")}>
+            {/* Timer Display */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-6xl font-bold font-mono">{timerDisplay}</div>
+              <div className="text-sm">{timerSubject?.name || "Fach nicht gewählt"}</div>
+            </div>
+
+            {/* Controls */}
+            <div className="flex gap-2 justify-center">
+              {!running && !paused ? (
+                <Button onClick={startQuickTimer} disabled={!timerSubjectId} className="rounded-xl bg-blue-600 hover:bg-blue-500">
+                  <Play className="mr-2 h-4 w-4" />Starten
+                </Button>
+              ) : paused ? (
+                <Button onClick={resumeQuickTimer} className="rounded-xl bg-blue-600 hover:bg-blue-500">
+                  <Play className="mr-2 h-4 w-4" />Fortsetzen
+                </Button>
+              ) : (
+                <Button onClick={pauseQuickTimer} className="rounded-xl bg-blue-600 hover:bg-blue-500">
+                  <Pause className="mr-2 h-4 w-4" />Pausieren
+                </Button>
+              )}
+
+              {seconds > 0 && (
+                <Button variant="outline" onClick={() => { setSeconds(0); setRunning(false); setPaused(false); }} className="rounded-xl">
+                  <X className="mr-2 h-4 w-4" />Zurücksetzen
+                </Button>
+              )}
+            </div>
+
+            {/* Subject Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Fach</Label>
+              <div className="grid gap-2 max-h-[150px] overflow-y-auto pr-1">
+                {subjects.map((subject) => {
+                  const isSelected = timerSubjectId === subject.id;
+                  return (
+                    <button
+                      key={subject.id}
+                      type="button"
+                      onClick={() => setTimerSubjectId(subject.id)}
+                      className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-blue-500 ring-offset-2" : "opacity-90")}
+                      style={{ backgroundColor: subject.color }}
+                    >
+                      <span>{subject.name}</span>
+                      {isSelected ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex gap-2 justify-end pt-4 border-t" style={{ borderColor: darkMode ? "#334155" : "#e2e8f0" }}>
+            <Button
+              variant="outline"
+              onClick={() => closeTimerDialog(false)}
+              className="rounded-xl"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() => closeTimerDialog(true)}
+              disabled={seconds === 0}
+              className="rounded-xl bg-blue-600 hover:bg-blue-500"
+            >
+              Speichern
+            </Button>
+          </div>
+
+          {/* Close Button (Timer läuft weiter) */}
+          <div className="flex justify-center pt-2">
+            <button
+              type="button"
+              onClick={() => closeTimerDialog()}
+              className={cn("text-sm font-medium transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}
+            >
+              Schließen (Timer läuft weiter)
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Study Dialog */}
       <ManualStudyDialog
         open={manualDialogOpen}
         onOpenChange={setManualDialogOpen}
