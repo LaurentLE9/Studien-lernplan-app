@@ -696,3 +696,28 @@ export async function archiveSubjectRecord(userId, subjectId) {
   );
   return rows?.[0] || null;
 }
+
+export async function unarchiveSubjectRecord(userId, subjectId) {
+  const rows = await supabaseRequest(
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,created_at`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({ is_archived: false }),
+    }
+  );
+  return rows?.[0] || null;
+}
+
+export async function deleteSubjectRecord(userId, subjectId) {
+  await supabaseRequest(
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+}

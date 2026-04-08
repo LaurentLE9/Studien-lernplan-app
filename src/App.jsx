@@ -54,6 +54,8 @@ import {
   createSubjectRecord,
   updateSubjectRecord,
   archiveSubjectRecord,
+  unarchiveSubjectRecord,
+  deleteSubjectRecord,
 } from "@/lib/cloudStore";
 import {
   Card,
@@ -1494,12 +1496,12 @@ export default function StudyPlannerApp() {
   const [semesterDialogOpen, setSemesterDialogOpen] = useState(false);
   const [semesters, setSemesters] = useState([]);
   const [editingSemester, setEditingSemester] = useState(null);
-  const [semesterConfigTab, setSemesterConfigTab] = useState("semester");
-  const [selectedSemesterId, setSelectedSemesterId] = useState("");
+  const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
+  const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
   const [lastDeletedSession, setLastDeletedSession] = useState(null);
@@ -2066,6 +2068,51 @@ export default function StudyPlannerApp() {
     }
   }
 
+  async function archiveSubject(id) {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setData((prev) => ({ ...prev, subjects: prev.subjects.filter((s) => s.id !== id) }));
+      return;
+    }
+
+    try {
+      await archiveSubjectRecord(userId, id);
+      await syncSubjectsFromDatabase(userId);
+    } catch (err) {
+      console.error("Archive subject error:", err);
+      setCloudSyncError(err?.message || "Fach konnte nicht archiviert werden");
+    }
+  }
+
+  async function restoreSubject(id) {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    try {
+      await unarchiveSubjectRecord(userId, id);
+      await syncSubjectsFromDatabase(userId);
+    } catch (err) {
+      console.error("Restore subject error:", err);
+      setCloudSyncError(err?.message || "Fach konnte nicht wiederhergestellt werden");
+    }
+  }
+
+  async function permanentlyDeleteSubject(id) {
+    const userId = session?.user?.id;
+    if (!userId) return;
+
+    const confirmed = window.confirm("Dieses Fach wird endgültig gelöscht und kann nicht wiederhergestellt werden. Fortfahren?");
+    if (!confirmed) return;
+
+    try {
+      await deleteSubjectRecord(userId, id);
+      await syncSubjectsFromDatabase(userId);
+    } catch (err) {
+      console.error("Permanently delete subject error:", err);
+      setCloudSyncError(err?.message || "Fach konnte nicht gelöscht werden");
+    }
+  }
+
   async function deleteSubject(id) {
     const userId = session?.user?.id;
     if (!userId) {
@@ -2287,9 +2334,9 @@ export default function StudyPlannerApp() {
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { id: "semester-config", label: "Semester Configuration", icon: CalendarClock },
-    { id: "subjects", label: "Fächer", icon: GraduationCap },
     { id: "tasks", label: "Aufgaben", icon: ListTodo },
+    { id: "semester-config", label: "Semesterkonfiguration", icon: CalendarClock },
+    { id: "subjects", label: "Fächer", icon: GraduationCap },
     { id: "tracking", label: "Lernzeiterfassung", icon: Clock3 },
     { id: "stats", label: "Statistik", icon: BarChart3 },
   ];
@@ -2712,98 +2759,47 @@ export default function StudyPlannerApp() {
 
           {page === "semester-config" ? (
             <div className="grid gap-6">
-              <Tabs value={semesterConfigTab} onValueChange={setSemesterConfigTab}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <TabsList>
-                    <TabsTrigger value="semester">Semester</TabsTrigger>
-                    <TabsTrigger value="subjects">Fächer</TabsTrigger>
-                  </TabsList>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="rounded-xl" onClick={() => { setEditingSemester(null); setSemesterDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Semester anlegen</Button>
-                    <Button variant="outline" className="rounded-xl" onClick={() => setSubjectDialogOpen(true)}><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-bold tracking-tight">Semesterkonfiguration</h2>
+                <Button variant="outline" className="rounded-xl" onClick={() => { setEditingSemester(null); setSemesterDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Semester anlegen</Button>
+              </div>
 
-                <TabsContent value="semester" className="mt-4 grid gap-6">
-                  {semesterSummaries.length === 0 ? (
-                    <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardContent className="p-6 text-sm text-muted-foreground">Noch keine Semester angelegt.</CardContent></Card>
-                  ) : (
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      {semesterSummaries.map((semester) => (
-                        <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                          <CardHeader>
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <CardTitle>{semester.name}</CardTitle>
-                                <CardDescription>
-                                  {semester.startDate && semester.endDate ? `${formatDateDisplay(semester.startDate)} - ${formatDateDisplay(semester.endDate)}` : "Zeitraum noch nicht gesetzt"}
-                                </CardDescription>
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => { setEditingSemester(semester); setSemesterDialogOpen(true); }}>Bearbeiten</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => deleteSemesterRecord(semester.id)}>Löschen</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => { setSelectedSemesterId(semester.id); setSemesterConfigTab("semester"); }}>Einstellungen</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="grid gap-3">
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div className="rounded-xl border p-3"><p className="text-muted-foreground">Dauer</p><p className="font-semibold">{semester.durationDays === null ? "-" : `${semester.durationDays} Tage`}</p></div>
-                              <div className="rounded-xl border p-3"><p className="text-muted-foreground">Resttage</p><p className="font-semibold">{semester.remainingDays === null ? "-" : semester.remainingDays < 0 ? `${Math.abs(semester.remainingDays)} vorbei` : `${semester.remainingDays} Tage`}</p></div>
-                              <div className="rounded-xl border p-3"><p className="text-muted-foreground">Anzahl Fächer</p><p className="font-semibold">{semester.subjectCount}</p></div>
-                              <div className="rounded-xl border p-3"><p className="text-muted-foreground">Lernzeit</p><p className="font-semibold">{formatMinutes(semester.totalMinutes)}</p></div>
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center justify-between text-sm"><span>Fortschritt</span><span>{semester.progress}%</span></div>
-                              <Progress value={semester.progress} />
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedSemesterStats ? (
-                    <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+              {semesters.length === 0 ? (
+                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardContent className="p-6 text-sm text-muted-foreground">Noch keine Semester angelegt.</CardContent></Card>
+              ) : (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {semesters.map((semester) => (
+                    <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                       <CardHeader>
-                        <CardTitle>Semester-Statistik: {selectedSemesterStats.name}</CardTitle>
-                        <CardDescription>Überblick über Lernzeit, Fächer und Fortschritt</CardDescription>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <CardTitle>{semester.name}</CardTitle>
+                            <CardDescription>
+                              {semester.start_date && semester.end_date ? `${formatDateDisplay(semester.start_date)} - ${formatDateDisplay(semester.end_date)}` : "Zeitraum noch nicht gesetzt"}
+                            </CardDescription>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => { setEditingSemester(semester); setSemesterDialogOpen(true); }}>Bearbeiten</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => deleteSemesterRecord(semester.id)}>Löschen</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </CardHeader>
-                      <CardContent className="grid gap-4 md:grid-cols-3">
-                        <div className="rounded-xl border p-4"><p className="text-sm text-muted-foreground">Gesamtlernzeit</p><p className="text-lg font-semibold">{formatMinutes(selectedSemesterStats.totalMinutes)}</p></div>
-                        <div className="rounded-xl border p-4"><p className="text-sm text-muted-foreground">Anzahl Fächer</p><p className="text-lg font-semibold">{selectedSemesterStats.subjectCount}</p></div>
-                        <div className="rounded-xl border p-4"><p className="text-sm text-muted-foreground">Fortschritt</p><p className="text-lg font-semibold">{selectedSemesterStats.progress}%</p></div>
-                      </CardContent>
-                    </Card>
-                  ) : null}
-                </TabsContent>
-
-                <TabsContent value="subjects" className="mt-4 grid gap-4">
-                  {groupedSubjects.length === 0 ? (
-                    <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardContent className="p-6 text-sm text-muted-foreground">Noch keine Fächer vorhanden.</CardContent></Card>
-                  ) : groupedSubjects.map((group) => (
-                    <Card key={group.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                      <CardHeader><CardTitle>{group.name}</CardTitle><CardDescription>{group.subjects.length} Fächer zugeordnet</CardDescription></CardHeader>
-                      <CardContent className="grid gap-2">
-                        {group.subjects.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><div className="flex gap-2"><Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => deleteSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button></div></div>)}
-                      </CardContent>
                     </Card>
                   ))}
-                </TabsContent>
-              </Tabs>
+                </div>
+              )}
             </div>
           ) : null}
 
           {page === "subjects" ? (
             <div className="grid gap-6">
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="outline" className="rounded-xl" onClick={() => { setEditingSemester(null); setSemesterDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />Semester anlegen</Button>
-
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-2xl font-bold tracking-tight">Fächer</h2>
                 <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
@@ -2840,7 +2836,7 @@ export default function StudyPlannerApp() {
                               </div>
                               <div className="flex gap-2">
                                 <Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button>
-                                <Button variant="outline" size="icon" onClick={() => deleteSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
+                                <Button variant="outline" size="icon" onClick={() => archiveSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
                               </div>
                             </div>
 
@@ -2879,18 +2875,67 @@ export default function StudyPlannerApp() {
               ))}
 
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                <CardHeader>
-                  <CardTitle>Archivierte Fächer</CardTitle>
-                  <CardDescription>Soft Delete: aus der normalen Ansicht entfernt, aber in der Datenbank erhalten.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3">
-                  {archivedSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p> : archivedSubjects.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><Badge variant="outline">{subject.semester || "Ohne Semester"}</Badge></div>)}
-                </CardContent>
+                <button 
+                  onClick={() => setArchiveCollapsed(!archiveCollapsed)}
+                  className="w-full"
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-semibold tracking-tight">Archiv</h3>
+                        <Badge variant="outline">{archivedSubjects.length}</Badge>
+                      </div>
+                      <ChevronDown className={cn("h-5 w-5 transition-transform", archiveCollapsed && "-rotate-90")} />
+                    </div>
+                  </CardHeader>
+                </button>
+                
+                {!archiveCollapsed && (
+                  <CardContent className="grid gap-3 pt-0">
+                    {archivedSubjects.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p>
+                    ) : (
+                      archivedSubjects.map((subject) => (
+                        <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} />
+                            <span>{subject.name}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="rounded-lg h-8"
+                              onClick={() => restoreSubject(subject.id)}
+                            >
+                              Wiederherstellen
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50"
+                              onClick={() => permanentlyDeleteSubject(subject.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                )}
               </Card>
             </div>
           ) : null}
 
           {page === "tasks" ? (
+            <Tabs value={activeTaskTab} onValueChange={setActiveTaskTab} className="w-full">
+              <TabsList className={cn("grid w-full grid-cols-2 rounded-2xl", darkMode ? "bg-[#2a3554]" : "bg-slate-200")}>
+                <TabsTrigger value="tasks">Aufgaben</TabsTrigger>
+                <TabsTrigger value="semester">Semester</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="tasks" className="mt-6">
             <div className="grid gap-6">
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                 <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
@@ -3041,6 +3086,68 @@ export default function StudyPlannerApp() {
                 ) : null}
               </Card>
             </div>
+              </TabsContent>
+
+              <TabsContent value="semester" className="mt-6">
+                <div className="grid gap-6">
+                  {semesters.length === 0 ? (
+                    <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                      <CardContent className="p-6 text-sm text-muted-foreground">Noch keine Semester angelegt.</CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                        {semesters.map((semester) => {
+                          const semesterSubjects = data.subjects.filter((s) => s.semesterId === semester.id || s.groupId === semester.id);
+                          const semesterTasks = data.tasks.filter((t) => t.semesterId === semester.id);
+                          const semesterMinutes = data.studySessions
+                            .filter((s) => semesterSubjects.find((sub) => sub.id === s.subjectId))
+                            .reduce((sum, s) => sum + s.durationMinutes, 0);
+                          const startDate = new Date(semester.start_date);
+                          const endDate = new Date(semester.end_date);
+                          const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+                          const remainingDays = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
+                          const progress = Math.max(0, Math.min(100, Math.round(((totalDays - remainingDays) / totalDays) * 100)));
+
+                          return (
+                            <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                              <CardHeader>
+                                <CardTitle className="text-lg">{semester.name}</CardTitle>
+                                <CardDescription className="text-xs">
+                                  {formatDateDisplay(semester.start_date)} - {formatDateDisplay(semester.end_date)}
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent className="grid gap-3 text-sm">
+                                <div className="rounded-lg border p-3">
+                                  <p className="text-muted-foreground">Fächer</p>
+                                  <p className="font-semibold">{semesterSubjects.length}</p>
+                                </div>
+                                <div className="rounded-lg border p-3">
+                                  <p className="text-muted-foreground">Aufgaben</p>
+                                  <p className="font-semibold">{semesterTasks.length}</p>
+                                </div>
+                                <div className="rounded-lg border p-3">
+                                  <p className="text-muted-foreground">Lernzeit</p>
+                                  <p className="font-semibold">{formatMinutes(semesterMinutes)}</p>
+                                </div>
+                                <div className="rounded-lg border p-3">
+                                  <p className="text-muted-foreground">Resttage</p>
+                                  <p className="font-semibold">{remainingDays >= 0 ? remainingDays : `${Math.abs(remainingDays)} vorbei`}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground mb-2">Fortschritt: {progress}%</p>
+                                  <Progress value={progress} className="h-2" />
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           ) : null}
 
           {page === "tracking" ? (
