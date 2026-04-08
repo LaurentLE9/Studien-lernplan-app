@@ -1496,6 +1496,7 @@ export default function StudyPlannerApp() {
   const [semesterDialogOpen, setSemesterDialogOpen] = useState(false);
   const [semesters, setSemesters] = useState([]);
   const [editingSemester, setEditingSemester] = useState(null);
+  const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
