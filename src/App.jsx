@@ -40,7 +40,19 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
 import { SortableTile } from "@/components/SortableTile";
 
-import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData, normalizeDefaultData } from "@/lib/cloudStore";
+import {
+  getActiveSession,
+  signOutCurrentSession,
+  loadUserPlannerData,
+  saveUserPlannerData,
+  normalizeDefaultData,
+  loadSubjectGroups,
+  createSubjectGroup,
+  loadSubjects,
+  createSubjectRecord,
+  updateSubjectRecord,
+  archiveSubjectRecord,
+} from "@/lib/cloudStore";
 import {
   Card,
   CardContent,
@@ -1274,16 +1286,25 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
   );
 }
 
-function SubjectForm({ onSave, initialValue, onDone }) {
-  const [form, setForm] = useState(initialValue || { name: "", color: "#3b82f6", description: "", semester: "", goal: "", targetHours: 30 });
+function SubjectForm({ onSave, initialValue, onDone, groups = [] }) {
+  const [form, setForm] = useState(initialValue || { name: "", color: "#3b82f6", description: "", groupId: groups[0]?.id || "", goal: "", targetHours: 30 });
+
+  useEffect(() => {
+    if (!groups.length) return;
+    setForm((prev) => ({
+      ...prev,
+      groupId: prev.groupId || groups[0].id,
+    }));
+  }, [groups]);
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Fachname</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Farbe</Label><input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="h-10 w-full rounded-md border bg-transparent" /></div><div className="grid gap-2"><Label>Zielstunden</Label><Input type="number" value={form.targetHours} onChange={(e) => setForm({ ...form, targetHours: Number(e.target.value) || 0 })} /></div></div>
       <div className="grid gap-2"><Label>Beschreibung</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-      <div className="grid gap-2"><Label>Semester</Label><Input value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Gruppe / Semester</Label><Select value={form.groupId} onValueChange={(value) => setForm({ ...form, groupId: value })}><SelectTrigger><SelectValue placeholder="Gruppe wählen" /></SelectTrigger><SelectContent>{groups.map((group) => <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid gap-2"><Label>Ziel / Notiz</Label><Textarea value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></div>
-      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={() => { if (!form.name.trim()) return; onSave({ ...initialValue, ...form }); onDone?.(); }}>Speichern</Button></div>
+      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={() => { if (!form.name.trim() || !form.groupId) return; onSave({ ...initialValue, ...form }); onDone?.(); }}>Speichern</Button></div>
     </div>
   );
 }
@@ -1444,6 +1465,10 @@ export default function StudyPlannerApp() {
   const [showArchive, setShowArchive] = useState(false);
   const [taskFilter, setTaskFilter] = useState({ subjectId: "all", priority: "all", status: "all", sort: "deadline" });
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [subjectGroups, setSubjectGroups] = useState([]);
+  const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
@@ -1491,6 +1516,8 @@ export default function StudyPlannerApp() {
     if (!session?.user?.id) {
       setIsCloudHydrated(false);
       setCloudSyncError(null);
+      setSubjectGroups([]);
+      setArchivedSubjects([]);
       return;
     }
 
@@ -1545,6 +1572,44 @@ export default function StudyPlannerApp() {
       }
     };
   }, [session?.user?.id, setData]);
+
+  const syncSubjectsFromDatabase = async (userId) => {
+    if (!userId) return;
+
+    const [groups, subjects] = await Promise.all([
+      loadSubjectGroups(userId),
+      loadSubjects(userId),
+    ]);
+
+    const groupsById = Object.fromEntries(groups.map((g) => [g.id, g]));
+    const mapRowToSubject = (row) => ({
+      id: row.id,
+      name: row.name,
+      color: row.color || "#3b82f6",
+      description: row.description || "",
+      groupId: row.group_id || "",
+      semester: groupsById[row.group_id]?.name || "Ohne Gruppe",
+      goal: row.goal || "",
+      targetHours: Number(row.target_hours || 0),
+      isArchived: Boolean(row.is_archived),
+      createdAt: row.created_at,
+    });
+
+    const active = subjects.filter((row) => !row.is_archived).map(mapRowToSubject);
+    const archived = subjects.filter((row) => row.is_archived).map(mapRowToSubject);
+
+    setSubjectGroups(groups);
+    setArchivedSubjects(archived);
+    setData((prev) => ({ ...prev, subjects: active }));
+  };
+
+  useEffect(() => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+    syncSubjectsFromDatabase(session.user.id).catch((err) => {
+      console.error("Subject sync error:", err);
+      setCloudSyncError(err?.message || "Fächer konnten nicht aus Supabase geladen werden");
+    });
+  }, [session?.user?.id, isCloudHydrated]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -1699,7 +1764,10 @@ export default function StudyPlannerApp() {
     });
   }, [data.seeds.tasks, data.seeds.sessions, setData, session?.user?.id, isCloudHydrated]);
 
-  const subjectsById = useMemo(() => Object.fromEntries(data.subjects.map((s) => [s.id, s])), [data.subjects]);
+  const subjectsById = useMemo(() => {
+    const allSubjects = [...data.subjects, ...archivedSubjects];
+    return Object.fromEntries(allSubjects.map((s) => [s.id, s]));
+  }, [data.subjects, archivedSubjects]);
 
   const enhancedTasks = useMemo(() => data.tasks.map((task) => {
     const nextMilestone = getNextTaskMilestone(task);
@@ -1871,23 +1939,87 @@ export default function StudyPlannerApp() {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [data.todayFocus, subjectsById, today]);
 
-  function saveSubject(subject) {
-    setData((prev) => ({
-      ...prev,
-      subjects: prev.subjects.some((s) => s.id === subject.id)
-        ? prev.subjects.map((s) => (s.id === subject.id ? subject : s))
-        : [...prev.subjects, { ...subject, id: crypto.randomUUID() }],
-    }));
-    setEditingSubject(null);
+  const groupedSubjects = useMemo(() => {
+    const groupsById = Object.fromEntries(subjectGroups.map((group) => [group.id, group]));
+    const bucket = new Map();
+
+    data.subjects.forEach((subject) => {
+      const key = subject.groupId || "ungrouped";
+      if (!bucket.has(key)) {
+        bucket.set(key, {
+          id: key,
+          name: groupsById[key]?.name || "Ohne Gruppe",
+          subjects: [],
+        });
+      }
+      bucket.get(key).subjects.push(subject);
+    });
+
+    return [...bucket.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
+  }, [data.subjects, subjectGroups]);
+
+  async function saveSubject(subject) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        subjects: prev.subjects.some((s) => s.id === subject.id)
+          ? prev.subjects.map((s) => (s.id === subject.id ? subject : s))
+          : [...prev.subjects, { ...subject, id: crypto.randomUUID() }],
+      }));
+      setEditingSubject(null);
+      return;
+    }
+
+    try {
+      const payload = {
+        ...subject,
+        id: subject.id || crypto.randomUUID(),
+      };
+      if (data.subjects.some((s) => s.id === payload.id)) {
+        await updateSubjectRecord(userId, payload.id, payload);
+      } else {
+        await createSubjectRecord(userId, payload);
+      }
+      await syncSubjectsFromDatabase(userId);
+      setEditingSubject(null);
+    } catch (err) {
+      console.error("Save subject error:", err);
+      setCloudSyncError(err?.message || "Fach konnte nicht gespeichert werden");
+    }
   }
 
-  function deleteSubject(id) {
-    setData((prev) => ({
-      ...prev,
-      subjects: prev.subjects.filter((s) => s.id !== id),
-      tasks: prev.tasks.filter((t) => t.subjectId !== id),
-      studySessions: prev.studySessions.filter((s) => s.subjectId !== id),
-    }));
+  async function deleteSubject(id) {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setData((prev) => ({ ...prev, subjects: prev.subjects.filter((s) => s.id !== id) }));
+      return;
+    }
+
+    try {
+      await archiveSubjectRecord(userId, id);
+      await syncSubjectsFromDatabase(userId);
+    } catch (err) {
+      console.error("Archive subject error:", err);
+      setCloudSyncError(err?.message || "Fach konnte nicht archiviert werden");
+    }
+  }
+
+  async function saveSubjectGroup() {
+    const userId = session?.user?.id;
+    const name = newGroupName.trim();
+    if (!userId || !name) return;
+
+    try {
+      await createSubjectGroup(userId, name);
+      setNewGroupName("");
+      setGroupDialogOpen(false);
+      await syncSubjectsFromDatabase(userId);
+    } catch (err) {
+      console.error("Create subject group error:", err);
+      setCloudSyncError(err?.message || "Gruppe konnte nicht angelegt werden");
+    }
   }
 
   function saveTask(task) {
@@ -2484,73 +2616,104 @@ export default function StudyPlannerApp() {
 
           {page === "subjects" ? (
             <div className="grid gap-6">
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Dialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Gruppe anlegen</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md rounded-3xl">
+                    <DialogHeader><DialogTitle>Gruppe / Semester anlegen</DialogTitle></DialogHeader>
+                    <div className="grid gap-3">
+                      <Label>Name</Label>
+                      <Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="z. B. Semester 1" />
+                      <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setGroupDialogOpen(false)}>Abbrechen</Button><Button onClick={saveSubjectGroup}>Speichern</Button></div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-xl rounded-3xl">
                     <DialogHeader><DialogTitle>Fach anlegen</DialogTitle></DialogHeader>
-                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} />
+                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} groups={subjectGroups} />
                   </DialogContent>
                 </Dialog>
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                {data.subjects.map((subject) => {
-                  const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
-                  const openTasks = data.tasks.filter((t) => t.subjectId === subject.id && t.status !== "erledigt").length;
-                  const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
-                  const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
+              {groupedSubjects.length === 0 ? (
+                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardContent className="p-6 text-sm text-muted-foreground">Noch keine Fächer vorhanden.</CardContent></Card>
+              ) : groupedSubjects.map((group) => (
+                <div key={group.id} className="grid gap-4">
+                  <div className="flex items-center gap-2"><h3 className="text-lg font-semibold tracking-tight">{group.name}</h3><Badge variant="outline">{group.subjects.length}</Badge></div>
+                  <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                    {group.subjects.map((subject) => {
+                      const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
+                      const openTasks = data.tasks.filter((t) => t.subjectId === subject.id && t.status !== "erledigt").length;
+                      const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
+                      const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
 
-                  return (
-                    <Card key={subject.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                      <CardContent className="p-5">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <div className="mt-1 h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
-                            <div>
-                              <h3 className="font-semibold">{subject.name}</h3>
-                              <p className="text-sm text-muted-foreground">{subject.semester || "Semester offen"}</p>
+                      return (
+                        <Card key={subject.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                          <CardContent className="p-5">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-start gap-3">
+                                <div className="mt-1 h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
+                                <div>
+                                  <h3 className="font-semibold">{subject.name}</h3>
+                                  <p className="text-sm text-muted-foreground">{group.name}</p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button>
+                                <Button variant="outline" size="icon" onClick={() => deleteSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="outline" size="icon" onClick={() => deleteSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </div>
 
-                        <div className="mt-4 grid gap-2 text-sm">
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Offene Aufgaben</span><span>{openTasks}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Gelernte Zeit</span><span>{formatMinutes(totalMinutes)} / {subject.targetHours}h</span></div>
-                        </div>
+                            <div className="mt-4 grid gap-2 text-sm">
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Offene Aufgaben</span><span>{openTasks}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Gelernte Zeit</span><span>{formatMinutes(totalMinutes)} / {subject.targetHours}h</span></div>
+                            </div>
 
-                        <div className="mt-4 space-y-2">
-                          <div className="flex items-center justify-between text-sm"><span>Fortschritt</span><span>{progressValue}%</span></div>
-                          <Progress value={progressValue} />
-                        </div>
+                            <div className="mt-4 space-y-2">
+                              <div className="flex items-center justify-between text-sm"><span>Fortschritt</span><span>{progressValue}%</span></div>
+                              <Progress value={progressValue} />
+                            </div>
 
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button onClick={() => openTodaySubjectDialog(subject)} className="rounded-xl">
-                            Heute lernen
-                          </Button>
-                          {todayFocus ? (
-                            <Button variant="outline" onClick={() => removeTodaySubjectFocus(subject.id)} className="rounded-xl">
-                              Heute entfernen
-                            </Button>
-                          ) : null}
-                        </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Button onClick={() => openTodaySubjectDialog(subject)} className="rounded-xl">
+                                Heute lernen
+                              </Button>
+                              {todayFocus ? (
+                                <Button variant="outline" onClick={() => removeTodaySubjectFocus(subject.id)} className="rounded-xl">
+                                  Heute entfernen
+                                </Button>
+                              ) : null}
+                            </div>
 
-                        {todayFocus ? (
-                          <div className="mt-3 rounded-xl border px-3 py-2 text-sm text-muted-foreground">
-                            {todayFocus.note || "Für heute markiert"}
-                          </div>
-                        ) : null}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
+                            {todayFocus ? (
+                              <div className="mt-3 rounded-xl border px-3 py-2 text-sm text-muted-foreground">
+                                {todayFocus.note || "Für heute markiert"}
+                              </div>
+                            ) : null}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                <CardHeader>
+                  <CardTitle>Archivierte Fächer</CardTitle>
+                  <CardDescription>Soft Delete: aus der normalen Ansicht entfernt, aber in der Datenbank erhalten.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  {archivedSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p> : archivedSubjects.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><Badge variant="outline">{subject.semester || "Ohne Gruppe"}</Badge></div>)}
+                </CardContent>
+              </Card>
             </div>
           ) : null}
 
@@ -2785,7 +2948,7 @@ export default function StudyPlannerApp() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent className="max-w-xl rounded-3xl"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent className="max-w-xl rounded-3xl"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} groups={subjectGroups} /> : null}</DialogContent></Dialog>
           <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent className="max-w-2xl rounded-3xl"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudyDialog
             open={!!editingSession}

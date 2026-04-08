@@ -557,3 +557,108 @@ export async function isAuthenticated() {
   const session = await getActiveSession();
   return !!session;
 }
+
+/**
+ * Subject groups CRUD
+ */
+export async function loadSubjectGroups(userId) {
+  const rows = await supabaseRequest(
+    `/subject_groups?user_id=eq.${userId}&select=id,name,user_id,created_at&order=created_at.asc`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function createSubjectGroup(userId, name) {
+  const rows = await supabaseRequest(
+    "/subject_groups?select=id,name,user_id,created_at",
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({ user_id: userId, name }),
+    }
+  );
+  return rows?.[0] || null;
+}
+
+/**
+ * Subjects CRUD (soft-delete via is_archived)
+ */
+export async function loadSubjects(userId) {
+  const rows = await supabaseRequest(
+    `/subjects?user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at&order=created_at.asc`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+  return Array.isArray(rows) ? rows : [];
+}
+
+export async function createSubjectRecord(userId, subject) {
+  const rows = await supabaseRequest(
+    "/subjects?select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at",
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        id: subject.id,
+        user_id: userId,
+        group_id: subject.groupId,
+        name: subject.name,
+        color: subject.color,
+        description: subject.description || "",
+        goal: subject.goal || "",
+        target_hours: Number(subject.targetHours || 0),
+        is_archived: false,
+      }),
+    }
+  );
+  return rows?.[0] || null;
+}
+
+export async function updateSubjectRecord(userId, subjectId, patch) {
+  const rows = await supabaseRequest(
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        group_id: patch.groupId,
+        name: patch.name,
+        color: patch.color,
+        description: patch.description || "",
+        goal: patch.goal || "",
+        target_hours: Number(patch.targetHours || 0),
+      }),
+    }
+  );
+  return rows?.[0] || null;
+}
+
+export async function archiveSubjectRecord(userId, subjectId) {
+  const rows = await supabaseRequest(
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({ is_archived: true }),
+    }
+  );
+  return rows?.[0] || null;
+}
