@@ -559,11 +559,11 @@ export async function isAuthenticated() {
 }
 
 /**
- * Subject groups CRUD
+ * Semesters CRUD
  */
-export async function loadSubjectGroups(userId) {
+export async function loadSemesters(userId) {
   const rows = await supabaseRequest(
-    `/subject_groups?user_id=eq.${userId}&select=id,name,user_id,created_at&order=created_at.asc`,
+    `/semesters?user_id=eq.${userId}&select=id,name,start_date,end_date,user_id,created_at&order=created_at.asc`,
     {
       method: "GET",
       headers: { apikey: SUPABASE_ANON_KEY },
@@ -572,19 +572,53 @@ export async function loadSubjectGroups(userId) {
   return Array.isArray(rows) ? rows : [];
 }
 
-export async function createSubjectGroup(userId, name) {
+export async function createSemester(userId, semester) {
   const rows = await supabaseRequest(
-    "/subject_groups?select=id,name,user_id,created_at",
+    "/semesters?select=id,name,start_date,end_date,user_id,created_at",
     {
       method: "POST",
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Prefer: "return=representation",
       },
-      body: JSON.stringify({ user_id: userId, name }),
+      body: JSON.stringify({
+        user_id: userId,
+        name: semester.name,
+        start_date: semester.startDate || null,
+        end_date: semester.endDate || null,
+      }),
     }
   );
   return rows?.[0] || null;
+}
+
+export async function updateSemester(userId, semesterId, patch) {
+  const rows = await supabaseRequest(
+    `/semesters?id=eq.${semesterId}&user_id=eq.${userId}&select=id,name,start_date,end_date,user_id,created_at`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        name: patch.name,
+        start_date: patch.startDate || null,
+        end_date: patch.endDate || null,
+      }),
+    }
+  );
+  return rows?.[0] || null;
+}
+
+export async function deleteSemester(userId, semesterId) {
+  await supabaseRequest(
+    `/semesters?id=eq.${semesterId}&user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
 }
 
 /**
@@ -592,7 +626,7 @@ export async function createSubjectGroup(userId, name) {
  */
 export async function loadSubjects(userId) {
   const rows = await supabaseRequest(
-    `/subjects?user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at&order=created_at.asc`,
+    `/subjects?user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,created_at&order=created_at.asc`,
     {
       method: "GET",
       headers: { apikey: SUPABASE_ANON_KEY },
@@ -603,7 +637,7 @@ export async function loadSubjects(userId) {
 
 export async function createSubjectRecord(userId, subject) {
   const rows = await supabaseRequest(
-    "/subjects?select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at",
+    "/subjects?select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,created_at",
     {
       method: "POST",
       headers: {
@@ -613,7 +647,7 @@ export async function createSubjectRecord(userId, subject) {
       body: JSON.stringify({
         id: subject.id,
         user_id: userId,
-        group_id: subject.groupId,
+        semester_id: subject.semesterId || subject.groupId || null,
         name: subject.name,
         color: subject.color,
         description: subject.description || "",
@@ -628,7 +662,7 @@ export async function createSubjectRecord(userId, subject) {
 
 export async function updateSubjectRecord(userId, subjectId, patch) {
   const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at`,
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,created_at`,
     {
       method: "PATCH",
       headers: {
@@ -636,7 +670,7 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
         Prefer: "return=representation",
       },
       body: JSON.stringify({
-        group_id: patch.groupId,
+        semester_id: patch.semesterId || patch.groupId || null,
         name: patch.name,
         color: patch.color,
         description: patch.description || "",
@@ -650,7 +684,7 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
 
 export async function archiveSubjectRecord(userId, subjectId) {
   const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,group_id,user_id,is_archived,created_at`,
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,created_at`,
     {
       method: "PATCH",
       headers: {
