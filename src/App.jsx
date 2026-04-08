@@ -96,6 +96,13 @@ import {
 
 const STORAGE_KEY = "study_planner_app_v3";
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const DEADLINE_FILTER_OPTIONS = [
+  { id: "all", label: "Alle" },
+  { id: "open", label: "Nur offene" },
+  { id: "urgent", label: "Dringend" },
+  { id: "today", label: "Heute lernen" },
+  { id: "next3", label: "Naechste 3 Tage" },
+];
 const USER_CACHE_PREFIX = `${STORAGE_KEY}:user`;
 
 function getUserCacheKey(userId) {
@@ -124,6 +131,27 @@ function normalizeDashboardLayout(layout) {
   const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
   const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
   return [...filtered, ...missing];
+}
+
+function normalizeDeadlineWidgetSettings(value) {
+  const fallback = { activeFilter: "all", defaultFilter: "all" };
+  const isValid = (filterId) => DEADLINE_FILTER_OPTIONS.some((option) => option.id === filterId);
+  const activeFilter = isValid(value?.activeFilter) ? value.activeFilter : fallback.activeFilter;
+  const defaultFilter = isValid(value?.defaultFilter) ? value.defaultFilter : fallback.defaultFilter;
+  return { activeFilter, defaultFilter };
+}
+
+function taskMatchesDeadlineFilter(task, filterId) {
+  if (filterId === "all") return true;
+  if (filterId === "open") return task.status !== "erledigt";
+  if (filterId === "urgent") return Boolean(task.urgent);
+  if (filterId === "today") return Boolean(task.flaggedToday);
+  if (filterId === "next3") {
+    if (!task.nextRelevantDate || task.status === "erledigt") return false;
+    const diff = daysUntil(task.nextRelevantDate);
+    return diff !== null && diff >= 0 && diff <= 3;
+  }
+  return true;
 }
 
 function cn(...classes) {
@@ -502,7 +530,12 @@ function usePersistentState() {
           tasks: [],
           studySessions: [],
           todayFocus: [],
-          settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
+          settings: {
+            appearance: "light",
+            sidebarCollapsed: false,
+            dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+            deadlineWidget: normalizeDeadlineWidgetSettings(),
+          },
           seeds: { tasks: false, sessions: false },
         };
       }
@@ -516,6 +549,7 @@ function usePersistentState() {
           appearance: parsed.settings?.appearance || "light",
           sidebarCollapsed: parsed.settings?.sidebarCollapsed || false,
           dashboardLayout: normalizeDashboardLayout(parsed.settings?.dashboardLayout),
+          deadlineWidget: normalizeDeadlineWidgetSettings(parsed.settings?.deadlineWidget),
         },
         seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
       };
@@ -525,7 +559,12 @@ function usePersistentState() {
         tasks: [],
         studySessions: [],
         todayFocus: [],
-        settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
+        settings: {
+          appearance: "light",
+          sidebarCollapsed: false,
+          dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+          deadlineWidget: normalizeDeadlineWidgetSettings(),
+        },
         seeds: { tasks: false, sessions: false },
       };
     }
@@ -546,6 +585,7 @@ function createLoggedOutData() {
       appearance: "light",
       sidebarCollapsed: false,
       dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+      deadlineWidget: normalizeDeadlineWidgetSettings(),
     },
   };
 }
@@ -1413,6 +1453,23 @@ export default function StudyPlannerApp() {
   const [todaySubjectDraft, setTodaySubjectDraft] = useState({ subjectId: "", note: "" });
   const [importError, setImportError] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const deadlineWidgetSettings = useMemo(
+    () => normalizeDeadlineWidgetSettings(data.settings?.deadlineWidget),
+    [data.settings?.deadlineWidget]
+  );
+
+  const updateDeadlineWidgetSettings = (patch) => {
+    setData((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        deadlineWidget: normalizeDeadlineWidgetSettings({
+          ...normalizeDeadlineWidgetSettings(prev.settings?.deadlineWidget),
+          ...patch,
+        }),
+      },
+    }));
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1422,6 +1479,12 @@ export default function StudyPlannerApp() {
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, []);
+
+  useEffect(() => {
+    if (page !== "dashboard") return;
+    if (deadlineWidgetSettings.activeFilter === deadlineWidgetSettings.defaultFilter) return;
+    updateDeadlineWidgetSettings({ activeFilter: deadlineWidgetSettings.defaultFilter });
+  }, [page, deadlineWidgetSettings.activeFilter, deadlineWidgetSettings.defaultFilter]);
 
   useEffect(() => {
     if (!session?.user?.id) {
@@ -1782,6 +1845,14 @@ export default function StudyPlannerApp() {
       .sort((a, b) => getTaskSortTimestamp(b) - getTaskSortTimestamp(a));
     return { open, done, overdue, dueSoon, nextDeadlines, completedDeadlines, archived };
   }, [enhancedTasks]);
+
+  const deadlineLists = useMemo(() => {
+    const activeFilter = deadlineWidgetSettings.activeFilter;
+    return {
+      due: taskSummary.nextDeadlines.filter((task) => taskMatchesDeadlineFilter(task, activeFilter)),
+      done: taskSummary.completedDeadlines.filter((task) => taskMatchesDeadlineFilter(task, activeFilter)),
+    };
+  }, [taskSummary.nextDeadlines, taskSummary.completedDeadlines, deadlineWidgetSettings.activeFilter]);
 
   const trackedSessions = useMemo(() => {
     return [...data.studySessions]
@@ -2287,16 +2358,47 @@ export default function StudyPlannerApp() {
                       return (
                         <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                            <CardHeader><CardTitle>Nächste Deadlines</CardTitle><CardDescription>Offene Fristen und erledigte Deadline-Aufgaben</CardDescription></CardHeader>
+                            <CardHeader>
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <CardTitle>Nächste Deadlines</CardTitle>
+                                  <CardDescription>Offene Fristen und erledigte Deadline-Aufgaben</CardDescription>
+                                </div>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" aria-label="Deadline-Filter öffnen">
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    {DEADLINE_FILTER_OPTIONS.map((option) => (
+                                      <DropdownMenuItem key={option.id} onClick={() => updateDeadlineWidgetSettings({ activeFilter: option.id })} className="flex items-center justify-between gap-2">
+                                        <span>Filter: {option.label}</span>
+                                        {deadlineWidgetSettings.activeFilter === option.id ? <Check className="h-4 w-4" /> : null}
+                                      </DropdownMenuItem>
+                                    ))}
+                                    <DropdownMenuItem onClick={() => updateDeadlineWidgetSettings({ defaultFilter: deadlineWidgetSettings.activeFilter })} className="flex items-center justify-between gap-2">
+                                      <span>Aktuellen Filter als Standard</span>
+                                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">Default</Badge>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => updateDeadlineWidgetSettings({ activeFilter: deadlineWidgetSettings.defaultFilter })}>
+                                      Gespeicherten Standard anwenden
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                            </CardHeader>
                             <CardContent className="grid max-h-[760px] gap-4 overflow-y-auto pr-2">
                               <div className={cn("grid grid-cols-2 gap-2 rounded-xl p-1", darkMode ? "bg-slate-800/70" : "bg-slate-100")}>
                                 <button type="button" onClick={() => setDeadlineTab("due")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", deadlineTab === "due" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-white text-slate-900 shadow-sm") : (darkMode ? "text-slate-300" : "text-slate-600"))}>Fällig</button>
                                 <button type="button" onClick={() => setDeadlineTab("done")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", deadlineTab === "done" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-white text-slate-900 shadow-sm") : (darkMode ? "text-slate-300" : "text-slate-600"))}>Erledigt</button>
                               </div>
 
+                              <p className="text-xs text-muted-foreground">Aktiver Filter: {DEADLINE_FILTER_OPTIONS.find((option) => option.id === deadlineWidgetSettings.activeFilter)?.label || "Alle"}</p>
+
                               <div className="grid gap-3">
                                 {deadlineTab === "due" ? (
-                                  taskSummary.nextDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : taskSummary.nextDeadlines.map((task) => (
+                                  deadlineLists.due.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : deadlineLists.due.map((task) => (
                                     <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
                                       <div>
                                         <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
@@ -2306,7 +2408,7 @@ export default function StudyPlannerApp() {
                                     </div>
                                   ))
                                 ) : (
-                                  taskSummary.completedDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : taskSummary.completedDeadlines.map((task) => (
+                                  deadlineLists.done.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : deadlineLists.done.map((task) => (
                                     <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
                                       <div>
                                         <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
@@ -2665,19 +2767,6 @@ export default function StudyPlannerApp() {
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent className="max-w-xl rounded-3xl"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} /> : null}</DialogContent></Dialog>
           <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent className="max-w-2xl rounded-3xl"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
-          <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
-            <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
-              <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
-                <Sun className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
-                <Moon className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
-                <Monitor className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
           <ManualStudyDialog
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
@@ -2704,6 +2793,20 @@ export default function StudyPlannerApp() {
             Nach oben
           </button>
           </main>
+
+          <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center">
+            <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
+              <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
+                <Sun className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
+                <Moon className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
+                <Monitor className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

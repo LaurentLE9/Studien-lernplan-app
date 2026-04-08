@@ -8,6 +8,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
 function logSyncDebug(event, payload) {
@@ -24,6 +25,12 @@ function normalizeDashboardLayout(layout) {
   const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
   const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
   return [...filtered, ...missing];
+}
+
+function normalizeDeadlineWidgetSettings(value) {
+  const activeFilter = DEADLINE_FILTER_OPTIONS.includes(value?.activeFilter) ? value.activeFilter : "all";
+  const defaultFilter = DEADLINE_FILTER_OPTIONS.includes(value?.defaultFilter) ? value.defaultFilter : "all";
+  return { activeFilter, defaultFilter };
 }
 
 function getAuthRedirectUrl() {
@@ -441,6 +448,7 @@ export async function loadUserPlannerData(userId) {
           appearance,
           sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
           dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
+          deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
         },
         seeds: {
           ...normalizeDefaultData().seeds,
@@ -516,7 +524,12 @@ export function normalizeDefaultData() {
     tasks: [],
     studySessions: [],
     todayFocus: [],
-    settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
+    settings: {
+      appearance: "light",
+      sidebarCollapsed: false,
+      dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+      deadlineWidget: { activeFilter: "all", defaultFilter: "all" },
+    },
     seeds: { tasks: false, sessions: false },
   };
 }
