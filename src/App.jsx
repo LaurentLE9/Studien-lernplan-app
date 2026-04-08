@@ -3098,6 +3098,20 @@ export default function StudyPlannerApp() {
                     <>
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         {semesters.map((semester) => {
+                          if (!semester.start_date || !semester.end_date) {
+                            return (
+                              <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                                <CardHeader>
+                                  <CardTitle className="text-lg">{semester.name}</CardTitle>
+                                  <CardDescription className="text-xs">Zeitraum noch nicht gesetzt</CardDescription>
+                                </CardHeader>
+                                <CardContent className="text-sm text-muted-foreground">
+                                  Bitte bearbeiten Sie das Semester, um die Daten festzulegen.
+                                </CardContent>
+                              </Card>
+                            );
+                          }
+
                           const semesterSubjects = data.subjects.filter((s) => s.semesterId === semester.id || s.groupId === semester.id);
                           const semesterTasks = data.tasks.filter((t) => t.semesterId === semester.id);
                           const semesterMinutes = data.studySessions
@@ -3107,7 +3121,7 @@ export default function StudyPlannerApp() {
                           const endDate = new Date(semester.end_date);
                           const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
                           const remainingDays = Math.ceil((endDate - new Date()) / (1000 * 60 * 60 * 24));
-                          const progress = Math.max(0, Math.min(100, Math.round(((totalDays - remainingDays) / totalDays) * 100)));
+                          const progress = totalDays > 0 ? Math.max(0, Math.min(100, Math.round(((totalDays - remainingDays) / totalDays) * 100))) : 0;
 
                           return (
                             <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
