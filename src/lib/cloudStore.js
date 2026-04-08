@@ -105,7 +105,7 @@ async function supabaseRequest(endpoint, options = {}) {
     userId: session?.user?.id || null,
   });
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
   });
@@ -117,6 +117,40 @@ async function supabaseRequest(endpoint, options = {}) {
     ok: response.ok,
     userId: session?.user?.id || null,
   });
+
+  // Handle 401 (Unauthorized) - token may have expired, try refresh and retry once
+  if (response.status === 401 && session?.refresh_token) {
+    try {
+      const refreshed = await refreshSession(session);
+      if (refreshed) {
+        localStorage.setItem("sb-auth-session", JSON.stringify(refreshed));
+        headers.Authorization = `Bearer ${refreshed.access_token}`;
+        
+        logSyncDebug("request:retry", {
+          method,
+          endpoint,
+          reason: "token_refreshed",
+        });
+
+        // Retry the request with new token
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+
+        logSyncDebug("request:response:retry", {
+          method,
+          endpoint,
+          status: response.status,
+          ok: response.ok,
+          userId: refreshed.user?.id || null,
+        });
+      }
+    } catch (err) {
+      console.warn("Failed to refresh token on 401:", err);
+      localStorage.removeItem("sb-auth-session");
+    }
+  }
 
   if (!response.ok) {
     let errorMessage = `Request failed: ${response.status}`;
@@ -331,10 +365,22 @@ export async function getActiveSession() {
     if (!sessionStr) return null;
 
     const session = JSON.parse(sessionStr);
+    
+    // Validate session structure
+    if (!session?.access_token || !session?.user) {
+      localStorage.removeItem("sb-auth-session");
+      return null;
+    }
 
     // Check if token is expired
     if (session.expires_at && session.expires_at * 1000 < Date.now()) {
       // Token expired, try to refresh
+      if (!session.refresh_token) {
+        console.warn("Token expired but no refresh token available");
+        localStorage.removeItem("sb-auth-session");
+        return null;
+      }
+
       try {
         const refreshed = await refreshSession(session);
         if (refreshed) {
@@ -351,6 +397,7 @@ export async function getActiveSession() {
     return session;
   } catch (error) {
     console.error("Error getting active session:", error);
+    localStorage.removeItem("sb-auth-session");
     return null;
   }
 }
@@ -374,10 +421,21 @@ async function refreshSession(session) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error("Token refresh failed");
+      throw new Error(
+        data?.error_description ||
+        data?.message ||
+        data?.error ||
+        "Token refresh failed"
+      );
     }
 
-    return data.session;
+    // Normalize the response - Supabase returns token data directly, not nested under .session
+    const refreshedSession = normalizeAuthSession(data);
+    if (!refreshedSession) {
+      throw new Error("Invalid token response structure");
+    }
+
+    return refreshedSession;
   } catch (error) {
     console.error("Refresh token error:", error);
     return null;
