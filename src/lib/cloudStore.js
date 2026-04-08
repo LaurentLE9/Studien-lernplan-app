@@ -126,6 +126,14 @@ async function supabaseRequest(endpoint, options = {}) {
     } catch {
       // Ignore non-JSON error bodies and use the fallback message.
     }
+
+    if (
+      response.status === 404 &&
+      (endpoint.includes("/user_plans") || errorMessage.toLowerCase().includes("schema cache") || errorMessage.toLowerCase().includes("public.user_plans"))
+    ) {
+      errorMessage = "Supabase-Tabelle public.user_plans fehlt oder der Schema-Cache ist veraltet. Bitte supabase/schema.sql oder die neue Migration ausführen und danach den Supabase Schema-Cache neu laden (NOTIFY pgrst, 'reload schema').";
+    }
+
     throw new Error(errorMessage);
   }
 

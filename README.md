@@ -51,9 +51,10 @@ React/Vite App fuer Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro
 ### 3. Datenbank-Schema einrichten
 
 1. Öffne Supabase Console → SQL Editor
-2. Kopiere den Inhalt von `supabase/schema.sql`
-3. Führe die SQL aus
-4. Anpassung: Stelle sicher, dass RLS (Row Level Security) aktiviert ist
+2. Führe entweder `supabase/schema.sql` oder die Migration `supabase/migrations/20260408_0001_create_user_plans.sql` aus
+3. Stelle sicher, dass danach der PostgREST Schema-Cache neu geladen wird
+4. Falls du die Fehlermeldung `Could not find the table 'public.user_plans' in the schema cache` siehst, ist die Tabelle noch nicht angelegt oder der Cache wurde nicht refreshed
+5. Anpassung: Stelle sicher, dass RLS (Row Level Security) aktiviert ist
 
 ### 4. Authentifizierung testen
 
