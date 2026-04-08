@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   BarChart3,
@@ -2074,10 +2075,29 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance } }));
   };
 
+  const themeDock = typeof document !== "undefined"
+    ? createPortal(
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center">
+          <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
+            <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
+              <Sun className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
+              <Moon className="h-4 w-4" />
+            </button>
+            <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
+              <Monitor className="h-4 w-4" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
+
   return (
     <div className={cn("min-h-screen transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
-      <div className={cn("mx-auto min-h-screen max-w-7xl", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_1fr]" : "lg:grid lg:grid-cols-[260px_1fr]")}>
-        <aside className={cn("hidden border-r p-4 backdrop-blur lg:block", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
+        <div className={cn("mx-auto min-h-screen max-w-7xl", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_1fr]" : "lg:grid lg:grid-cols-[260px_1fr]")}>
+          <aside className={cn("hidden border-r p-4 backdrop-blur lg:block", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
           <div className="flex h-full flex-col">
             <div>
               <div className={cn("flex items-center px-2 py-3", sidebarCollapsed ? "justify-center" : "justify-between gap-3")}>
@@ -2793,22 +2813,9 @@ export default function StudyPlannerApp() {
             Nach oben
           </button>
           </main>
-
-          <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center">
-            <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
-              <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
-                <Sun className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
-                <Moon className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
-                <Monitor className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
+      {themeDock}
     </div>
   );
 }
