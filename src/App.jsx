@@ -457,6 +457,10 @@ function getNextTaskMilestone(task) {
   return milestones[0] || null;
 }
 
+function getTaskSortTimestamp(task) {
+  return new Date(task.acceptanceDate || task.nextRelevantDate || task.dueDate || task.createdAt || 0).getTime();
+}
+
 function isTaskArchived(task) {
   if (task.archived) return true;
   if (task.status !== "erledigt") return false;
@@ -1348,7 +1352,7 @@ export default function StudyPlannerApp() {
   }, [data, session?.user?.id, isCloudHydrated]);
 
   const [search, setSearch] = useState("");
-  const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
+  const [deadlineTab, setDeadlineTab] = useState("due");
   const [showArchive, setShowArchive] = useState(false);
   const [taskFilter, setTaskFilter] = useState({ subjectId: "all", priority: "all", status: "all", sort: "deadline" });
   const [subjectDialogOpen, setSubjectDialogOpen] = useState(false);
@@ -1698,8 +1702,12 @@ export default function StudyPlannerApp() {
     const done = visibleTasks.filter((t) => t.status === "erledigt").length;
     const overdue = visibleTasks.filter((t) => t.status !== "erledigt" && t.nextRelevantDate && t.daysLeft < 0).length;
     const dueSoon = visibleTasks.filter((t) => t.status !== "erledigt" && t.nextRelevantDate && t.daysLeft >= 0 && t.daysLeft <= 3).length;
-    const nextDeadlines = [...visibleTasks].filter((t) => t.status !== "erledigt" && t.nextRelevantDate).sort((a, b) => new Date(a.nextRelevantDate) - new Date(b.nextRelevantDate)).slice(0, 5);
-    const completedDeadlines = [...visibleTasks].filter((t) => t.status === "erledigt" && t.nextRelevantDate).sort((a, b) => new Date(a.nextRelevantDate) - new Date(b.nextRelevantDate));
+    const nextDeadlines = [...visibleTasks]
+      .filter((t) => t.status !== "erledigt" && t.nextRelevantDate)
+      .sort((a, b) => getTaskSortTimestamp(b) - getTaskSortTimestamp(a));
+    const completedDeadlines = [...visibleTasks]
+      .filter((t) => t.status === "erledigt")
+      .sort((a, b) => getTaskSortTimestamp(b) - getTaskSortTimestamp(a));
     return { open, done, overdue, dueSoon, nextDeadlines, completedDeadlines, archived };
   }, [enhancedTasks]);
 
@@ -1978,43 +1986,7 @@ export default function StudyPlannerApp() {
             <div className="mt-auto pt-6">
               <Separator className="mb-4" />
               <div className={cn("mx-auto w-full", sidebarCollapsed ? "" : "max-w-[220px]")}>
-                <div className={cn("rounded-3xl border p-3 shadow-sm", getSoftSurfaceClass(darkMode))}>
-                  <div className="flex items-center justify-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className={cn(
-                            "h-9 w-9 rounded-full border",
-                            darkMode
-                              ? "border-slate-600 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                          )}
-                          title="Darstellung einstellen"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="center">
-                        <DropdownMenuItem onClick={() => handleAppearanceChange("light")} className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "light" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}>
-                          <span className="flex items-center gap-2"><Sun className="h-4 w-4" />Hell</span>
-                          {data.settings.appearance === "light" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAppearanceChange("dark")} className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "dark" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}>
-                          <span className="flex items-center gap-2"><Moon className="h-4 w-4" />Dunkel</span>
-                          {data.settings.appearance === "dark" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAppearanceChange("system")} className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "system" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}>
-                          <span className="flex items-center gap-2"><Monitor className="h-4 w-4" />System</span>
-                          {data.settings.appearance === "system" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                <div className={cn("mt-4 pt-4 border-t", darkMode ? "border-slate-700" : "border-slate-200")}>
+                <div className={cn("pt-1", darkMode ? "border-slate-700" : "border-slate-200")}>
                   <div className={cn("flex items-center gap-2 rounded-xl p-3 text-xs font-medium", darkMode ? "bg-slate-800/50 text-slate-400" : "bg-slate-100/50 text-slate-600")}>
                     {session?.user?.email || "User"}
                   </div>
@@ -2077,45 +2049,6 @@ export default function StudyPlannerApp() {
                   <div className={cn("rounded-xl px-3 py-2 text-xs font-medium", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
                     {session?.user?.email || "User"}
                   </div>
-                  <div className="flex justify-center">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className={cn(
-                            "h-9 w-9 rounded-full border",
-                            darkMode
-                              ? "border-slate-600 bg-slate-900 text-slate-100 hover:bg-slate-800"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                          )}
-                          aria-label="Darstellung einstellen"
-                        >
-                          <Settings className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="center">
-                        <DropdownMenuItem onClick={() => handleAppearanceChange("light")} className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "light" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}>
-                          <span className="flex items-center gap-2"><Sun className="h-4 w-4" />Hell</span>
-                          {data.settings.appearance === "light" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleAppearanceChange("dark")} className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "dark" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}>
-                          <span className="flex items-center gap-2"><Moon className="h-4 w-4" />Dunkel</span>
-                          {data.settings.appearance === "dark" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            handleAppearanceChange("system");
-                            setMobileNavOpen(false);
-                          }}
-                          className={cn("flex w-full items-center justify-between gap-3", data.settings.appearance === "system" && (darkMode ? "bg-slate-800" : "bg-slate-100"))}
-                        >
-                          <span className="flex items-center gap-2"><Monitor className="h-4 w-4" />System</span>
-                          {data.settings.appearance === "system" ? <Check className="h-4 w-4" /> : null}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <Button
@@ -2157,25 +2090,9 @@ export default function StudyPlannerApp() {
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen nach Aufgabe oder Fach" className="pl-9" />
                 </div>
                 <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} />
-                
-<Button variant="outline" className="rounded-xl flex gap-2 items-center" onClick={() => setIsEditingDashboard(!isEditingDashboard)}>
-  <Pencil className="w-4 h-4" />
-  {isEditingDashboard ? "Fertig" : "Dashboard bearbeiten"}
-</Button>
-
               </div>
 
               <div className="flex w-full flex-wrap gap-3 lg:justify-end">
-                <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xl rounded-3xl">
-                    <DialogHeader><DialogTitle>Fach anlegen</DialogTitle></DialogHeader>
-                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} />
-                  </DialogContent>
-                </Dialog>
-
                 <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Aufgabe</Button>
@@ -2190,6 +2107,18 @@ export default function StudyPlannerApp() {
                   <DialogContent className="max-w-lg rounded-3xl">
                     <DialogHeader><DialogTitle>Datenverwaltung & Backup</DialogTitle></DialogHeader>
                     <div className="grid gap-5">
+                      <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
+                            <p className="text-xs text-muted-foreground">Kacheln per Drag & Drop anordnen</p>
+                          </div>
+                          <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+
                       <div className="space-y-2">
                         <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
                         <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
@@ -2268,29 +2197,32 @@ export default function StudyPlannerApp() {
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Nächste Deadlines</CardTitle><CardDescription>Offene Fristen und erledigte Deadline-Aufgaben</CardDescription></CardHeader>
                             <CardContent className="grid max-h-[760px] gap-4 overflow-y-auto pr-2">
-                              <div className="grid gap-3">
-                                {taskSummary.nextDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : taskSummary.nextDeadlines.map((task) => (
-                                  <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
-                                    <div>
-                                      <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
-                                      <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
-                                  </div>
-                                ))}
+                              <div className={cn("grid grid-cols-2 gap-2 rounded-xl p-1", darkMode ? "bg-slate-800/70" : "bg-slate-100")}>
+                                <button type="button" onClick={() => setDeadlineTab("due")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", deadlineTab === "due" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-white text-slate-900 shadow-sm") : (darkMode ? "text-slate-300" : "text-slate-600"))}>Fällig</button>
+                                <button type="button" onClick={() => setDeadlineTab("done")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", deadlineTab === "done" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-white text-slate-900 shadow-sm") : (darkMode ? "text-slate-300" : "text-slate-600"))}>Erledigt</button>
                               </div>
-                              <div className="rounded-2xl border p-3">
-                                <button type="button" onClick={() => setShowCompletedDeadlines((prev) => !prev)} className="flex w-full items-center justify-between text-left"><div><p className="text-sm font-medium">Fällig, aber erledigt</p><p className="text-xs text-muted-foreground">Erledigte Aufgaben mit vorhandener Abgabe oder Abnahme</p></div><ChevronDown className={cn("h-4 w-4 transition-transform", showCompletedDeadlines ? "rotate-180" : "")} /></button>
-                                {showCompletedDeadlines ? (
-                                  <div className="mt-4 grid gap-3">
-                                    {taskSummary.completedDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : taskSummary.completedDeadlines.map((task) => (
-                                      <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
-                                        <div><div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p></div>
-                                        <div className="flex flex-wrap gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge></div>
+
+                              <div className="grid gap-3">
+                                {deadlineTab === "due" ? (
+                                  taskSummary.nextDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : taskSummary.nextDeadlines.map((task) => (
+                                    <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
+                                      <div>
+                                        <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
+                                        <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                       </div>
-                                    ))}
-                                  </div>
-                                ) : null}
+                                      <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  taskSummary.completedDeadlines.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : taskSummary.completedDeadlines.map((task) => (
+                                    <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
+                                      <div>
+                                        <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                    </div>
+                                  ))
+                                )}
                               </div>
                             </CardContent>
                           </Card>
@@ -2338,6 +2270,18 @@ export default function StudyPlannerApp() {
 
           {page === "subjects" ? (
             <div className="grid gap-6">
+              <div className="flex justify-end">
+                <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-xl rounded-3xl">
+                    <DialogHeader><DialogTitle>Fach anlegen</DialogTitle></DialogHeader>
+                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} />
+                  </DialogContent>
+                </Dialog>
+              </div>
+
               <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                 {data.subjects.map((subject) => {
                   const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
@@ -2629,6 +2573,19 @@ export default function StudyPlannerApp() {
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent className="max-w-xl rounded-3xl"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} /> : null}</DialogContent></Dialog>
           <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent className="max-w-2xl rounded-3xl"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2">
+            <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
+              <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
+                <Sun className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
+                <Moon className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
+                <Monitor className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
           <ManualStudyDialog
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
