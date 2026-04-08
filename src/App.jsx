@@ -3086,7 +3086,7 @@ export default function StudyPlannerApp() {
                 ) : null}
               </Card>
             </div>
-              </TabsContent>
+            </TabsContent>
 
               <TabsContent value="semester" className="mt-6">
                 <div className="grid gap-6">
