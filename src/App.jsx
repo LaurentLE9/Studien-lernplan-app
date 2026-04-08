@@ -46,6 +46,12 @@ import {
   loadUserPlannerData,
   saveUserPlannerData,
   normalizeDefaultData,
+  loadActiveTimerSession,
+  startTimerSession,
+  pauseTimerSession,
+  resumeTimerSession,
+  finishTimerSession,
+  cancelTimerSession,
   loadSemesters,
   createSemester,
   updateSemester,
@@ -1060,7 +1066,7 @@ function ManualStudyDialog({
   );
 }
 
-function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
+function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   const storedTimer = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("study_planner_timer_state") || "{}");
@@ -1073,15 +1079,14 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualSeed, setManualSeed] = useState(null);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [timerDialogOpen, setTimerDialogOpen] = useState(false);
+  const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
-  const [seconds, setSeconds] = useState(Number(storedTimer.seconds || 0));
-  const [running, setRunning] = useState(Boolean(storedTimer.running));
-  const [paused, setPaused] = useState(Boolean(storedTimer.paused));
-  const [timerStartCount, setTimerStartCount] = useState(0);
+  const [activeTimer, setActiveTimer] = useState(null);
+  const [tickNowMs, setTickNowMs] = useState(Date.now());
+  const [timerBusy, setTimerBusy] = useState(false);
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
 
@@ -1096,23 +1101,11 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
       timerSubjectId,
       timerMode,
       timerPreset,
-      seconds,
-      running,
-      paused,
     }));
-  }, [manualSubjectId, timerSubjectId, timerMode, timerPreset, seconds, running, paused]);
+  }, [manualSubjectId, timerSubjectId, timerMode, timerPreset]);
 
-  // Automatischer Start der Stoppuhr beim Fach-Wechsel
   useEffect(() => {
-    if (!timerSubjectId || running || paused || seconds > 0) return;
-    // Automatisch starten wenn Fach gewählt und Timer nicht läuft
-    setRunning(true);
-    setTimerStartCount((prev) => prev + 1);
-  }, [timerSubjectId]);
-
-  // Timer-Interval
-  useEffect(() => {
-    if (!running || paused) {
+    if (!activeTimer || activeTimer.status !== "running") {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -1121,7 +1114,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
     }
 
     intervalRef.current = setInterval(() => {
-      setSeconds((prev) => (timerMode === "pomodoro" ? Math.max(0, prev - 1) : prev + 1));
+      setTickNowMs(Date.now());
     }, 1000);
 
     return () => {
@@ -1130,23 +1123,61 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
         intervalRef.current = null;
       }
     };
-  }, [running, paused, timerMode]);
+  }, [activeTimer]);
 
-  // Pomodoro-Ende automatisch speichern
   useEffect(() => {
-    if (timerMode === "pomodoro" && running && !paused && seconds === 0) {
-      onSaveSession({
-        id: crypto.randomUUID(),
-        subjectId: timerSubjectId,
-        durationMinutes: timerPreset,
-        createdAt: new Date().toISOString(),
-        source: "pomodoro",
-        note: `Pomodoro ${timerPreset} Minuten`,
-      });
-      setRunning(false);
-      setSeconds(0);
+    if (!userId) {
+      setActiveTimer(null);
+      return;
     }
-  }, [seconds, running, paused, timerMode, timerPreset, timerSubjectId, onSaveSession]);
+
+    let cancelled = false;
+    const restoreActiveTimer = async () => {
+      try {
+        const existing = await loadActiveTimerSession(userId);
+        if (cancelled) return;
+        if (existing) {
+          setActiveTimer(existing);
+          setTimerSubjectId(existing.subjectId || "");
+          if (existing.mode === "pomodoro") {
+            setTimerMode("pomodoro");
+            if (existing.presetMinutes) {
+              setTimerPreset(existing.presetMinutes);
+            }
+          } else {
+            setTimerMode("stopwatch");
+          }
+        } else {
+          setActiveTimer(null);
+        }
+      } catch (error) {
+        console.error("Restore active timer failed:", error);
+      }
+    };
+    restoreActiveTimer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  function getElapsedSeconds(session, nowMs = Date.now()) {
+    if (!session?.startedAt) return 0;
+    const startedMs = new Date(session.startedAt).getTime();
+    const pausedMs = session.pausedAt ? new Date(session.pausedAt).getTime() : nowMs;
+    const endMs = session.status === "paused" ? pausedMs : nowMs;
+    const raw = Math.max(0, Math.floor((endMs - startedMs) / 1000));
+    return Math.max(0, raw - Number(session.totalPauseSeconds || 0));
+  }
+
+  function getDisplaySeconds(session) {
+    const elapsed = getElapsedSeconds(session, tickNowMs);
+    if (session?.mode === "pomodoro") {
+      const presetSeconds = Math.max(1, Number(session.presetMinutes || timerPreset || 90)) * 60;
+      return Math.max(0, presetSeconds - elapsed);
+    }
+    return elapsed;
+  }
 
   function openManualWithSeed(subjectId, seed = null) {
     setManualSubjectId(subjectId || subjects[0]?.id || "");
@@ -1154,63 +1185,134 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
     setManualDialogOpen(true);
   }
 
-  function startQuickTimer() {
-    if (!timerSubjectId) return;
-    if (timerMode === "pomodoro") {
-      setSeconds((prev) => (prev === 0 ? timerPreset * 60 : prev));
-    }
-    setRunning(true);
-    setPaused(false);
+  async function handleTimerSubjectPick(subjectId) {
+    setTimerSubjectId(subjectId);
     setTimerOpen(false);
+
+    if (!userId || !subjectId) return;
+    if (activeTimer) return;
+
+    try {
+      setTimerBusy(true);
+      const created = await startTimerSession(userId, subjectId, {
+        mode: timerMode,
+        presetMinutes: timerPreset,
+      });
+      if (created) {
+        setActiveTimer(created);
+        setTickNowMs(Date.now());
+      }
+    } catch (error) {
+      console.error("Start timer failed:", error);
+    } finally {
+      setTimerBusy(false);
+    }
   }
 
-  function pauseQuickTimer() {
-    setRunning(false);
-    setPaused(true);
+  async function pauseQuickTimer() {
+    if (!userId || !activeTimer || activeTimer.status !== "running") return;
+    try {
+      setTimerBusy(true);
+      const updated = await pauseTimerSession(userId, activeTimer.id);
+      if (updated) {
+        setActiveTimer(updated);
+      }
+    } catch (error) {
+      console.error("Pause timer failed:", error);
+    } finally {
+      setTimerBusy(false);
+    }
   }
 
-  function resumeQuickTimer() {
-    setRunning(true);
-    setPaused(false);
+  async function resumeQuickTimer() {
+    if (!userId || !activeTimer || activeTimer.status !== "paused") return;
+    try {
+      setTimerBusy(true);
+      const updated = await resumeTimerSession(userId, activeTimer.id);
+      if (updated) {
+        setActiveTimer(updated);
+        setTickNowMs(Date.now());
+      }
+    } catch (error) {
+      console.error("Resume timer failed:", error);
+    } finally {
+      setTimerBusy(false);
+    }
   }
 
-  function closeTimerDialog(save = false) {
-    if (save) {
-      // Speichern: Timer-Zeit wird gespeichert
-      const minutes = timerMode === "pomodoro"
-        ? Math.max(1, Math.round(((timerPreset * 60) - seconds) / 60))
-        : Math.max(1, Math.round(seconds / 60));
-      const hasTime = timerMode === "pomodoro" ? (timerPreset * 60) - seconds > 0 : seconds > 0;
-      if (hasTime && timerSubjectId) {
+  function openManualFromActiveTimer() {
+    if (!activeTimer?.subjectId) return;
+    const now = new Date();
+    const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
+    const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+    const start = new Date(now.getTime() - durationMinutes * 60000);
+    openManualWithSeed(activeTimer.subjectId, {
+      date: formatDateInput(now),
+      startTime: toTimeInputValue(start),
+      endTime: toTimeInputValue(now),
+      breakMinutes: "0",
+      activity: activeTimer.mode === "pomodoro" ? "Pomodoro" : "Stoppuhr",
+      note: activeTimer.mode === "pomodoro"
+        ? `Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
+        : "Stoppuhr-Sitzung",
+      source: activeTimer.mode || "stopwatch",
+    });
+  }
+
+  async function handleExpireSave() {
+    if (!activeTimer || !userId) return;
+    try {
+      setTimerBusy(true);
+      const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
+      const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+
+      if (elapsedSeconds > 0 && activeTimer.subjectId) {
         onSaveSession({
           id: crypto.randomUUID(),
-          subjectId: timerSubjectId,
-          durationMinutes: minutes,
+          subjectId: activeTimer.subjectId,
+          durationMinutes,
           createdAt: new Date().toISOString(),
-          source: timerMode,
-          note: timerMode === "pomodoro" ? `Pomodoro ${timerPreset} Minuten` : "Stoppuhr-Sitzung",
+          source: activeTimer.mode || "stopwatch",
+          note: activeTimer.mode === "pomodoro"
+            ? `Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
+            : "Stoppuhr-Sitzung",
         });
       }
-      setSeconds(0);
-      setRunning(false);
-      setPaused(false);
-    } else {
-      // Abbrechen: Timer wird verworfen
-      setSeconds(0);
-      setRunning(false);
-      setPaused(false);
+
+      await finishTimerSession(userId, activeTimer.id);
+      setActiveTimer(null);
+      setExpireDialogOpen(false);
+    } catch (error) {
+      console.error("Finish timer with save failed:", error);
+    } finally {
+      setTimerBusy(false);
     }
-    // Schließen: Timer läuft weiter (kein reset)
-    setTimerDialogOpen(false);
   }
 
-  const timerDisplay = `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  const timerSubject = subjects.find((subject) => subject.id === timerSubjectId);
+  async function handleExpireDiscard() {
+    if (!activeTimer || !userId) return;
+    try {
+      setTimerBusy(true);
+      await cancelTimerSession(userId, activeTimer.id);
+      setActiveTimer(null);
+      setExpireDialogOpen(false);
+    } catch (error) {
+      console.error("Cancel timer failed:", error);
+    } finally {
+      setTimerBusy(false);
+    }
+  }
+
+  const selectedSubjectId = activeTimer?.subjectId || timerSubjectId;
+  const timerSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const displaySeconds = activeTimer ? getDisplaySeconds(activeTimer) : 0;
+  const timerDisplay = `${String(Math.floor(displaySeconds / 3600)).padStart(2, "0")}:${String(Math.floor((displaySeconds % 3600) / 60)).padStart(2, "0")}:${String(displaySeconds % 60).padStart(2, "0")}`;
+  const isRunning = activeTimer?.status === "running";
+  const isPaused = activeTimer?.status === "paused";
 
   return (
     <>
       <div className="relative flex flex-row flex-nowrap gap-3">
-        {/* "Lerneinheit anlegen" Button */}
         <div className="relative">
           <Button type="button" onClick={() => { setManualPickerOpen((prev) => !prev); setTimerOpen(false); }} className="shrink-0 rounded-full bg-white px-5 text-slate-950 hover:bg-slate-100">
             <Plus className="mr-2 h-4 w-4" />Lerneinheit anlegen<ChevronDown className="ml-2 h-4 w-4" />
@@ -1229,7 +1331,6 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
           ) : null}
         </div>
 
-        {/* Timer Button */}
         <div className="relative">
           <Button type="button" onClick={() => { setTimerOpen((prev) => !prev); setManualPickerOpen(false); }} className="shrink-0 rounded-full bg-blue-600 px-5 text-white hover:bg-blue-500">
             <Play className="mr-2 h-4 w-4" />Timer<ChevronDown className="ml-2 h-4 w-4" />
@@ -1251,7 +1352,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
                   <TabsContent value="pomodoro" className="m-0">
                     <div className="grid grid-cols-6 gap-2">
                       {[25, 45, 60, 90, 120].map((preset) => (
-                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => { setTimerPreset(preset); if (!running && !paused) setSeconds(preset * 60); }}>{preset}</Button>
+                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => setTimerPreset(preset)}>{preset}</Button>
                       ))}
                       <div className={cn("flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold", darkMode ? "bg-slate-100 text-slate-700" : "bg-slate-200 text-slate-700")}>
                         <button type="button" onClick={() => setTimerPreset((prev) => Math.max(5, prev - 5))}>-</button>
@@ -1263,9 +1364,9 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
 
                   <div className="grid gap-2 max-h-[250px] overflow-y-auto pr-1">
                     {subjects.map((subject) => {
-                      const isSelected = timerSubjectId === subject.id;
+                      const isSelected = selectedSubjectId === subject.id;
                       return (
-                        <button key={subject.id} type="button" onClick={() => setTimerSubjectId(subject.id)} className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-white/80 ring-offset-2 ring-offset-transparent opacity-100" : "opacity-90")} style={{ backgroundColor: subject.color }}>
+                        <button key={subject.id} type="button" onClick={() => handleTimerSubjectPick(subject.id)} className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-white/80 ring-offset-2 ring-offset-transparent opacity-100" : "opacity-90")} style={{ backgroundColor: subject.color }}>
                           <span>{subject.name}</span>
                           {isSelected ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
@@ -1273,23 +1374,8 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
                     })}
                   </div>
 
-                  <div className="flex gap-2">
-                    {!running && !paused ? (
-                      <Button type="button" onClick={startQuickTimer} className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-500" disabled={!timerSubjectId}>
-                        <Play className="mr-2 h-4 w-4" />{timerMode === "pomodoro" ? "Pomodoro starten" : "Stoppuhr starten"}
-                      </Button>
-                    ) : paused ? (
-                      <Button type="button" onClick={resumeQuickTimer} className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-500">
-                        <Play className="mr-2 h-4 w-4" />Fortsetzen
-                      </Button>
-                    ) : (
-                      <Button type="button" onClick={pauseQuickTimer} className="flex-1 rounded-xl variant-secondary">
-                        <Pause className="mr-2 h-4 w-4" />Pausieren
-                      </Button>
-                    )}
-                    <Button type="button" variant="outline" onClick={() => setTimerDialogOpen(true)} className="rounded-xl">
-                      <Maximize2 className="h-4 w-4" />
-                    </Button>
+                  <div className={cn("rounded-xl px-3 py-2 text-xs", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
+                    Auswahl eines Fachs startet die Stoppuhr automatisch.
                   </div>
                 </div>
               </Tabs>
@@ -1298,128 +1384,50 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode }) {
         </div>
       </div>
 
-      {/* Floating Timer Display */}
-      {(running || paused || seconds > 0) ? (
+      {activeTimer ? (
         <div className="fixed left-1/2 top-4 z-[80] -translate-x-1/2">
           <div className={cn("flex items-center gap-3 rounded-full border px-4 py-3 shadow-2xl", floatingClass)}>
-            {paused ? (
-              <button type="button" onClick={resumeQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500">
+            {isPaused ? (
+              <button type="button" onClick={resumeQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500" disabled={timerBusy}>
                 <Play className="h-4 w-4" />
               </button>
             ) : (
-              <button type="button" onClick={pauseQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500">
+              <button type="button" onClick={pauseQuickTimer} className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-500" disabled={timerBusy}>
                 <Pause className="h-4 w-4" />
               </button>
             )}
-            <button type="button" onClick={() => setTimerDialogOpen(true)} className="flex items-center gap-3">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: paused ? "#f59e0b" : "#10b981" }} />
+            <div className="flex items-center gap-3">
+              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: isPaused ? "#f59e0b" : "#10b981" }} />
               <span className="font-semibold">{timerSubject?.name || "Fach"}</span>
               <span className="font-mono text-lg font-semibold">{timerDisplay}</span>
-            </button>
-            <button type="button" onClick={() => setTimerDialogOpen(true)} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+            </div>
+            <button type="button" onClick={openManualFromActiveTimer} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
               <Maximize2 className="h-4 w-4" />
             </button>
-            <button type="button" onClick={() => closeTimerDialog(false)} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+            <button type="button" onClick={() => setExpireDialogOpen(true)} className={cn("transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
       ) : null}
 
-      {/* Timer Detail Dialog */}
-      <Dialog open={timerDialogOpen} onOpenChange={setTimerDialogOpen}>
+      <Dialog open={expireDialogOpen} onOpenChange={setExpireDialogOpen}>
         <DialogContent className={cn("max-w-md rounded-2xl", darkMode ? "bg-[#1b2237] border-slate-800" : "bg-white border-slate-200")}>
           <DialogHeader>
-            <DialogTitle className={darkMode ? "text-white" : "text-slate-900"}>
-              {timerMode === "stopwatch" ? "Stoppuhr" : "Pomodoro"}
-            </DialogTitle>
+            <DialogTitle className={darkMode ? "text-white" : "text-slate-900"}>Timer beenden</DialogTitle>
           </DialogHeader>
-
-          <div className={cn("space-y-6 py-4", darkMode ? "text-slate-50" : "text-slate-900")}>
-            {/* Timer Display */}
-            <div className="flex flex-col items-center gap-2">
-              <div className="text-6xl font-bold font-mono">{timerDisplay}</div>
-              <div className="text-sm">{timerSubject?.name || "Fach nicht gewählt"}</div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex gap-2 justify-center">
-              {!running && !paused ? (
-                <Button onClick={startQuickTimer} disabled={!timerSubjectId} className="rounded-xl bg-blue-600 hover:bg-blue-500">
-                  <Play className="mr-2 h-4 w-4" />Starten
-                </Button>
-              ) : paused ? (
-                <Button onClick={resumeQuickTimer} className="rounded-xl bg-blue-600 hover:bg-blue-500">
-                  <Play className="mr-2 h-4 w-4" />Fortsetzen
-                </Button>
-              ) : (
-                <Button onClick={pauseQuickTimer} className="rounded-xl bg-blue-600 hover:bg-blue-500">
-                  <Pause className="mr-2 h-4 w-4" />Pausieren
-                </Button>
-              )}
-
-              {seconds > 0 && (
-                <Button variant="outline" onClick={() => { setSeconds(0); setRunning(false); setPaused(false); }} className="rounded-xl">
-                  <X className="mr-2 h-4 w-4" />Zurücksetzen
-                </Button>
-              )}
-            </div>
-
-            {/* Subject Selection */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Fach</Label>
-              <div className="grid gap-2 max-h-[150px] overflow-y-auto pr-1">
-                {subjects.map((subject) => {
-                  const isSelected = timerSubjectId === subject.id;
-                  return (
-                    <button
-                      key={subject.id}
-                      type="button"
-                      onClick={() => setTimerSubjectId(subject.id)}
-                      className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-blue-500 ring-offset-2" : "opacity-90")}
-                      style={{ backgroundColor: subject.color }}
-                    >
-                      <span>{subject.name}</span>
-                      {isSelected ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <div className={cn("space-y-3 py-2 text-sm", darkMode ? "text-slate-300" : "text-slate-600")}>
+            <p>Willst du die laufende Zeit speichern oder verwerfen?</p>
+            <p className={darkMode ? "text-slate-100" : "text-slate-900"}>Aktuelle Dauer: <span className="font-mono font-semibold">{timerDisplay}</span></p>
           </div>
-
-          {/* Footer Buttons */}
           <div className="flex gap-2 justify-end pt-4 border-t" style={{ borderColor: darkMode ? "#334155" : "#e2e8f0" }}>
-            <Button
-              variant="outline"
-              onClick={() => closeTimerDialog(false)}
-              className="rounded-xl"
-            >
-              Abbrechen
-            </Button>
-            <Button
-              onClick={() => closeTimerDialog(true)}
-              disabled={seconds === 0}
-              className="rounded-xl bg-blue-600 hover:bg-blue-500"
-            >
-              Speichern
-            </Button>
-          </div>
-
-          {/* Close Button (Timer läuft weiter) */}
-          <div className="flex justify-center pt-2">
-            <button
-              type="button"
-              onClick={() => closeTimerDialog()}
-              className={cn("text-sm font-medium transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}
-            >
-              Schließen (Timer läuft weiter)
-            </button>
+            <Button variant="outline" onClick={() => setExpireDialogOpen(false)} className="rounded-xl">Zurück</Button>
+            <Button variant="destructive" onClick={handleExpireDiscard} className="rounded-xl" disabled={timerBusy}>Verwerfen</Button>
+            <Button onClick={handleExpireSave} className="rounded-xl bg-blue-600 hover:bg-blue-500" disabled={timerBusy}>Speichern</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Manual Study Dialog */}
       <ManualStudyDialog
         open={manualDialogOpen}
         onOpenChange={setManualDialogOpen}
@@ -2678,7 +2686,7 @@ export default function StudyPlannerApp() {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen nach Aufgabe oder Fach" className="pl-9" />
                 </div>
-                <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} />
+                <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
               </div>
 
               <div className="flex w-full flex-wrap gap-3 lg:justify-end">

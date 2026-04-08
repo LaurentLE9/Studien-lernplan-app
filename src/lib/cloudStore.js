@@ -779,3 +779,169 @@ export async function deleteSubjectRecord(userId, subjectId) {
     }
   );
 }
+
+const TIMER_SESSION_SELECT = "id,user_id,subject_id,mode,preset_minutes,started_at,paused_at,total_pause_seconds,status,created_at,updated_at";
+
+function mapTimerSession(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    subjectId: row.subject_id,
+    mode: row.mode || "stopwatch",
+    presetMinutes: Number(row.preset_minutes || 90),
+    startedAt: row.started_at,
+    pausedAt: row.paused_at,
+    totalPauseSeconds: Number(row.total_pause_seconds || 0),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function loadActiveTimerSession(userId) {
+  const rows = await supabaseRequest(
+    `/timer_sessions?user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}&order=created_at.desc&limit=1`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+  return mapTimerSession(rows?.[0] || null);
+}
+
+async function loadTimerSessionById(userId, sessionId) {
+  const rows = await supabaseRequest(
+    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&select=${TIMER_SESSION_SELECT}&limit=1`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+  return mapTimerSession(rows?.[0] || null);
+}
+
+export async function startTimerSession(userId, subjectId, options = {}) {
+  const existing = await loadActiveTimerSession(userId);
+  if (existing) return existing;
+
+  const mode = options.mode === "pomodoro" ? "pomodoro" : "stopwatch";
+  const presetMinutes = Math.max(1, Number(options.presetMinutes || 90));
+  const nowIso = new Date().toISOString();
+
+  try {
+    const rows = await supabaseRequest(
+      `/timer_sessions?select=${TIMER_SESSION_SELECT}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          subject_id: subjectId,
+          mode,
+          preset_minutes: presetMinutes,
+          started_at: nowIso,
+          paused_at: null,
+          total_pause_seconds: 0,
+          status: "running",
+        }),
+      }
+    );
+    return mapTimerSession(rows?.[0] || null);
+  } catch (error) {
+    const message = String(error?.message || "").toLowerCase();
+    if (message.includes("duplicate") || message.includes("unique")) {
+      return loadActiveTimerSession(userId);
+    }
+    throw error;
+  }
+}
+
+export async function pauseTimerSession(userId, sessionId) {
+  const nowIso = new Date().toISOString();
+  const rows = await supabaseRequest(
+    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=eq.running&select=${TIMER_SESSION_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "paused",
+        paused_at: nowIso,
+      }),
+    }
+  );
+
+  if (rows?.[0]) return mapTimerSession(rows[0]);
+  return loadTimerSessionById(userId, sessionId);
+}
+
+export async function resumeTimerSession(userId, sessionId) {
+  const existing = await loadTimerSessionById(userId, sessionId);
+  if (!existing) return null;
+  if (existing.status !== "paused") return existing;
+
+  const pausedAtMs = existing.pausedAt ? new Date(existing.pausedAt).getTime() : Date.now();
+  const additionalPause = Math.max(0, Math.floor((Date.now() - pausedAtMs) / 1000));
+  const updatedPauseSeconds = Number(existing.totalPauseSeconds || 0) + additionalPause;
+
+  const rows = await supabaseRequest(
+    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=eq.paused&select=${TIMER_SESSION_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "running",
+        paused_at: null,
+        total_pause_seconds: updatedPauseSeconds,
+      }),
+    }
+  );
+
+  if (rows?.[0]) return mapTimerSession(rows[0]);
+  return loadTimerSessionById(userId, sessionId);
+}
+
+export async function finishTimerSession(userId, sessionId) {
+  const rows = await supabaseRequest(
+    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "finished",
+        paused_at: null,
+      }),
+    }
+  );
+  return mapTimerSession(rows?.[0] || null);
+}
+
+export async function cancelTimerSession(userId, sessionId) {
+  const rows = await supabaseRequest(
+    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        status: "cancelled",
+        paused_at: null,
+      }),
+    }
+  );
+  return mapTimerSession(rows?.[0] || null);
+}
