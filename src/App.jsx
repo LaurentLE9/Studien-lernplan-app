@@ -1306,6 +1306,7 @@ function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
 
 export default function StudyPlannerApp() {
   const [data, setData] = usePersistentState();
+  const hasSupabaseEnv = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -1314,6 +1315,8 @@ export default function StudyPlannerApp() {
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     const [isCloudHydrated, setIsCloudHydrated] = useState(false);
     const [cloudSyncError, setCloudSyncError] = useState(null);
+    const [lastCloudLoadAt, setLastCloudLoadAt] = useState(null);
+    const [lastCloudSaveAt, setLastCloudSaveAt] = useState(null);
     const cloudSyncTimeoutRef = useRef(null);
     const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
@@ -1364,6 +1367,7 @@ export default function StudyPlannerApp() {
       await saveUserPlannerData(session.user.id, snapshot);
       console.info("[app-sync] save:success", { userId: session.user.id });
       setCloudSyncError(null);
+      setLastCloudSaveAt(new Date().toISOString());
     } catch (err) {
       console.error("Immediate cloud sync error:", err);
       setCloudSyncError(err?.message || "Cloud-Sync fehlgeschlagen");
@@ -1439,6 +1443,7 @@ export default function StudyPlannerApp() {
         if (!cancelled) {
           setIsCloudHydrated(true);
           setCloudSyncError(null);
+          setLastCloudLoadAt(new Date().toISOString());
           console.info("[app-sync] load:success", { userId: session.user.id });
           setIsLoadingSession(false);
         }
@@ -1451,6 +1456,7 @@ export default function StudyPlannerApp() {
             setIsCloudHydrated(true);
             setCloudSyncError("Cloud nicht erreichbar, lokale Kopie geladen.");
             setIsLoadingSession(false);
+            setLastCloudLoadAt(new Date().toISOString());
             console.info("[app-sync] load:fallback-cache", { userId: session.user.id });
             return;
           }
@@ -1495,6 +1501,8 @@ export default function StudyPlannerApp() {
           if (currentJson === cloudJson) {
             return current;
           }
+          setLastCloudLoadAt(new Date().toISOString());
+          setCloudSyncError(null);
           return cloudData;
         });
       } catch (err) {
@@ -2182,6 +2190,24 @@ export default function StudyPlannerApp() {
                           <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
+                        </div>
+                      </div>
+
+                      <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">Sync-Health</p>
+                          <Badge variant={cloudSyncError ? "destructive" : "secondary"}>{cloudSyncError ? "Warnung" : "OK"}</Badge>
+                        </div>
+                        <div className="grid gap-2 text-xs">
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Session User</span><span className="font-medium">{session?.user?.id ? "aktiv" : "fehlt"}</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">user_id</span><span className="font-medium truncate max-w-[180px]">{session?.user?.id || "-"}</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Supabase ENV</span><span className="font-medium">{hasSupabaseEnv ? "konfiguriert" : "fehlt"}</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Cloud-Hydration</span><span className="font-medium">{isCloudHydrated ? "fertig" : "ausstehend"}</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Load Query</span><span className="font-medium">/user_plans?user_id=eq.&lt;id&gt;&amp;select=data</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Save Query</span><span className="font-medium">POST /user_plans?on_conflict=user_id</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
+                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
+                          {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
                         </div>
                       </div>
 
