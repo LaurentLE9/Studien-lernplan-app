@@ -64,7 +64,21 @@ React/Vite App fuer Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro
 ## Funktionen mit Cloud-Sync
 
 - ✅ Benutzerregistration und Login
-- ✅ Automatische Cloud-Synchronisierung (Debounce 2 Sekunden)
+- ✅ Automatische Cloud-Synchronisierung (kurzer Debounce + Sofort-Sync bei Logout/Tab-Wechsel)
 - ✅ Multi-Device Support: Daten werden überall aktualisiert
 - ✅ Session Persistence: Login bleibt erhalten
 - ✅ Row-Level Security: Jeden Nutzer sieht nur eigene Daten
+- ✅ User-Scoped Fallback-Cache: Bei kurzzeitigem Cloud-Ausfall wird die letzte lokale Kopie des eingeloggten Users geladen
+
+## Wichtige Persistenz-Hinweise (Vercel)
+
+- Daten liegen persistent in Supabase (Tabelle `user_plans`) und nicht im Deployment-Artefakt.
+- Jeder Datensatz ist ueber `user_id` an den eingeloggten User gebunden.
+- Neue Deployments auf Vercel loeschen keine Nutzerdaten, solange die ENV-Werte korrekt gesetzt sind.
+
+## Debugging / Diagnose
+
+- Setze optional `VITE_DEBUG_SYNC=true` (Standard aktiv), um Sync-Logs in der Browser-Konsole zu sehen.
+- Relevante Log-Praefixe:
+	- `[cloud-sync]` fuer Requests/Antworten gegen Supabase
+	- `[app-sync]` fuer Login-Laden/Speichern im Frontend

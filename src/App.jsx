@@ -39,7 +39,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
 import { SortableTile } from "@/components/SortableTile";
 
-import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData } from "@/lib/cloudStore";
+import { getActiveSession, signOutCurrentSession, loadUserPlannerData, saveUserPlannerData, normalizeDefaultData } from "@/lib/cloudStore";
 import {
   Card,
   CardContent,
@@ -96,6 +96,28 @@ import {
 
 const STORAGE_KEY = "study_planner_app_v3";
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const USER_CACHE_PREFIX = `${STORAGE_KEY}:user`;
+
+function getUserCacheKey(userId) {
+  return `${USER_CACHE_PREFIX}:${userId}`;
+}
+
+function readUserCache(userId) {
+  try {
+    const raw = localStorage.getItem(getUserCacheKey(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeUserCache(userId, data) {
+  try {
+    localStorage.setItem(getUserCacheKey(userId), JSON.stringify(data));
+  } catch {
+    // Ignore storage quota/errors and keep cloud sync path active.
+  }
+}
 
 function normalizeDashboardLayout(layout) {
   if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
@@ -514,6 +536,18 @@ function usePersistentState() {
   }, [data]);
 
   return [data, setData];
+}
+
+function createLoggedOutData() {
+  return {
+    ...normalizeDefaultData(),
+    settings: {
+      ...normalizeDefaultData().settings,
+      appearance: "light",
+      sidebarCollapsed: false,
+      dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+    },
+  };
 }
 
 function StatCard({ title, value, sub, icon: Icon, darkMode }) {
@@ -1279,6 +1313,7 @@ export default function StudyPlannerApp() {
     const [session, setSession] = useState(null);
     const [isLoadingSession, setIsLoadingSession] = useState(true);
     const [isCloudHydrated, setIsCloudHydrated] = useState(false);
+    const [cloudSyncError, setCloudSyncError] = useState(null);
     const cloudSyncTimeoutRef = useRef(null);
     const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
@@ -1312,7 +1347,11 @@ export default function StudyPlannerApp() {
   };
 
   const flushCloudSaveNow = async (snapshot = data) => {
-    if (!session?.user?.id || !isCloudHydrated) return;
+    if (!session?.user?.id) return;
+
+    writeUserCache(session.user.id, snapshot);
+
+    if (!isCloudHydrated) return;
 
     if (cloudSyncTimeoutRef.current) {
       clearTimeout(cloudSyncTimeoutRef.current);
@@ -1321,9 +1360,13 @@ export default function StudyPlannerApp() {
 
     hasPendingCloudSaveRef.current = true;
     try {
+      console.info("[app-sync] save:start", { userId: session.user.id });
       await saveUserPlannerData(session.user.id, snapshot);
+      console.info("[app-sync] save:success", { userId: session.user.id });
+      setCloudSyncError(null);
     } catch (err) {
       console.error("Immediate cloud sync error:", err);
+      setCloudSyncError(err?.message || "Cloud-Sync fehlgeschlagen");
     } finally {
       hasPendingCloudSaveRef.current = false;
     }
@@ -1379,6 +1422,7 @@ export default function StudyPlannerApp() {
   useEffect(() => {
     if (!session?.user?.id) {
       setIsCloudHydrated(false);
+      setCloudSyncError(null);
       return;
     }
 
@@ -1386,19 +1430,34 @@ export default function StudyPlannerApp() {
 
     const loadCloudDataForSession = async () => {
       try {
+        console.info("[app-sync] load:start", { userId: session.user.id });
         const cloudData = await loadUserPlannerData(session.user.id);
         if (!cancelled && cloudData) {
           setData(cloudData);
+          writeUserCache(session.user.id, cloudData);
         }
         if (!cancelled) {
           setIsCloudHydrated(true);
+          setCloudSyncError(null);
+          console.info("[app-sync] load:success", { userId: session.user.id });
           setIsLoadingSession(false);
         }
       } catch (err) {
         console.error("Cloud data load after login failed:", err);
         if (!cancelled) {
+          const cached = readUserCache(session.user.id);
+          if (cached) {
+            setData(cached);
+            setIsCloudHydrated(true);
+            setCloudSyncError("Cloud nicht erreichbar, lokale Kopie geladen.");
+            setIsLoadingSession(false);
+            console.info("[app-sync] load:fallback-cache", { userId: session.user.id });
+            return;
+          }
+
           setIsLoadingSession(false);
           setIsCloudHydrated(false);
+          setCloudSyncError(err?.message || "Cloud-Daten konnten nicht geladen werden");
           cloudHydrationRetryRef.current = window.setTimeout(() => {
             loadCloudDataForSession();
           }, 4000);
@@ -1467,7 +1526,10 @@ export default function StudyPlannerApp() {
         try {
           const activeSession = await getActiveSession();
           if (activeSession && activeSession.user) {
+            console.info("[app-sync] session:active", { userId: activeSession.user.id });
             setSession(activeSession);
+          } else {
+            console.info("[app-sync] session:none");
           }
         } catch (err) {
           console.error("Session initialization error:", err);
@@ -1491,7 +1553,7 @@ export default function StudyPlannerApp() {
       cloudSyncTimeoutRef.current = setTimeout(async () => {
         await flushCloudSaveNow(data);
         cloudSyncTimeoutRef.current = null;
-      }, 2000);
+      }, 700);
 
       return () => {
         if (cloudSyncTimeoutRef.current) {
@@ -1513,6 +1575,8 @@ export default function StudyPlannerApp() {
   }, [darkMode]);
 
   useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (session?.user?.id && !isCloudHydrated) return;
     if (data.seeds.tasks && data.seeds.sessions) return;
     setData((prev) => {
       const subjectIds = Object.fromEntries(prev.subjects.map((subject) => [subject.name, subject.id]));
@@ -1561,7 +1625,7 @@ export default function StudyPlannerApp() {
       next.seeds = { tasks: true, sessions: true };
       return next;
     });
-  }, [data.seeds.tasks, data.seeds.sessions, setData]);
+  }, [data.seeds.tasks, data.seeds.sessions, setData, session?.user?.id, isCloudHydrated]);
 
   const subjectsById = useMemo(() => Object.fromEntries(data.subjects.map((s) => [s.id, s])), [data.subjects]);
 
@@ -1887,14 +1951,7 @@ export default function StudyPlannerApp() {
         await flushCloudSaveNow(data);
         await signOutCurrentSession();
         setSession(null);
-        setData({
-          subjects: [],
-          tasks: [],
-          studySessions: [],
-          todayFocus: [],
-          settings: { appearance: "light", sidebarCollapsed: false, dashboardLayout: [...DASHBOARD_WIDGET_IDS] },
-          seeds: { tasks: false, sessions: false },
-        });
+        setData(createLoggedOutData());
       } catch (err) {
         console.error("Logout error:", err);
       }
@@ -1915,7 +1972,10 @@ export default function StudyPlannerApp() {
     }
 
     if (!session || !session.user) {
-      return <AuthScreen onAuthSuccess={(authResult) => setSession(authResult?.session || authResult)} />;
+      return <AuthScreen onAuthSuccess={(authResult) => {
+        setIsLoadingSession(true);
+        setSession(authResult?.session || authResult);
+      }} />;
     }
 
   const navItems = [
@@ -2077,6 +2137,12 @@ export default function StudyPlannerApp() {
           </header>
 
           <main className="p-4 md:p-6 lg:p-8">
+          {cloudSyncError ? (
+            <div className={cn("mb-4 rounded-xl border px-4 py-3 text-sm", darkMode ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "border-amber-300 bg-amber-50 text-amber-800")}>
+              {cloudSyncError}
+            </div>
+          ) : null}
+
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>

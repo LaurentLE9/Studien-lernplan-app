@@ -8,6 +8,16 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
+
+function logSyncDebug(event, payload) {
+  if (!DEBUG_SYNC) return;
+  try {
+    console.info(`[cloud-sync] ${event}`, payload || "");
+  } catch {
+    console.info(`[cloud-sync] ${event}`);
+  }
+}
 
 function normalizeDashboardLayout(layout) {
   if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
@@ -66,8 +76,11 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 // Helper: Make authenticated requests to Supabase
 async function supabaseRequest(endpoint, options = {}) {
+  ensureSupabaseConfig();
+
   const session = await getActiveSession();
   const token = session?.access_token;
+  const method = options.method || "GET";
 
   const headers = {
     "Content-Type": "application/json",
@@ -79,9 +92,23 @@ async function supabaseRequest(endpoint, options = {}) {
   }
 
   const url = `${SUPABASE_URL}/rest/v1${endpoint}`;
+  logSyncDebug("request:start", {
+    method,
+    endpoint,
+    userId: session?.user?.id || null,
+  });
+
   const response = await fetch(url, {
     ...options,
     headers,
+  });
+
+  logSyncDebug("request:response", {
+    method,
+    endpoint,
+    status: response.status,
+    ok: response.ok,
+    userId: session?.user?.id || null,
   });
 
   if (!response.ok) {
@@ -374,6 +401,11 @@ export async function loadUserPlannerData(userId) {
     const session = await getActiveSession();
     if (!session) throw new Error("No active session");
 
+    logSyncDebug("load:start", {
+      userId,
+      sessionUserId: session?.user?.id || null,
+    });
+
     const data = await supabaseRequest(
       `/user_plans?user_id=eq.${userId}&select=data`,
       {
@@ -388,6 +420,17 @@ export async function loadUserPlannerData(userId) {
       const rawData = data[0].data || {};
       const rawSettings = rawData.settings || {};
       const appearance = rawSettings.appearance || (typeof rawSettings.darkMode === "boolean" ? (rawSettings.darkMode ? "dark" : "light") : "light");
+
+      logSyncDebug("load:success", {
+        userId,
+        hasData: true,
+        counts: {
+          subjects: Array.isArray(rawData.subjects) ? rawData.subjects.length : 0,
+          tasks: Array.isArray(rawData.tasks) ? rawData.tasks.length : 0,
+          studySessions: Array.isArray(rawData.studySessions) ? rawData.studySessions.length : 0,
+          todayFocus: Array.isArray(rawData.todayFocus) ? rawData.todayFocus.length : 0,
+        },
+      });
 
       return {
         ...normalizeDefaultData(),
@@ -407,9 +450,14 @@ export async function loadUserPlannerData(userId) {
     }
 
     // No data yet, return defaults
+    logSyncDebug("load:success", { userId, hasData: false });
     return normalizeDefaultData();
   } catch (error) {
     console.error("Load planner data error:", error);
+    logSyncDebug("load:error", {
+      userId,
+      message: error?.message || String(error),
+    });
     throw error;
   }
 }
@@ -421,6 +469,17 @@ export async function saveUserPlannerData(userId, plannerData) {
   try {
     const session = await getActiveSession();
     if (!session) throw new Error("No active session");
+
+    logSyncDebug("save:start", {
+      userId,
+      sessionUserId: session?.user?.id || null,
+      counts: {
+        subjects: Array.isArray(plannerData?.subjects) ? plannerData.subjects.length : 0,
+        tasks: Array.isArray(plannerData?.tasks) ? plannerData.tasks.length : 0,
+        studySessions: Array.isArray(plannerData?.studySessions) ? plannerData.studySessions.length : 0,
+        todayFocus: Array.isArray(plannerData?.todayFocus) ? plannerData.todayFocus.length : 0,
+      },
+    });
 
     // Upsert avoids race conditions between SELECT->INSERT/PATCH.
     await supabaseRequest(
@@ -435,9 +494,15 @@ export async function saveUserPlannerData(userId, plannerData) {
       }
     );
 
+    logSyncDebug("save:success", { userId });
+
     return true;
   } catch (error) {
     console.error("Save planner data error:", error);
+    logSyncDebug("save:error", {
+      userId,
+      message: error?.message || String(error),
+    });
     throw error;
   }
 }
