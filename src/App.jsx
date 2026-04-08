@@ -940,6 +940,7 @@ function ManualStudyDialog({
   onSelectedSubjectChange,
   onSaveEntry,
   initialValue,
+  liveBreakMinutes,
   title = "Einheit anlegen",
   submitLabel = "Speichern",
 }) {
@@ -947,6 +948,7 @@ function ManualStudyDialog({
   const [startTime, setStartTime] = useState(new Date().toTimeString().slice(0, 5));
   const [endTime, setEndTime] = useState(new Date().toTimeString().slice(0, 5));
   const [breakMinutes, setBreakMinutes] = useState("0");
+  const [breakMinutesTouched, setBreakMinutesTouched] = useState(false);
   const [activity, setActivity] = useState("");
   const [note, setNote] = useState("");
 
@@ -958,9 +960,17 @@ function ManualStudyDialog({
     setStartTime(seed.startTime || toTimeInputValue(now));
     setEndTime(seed.endTime || toTimeInputValue(now));
     setBreakMinutes(seed.breakMinutes ?? "0");
+    setBreakMinutesTouched(false);
     setActivity(seed.activity || "");
     setNote(seed.note || "");
   }, [open, initialValue]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (breakMinutesTouched) return;
+    if (liveBreakMinutes === undefined || liveBreakMinutes === null) return;
+    setBreakMinutes(String(liveBreakMinutes));
+  }, [open, breakMinutesTouched, liveBreakMinutes]);
 
   function shiftDate(days) {
     const d = new Date(entryDate);
@@ -1029,7 +1039,7 @@ function ManualStudyDialog({
             <div className="grid gap-3 md:grid-cols-3">
               <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Start *</Label><TimeInput24 value={startTime} onChange={setStartTime} className="mt-2 h-auto border-0 bg-transparent px-0 text-2xl font-medium shadow-none focus-visible:ring-0" /></div>
               <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Ende *</Label><TimeInput24 value={endTime} onChange={setEndTime} className="mt-2 h-auto border-0 bg-transparent px-0 text-2xl font-medium shadow-none focus-visible:ring-0" /></div>
-              <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Pause (m)</Label><Input type="number" min="0" value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} className="mt-2 h-auto border-0 bg-transparent px-0 text-2xl font-medium shadow-none focus-visible:ring-0" /></div>
+              <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Pause (m)</Label><Input type="number" min="0" value={breakMinutes} onChange={(e) => { setBreakMinutesTouched(true); setBreakMinutes(e.target.value); }} className="mt-2 h-auto border-0 bg-transparent px-0 text-2xl font-medium shadow-none focus-visible:ring-0" /></div>
             </div>
 
             <div className="text-sm font-medium">
@@ -1105,7 +1115,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   }, [manualSubjectId, timerSubjectId, timerMode, timerPreset]);
 
   useEffect(() => {
-    if (!activeTimer || activeTimer.status !== "running") {
+    if (!activeTimer || (activeTimer.status !== "running" && activeTimer.status !== "paused")) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -1168,6 +1178,21 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
     const endMs = session.status === "paused" ? pausedMs : nowMs;
     const raw = Math.max(0, Math.floor((endMs - startedMs) / 1000));
     return Math.max(0, raw - Number(session.totalPauseSeconds || 0));
+  }
+
+  function getCurrentPauseSeconds(session, nowMs = Date.now()) {
+    if (!session) return 0;
+    const persisted = Math.max(0, Number(session.totalPauseSeconds || 0));
+    if (session.status !== "paused" || !session.pausedAt) {
+      return persisted;
+    }
+    const pausedAtMs = new Date(session.pausedAt).getTime();
+    const activePause = Math.max(0, Math.floor((nowMs - pausedAtMs) / 1000));
+    return persisted + activePause;
+  }
+
+  function getCurrentPauseMinutes(session, nowMs = Date.now()) {
+    return Math.floor(getCurrentPauseSeconds(session, nowMs) / 60);
   }
 
   function getDisplaySeconds(session) {
@@ -1243,6 +1268,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   function openManualFromActiveTimer() {
     if (!activeTimer?.subjectId) return;
     const now = new Date();
+    const nowMs = Date.now();
     const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
     const start = new Date(now.getTime() - durationMinutes * 60000);
@@ -1250,7 +1276,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
       date: formatDateInput(now),
       startTime: toTimeInputValue(start),
       endTime: toTimeInputValue(now),
-      breakMinutes: "0",
+      breakMinutes: String(getCurrentPauseMinutes(activeTimer, nowMs)),
       activity: activeTimer.mode === "pomodoro" ? "Pomodoro" : "Stoppuhr",
       note: activeTimer.mode === "pomodoro"
         ? `Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
@@ -1309,6 +1335,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   const timerDisplay = `${String(Math.floor(displaySeconds / 3600)).padStart(2, "0")}:${String(Math.floor((displaySeconds % 3600) / 60)).padStart(2, "0")}:${String(displaySeconds % 60).padStart(2, "0")}`;
   const isRunning = activeTimer?.status === "running";
   const isPaused = activeTimer?.status === "paused";
+  const livePauseMinutes = activeTimer ? getCurrentPauseMinutes(activeTimer, tickNowMs) : undefined;
 
   return (
     <>
@@ -1437,6 +1464,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
         onSelectedSubjectChange={setManualSubjectId}
         onSaveEntry={onSaveSession}
         initialValue={manualSeed}
+        liveBreakMinutes={livePauseMinutes}
         title="Lerneinheit anlegen"
         submitLabel="Speichern"
       />
