@@ -119,13 +119,14 @@ import {
 
 const STORAGE_KEY = "study_planner_app_v3";
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
-const DEADLINE_FILTER_OPTIONS = [
-  { id: "all", label: "Alle" },
-  { id: "open", label: "Nur offene" },
+const DEADLINE_SORT_OPTIONS = [
+  { id: "due", label: "Fälligkeit" },
+  { id: "acceptance", label: "Abnahme" },
   { id: "urgent", label: "Dringend" },
-  { id: "today", label: "Heute lernen" },
-  { id: "next3", label: "Naechste 3 Tage" },
+  { id: "priority", label: "Priorität" },
 ];
+const DEADLINE_DEFAULT_SORT = "due";
+const PRIORITY_SORT_RANK = { hoch: 0, mittel: 1, niedrig: 2 };
 const USER_CACHE_PREFIX = `${STORAGE_KEY}:user`;
 
 function getUserCacheKey(userId) {
@@ -157,24 +158,52 @@ function normalizeDashboardLayout(layout) {
 }
 
 function normalizeDeadlineWidgetSettings(value) {
-  const fallback = { activeFilter: "all", defaultFilter: "all" };
-  const isValid = (filterId) => DEADLINE_FILTER_OPTIONS.some((option) => option.id === filterId);
-  const activeFilter = isValid(value?.activeFilter) ? value.activeFilter : fallback.activeFilter;
-  const defaultFilter = isValid(value?.defaultFilter) ? value.defaultFilter : fallback.defaultFilter;
-  return { activeFilter, defaultFilter };
+  const legacyFilterToSort = {
+    all: "due",
+    open: "due",
+    today: "due",
+    next3: "due",
+    urgent: "urgent",
+  };
+  const isValid = (sortId) => DEADLINE_SORT_OPTIONS.some((option) => option.id === sortId);
+  const legacySort = legacyFilterToSort[value?.activeFilter] || legacyFilterToSort[value?.defaultFilter];
+  const candidate = value?.sortBy || value?.activeSort || legacySort;
+  return {
+    sortBy: isValid(candidate) ? candidate : DEADLINE_DEFAULT_SORT,
+  };
 }
 
-function taskMatchesDeadlineFilter(task, filterId) {
-  if (filterId === "all") return true;
-  if (filterId === "open") return task.status !== "erledigt";
-  if (filterId === "urgent") return Boolean(task.urgent);
-  if (filterId === "today") return Boolean(task.flaggedToday);
-  if (filterId === "next3") {
-    if (!task.nextRelevantDate || task.status === "erledigt") return false;
-    const diff = daysUntil(task.nextRelevantDate);
-    return diff !== null && diff >= 0 && diff <= 3;
+function getDeadlineDateTimestamp(task) {
+  return new Date(task.nextRelevantDate || task.dueDate || task.acceptanceDate || "2999-12-31").getTime();
+}
+
+function getDeadlineAcceptanceTimestamp(task) {
+  return new Date(task.acceptanceDate || task.nextRelevantDate || task.dueDate || "2999-12-31").getTime();
+}
+
+function compareDeadlineTasks(a, b, sortBy) {
+  if (sortBy === "acceptance") {
+    const aHasAcceptance = Boolean(a.acceptanceDate);
+    const bHasAcceptance = Boolean(b.acceptanceDate);
+    if (aHasAcceptance !== bHasAcceptance) return aHasAcceptance ? -1 : 1;
+    const acceptanceDiff = getDeadlineAcceptanceTimestamp(a) - getDeadlineAcceptanceTimestamp(b);
+    if (acceptanceDiff !== 0) return acceptanceDiff;
   }
-  return true;
+
+  if (sortBy === "urgent") {
+    const urgentDiff = Number(Boolean(b.urgent)) - Number(Boolean(a.urgent));
+    if (urgentDiff !== 0) return urgentDiff;
+  }
+
+  if (sortBy === "priority") {
+    const priorityDiff = (PRIORITY_SORT_RANK[a.priority] ?? 99) - (PRIORITY_SORT_RANK[b.priority] ?? 99);
+    if (priorityDiff !== 0) return priorityDiff;
+  }
+
+  const deadlineDiff = getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
+  if (deadlineDiff !== 0) return deadlineDiff;
+
+  return (a.title || "").localeCompare(b.title || "", "de");
 }
 
 function cn(...classes) {
@@ -1720,12 +1749,6 @@ export default function StudyPlannerApp() {
   }, []);
 
   useEffect(() => {
-    if (page !== "dashboard") return;
-    if (deadlineWidgetSettings.activeFilter === deadlineWidgetSettings.defaultFilter) return;
-    updateDeadlineWidgetSettings({ activeFilter: deadlineWidgetSettings.defaultFilter });
-  }, [page, deadlineWidgetSettings.activeFilter, deadlineWidgetSettings.defaultFilter]);
-
-  useEffect(() => {
     if (!session?.user?.id) {
       setIsCloudHydrated(false);
       setCloudSyncError(null);
@@ -2137,12 +2160,11 @@ export default function StudyPlannerApp() {
   }, [enhancedTasks]);
 
   const deadlineLists = useMemo(() => {
-    const activeFilter = deadlineWidgetSettings.activeFilter;
     return {
-      due: taskSummary.nextDeadlines.filter((task) => taskMatchesDeadlineFilter(task, activeFilter)),
-      done: taskSummary.completedDeadlines.filter((task) => taskMatchesDeadlineFilter(task, activeFilter)),
+      due: [...taskSummary.nextDeadlines].sort((a, b) => compareDeadlineTasks(a, b, deadlineWidgetSettings.sortBy)),
+      done: [...taskSummary.completedDeadlines].sort((a, b) => compareDeadlineTasks(a, b, deadlineWidgetSettings.sortBy)),
     };
-  }, [taskSummary.nextDeadlines, taskSummary.completedDeadlines, deadlineWidgetSettings.activeFilter]);
+  }, [taskSummary.nextDeadlines, taskSummary.completedDeadlines, deadlineWidgetSettings.sortBy]);
 
   const trackedSessions = useMemo(() => {
     return [...data.studySessions]
@@ -2846,24 +2868,17 @@ export default function StudyPlannerApp() {
                                 </div>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" aria-label="Deadline-Filter öffnen">
+                                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" aria-label="Deadline-Sortierung öffnen">
                                       <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
-                                    {DEADLINE_FILTER_OPTIONS.map((option) => (
-                                      <DropdownMenuItem key={option.id} onClick={() => updateDeadlineWidgetSettings({ activeFilter: option.id })} className="flex items-center justify-between gap-2">
-                                        <span>Filter: {option.label}</span>
-                                        {deadlineWidgetSettings.activeFilter === option.id ? <Check className="h-4 w-4" /> : null}
+                                    {DEADLINE_SORT_OPTIONS.map((option) => (
+                                      <DropdownMenuItem key={option.id} onClick={() => updateDeadlineWidgetSettings({ sortBy: option.id })} className="flex items-center justify-between gap-2">
+                                        <span>Sortierung: {option.label}</span>
+                                        {deadlineWidgetSettings.sortBy === option.id ? <Check className="h-4 w-4" /> : null}
                                       </DropdownMenuItem>
                                     ))}
-                                    <DropdownMenuItem onClick={() => updateDeadlineWidgetSettings({ defaultFilter: deadlineWidgetSettings.activeFilter })} className="flex items-center justify-between gap-2">
-                                      <span>Aktuellen Filter als Standard</span>
-                                      <Badge variant="secondary" className="px-2 py-0 text-[10px]">Default</Badge>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => updateDeadlineWidgetSettings({ activeFilter: deadlineWidgetSettings.defaultFilter })}>
-                                      Gespeicherten Standard anwenden
-                                    </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
                               </div>
@@ -2874,7 +2889,7 @@ export default function StudyPlannerApp() {
                                 <button type="button" onClick={() => setDeadlineTab("done")} className={cn("rounded-lg px-3 py-1.5 text-sm font-medium transition", deadlineTab === "done" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-white text-slate-900 shadow-sm") : (darkMode ? "text-slate-300" : "text-slate-600"))}>Erledigt</button>
                               </div>
 
-                              <p className="text-xs text-muted-foreground">Aktiver Filter: {DEADLINE_FILTER_OPTIONS.find((option) => option.id === deadlineWidgetSettings.activeFilter)?.label || "Alle"}</p>
+                              <p className="text-xs text-muted-foreground">Aktive Sortierung: {DEADLINE_SORT_OPTIONS.find((option) => option.id === deadlineWidgetSettings.sortBy)?.label || "Fälligkeit"}</p>
 
                               <div className="grid gap-3">
                                 {deadlineTab === "due" ? (
