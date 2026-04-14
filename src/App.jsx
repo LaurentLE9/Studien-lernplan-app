@@ -1129,6 +1129,8 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
+  const [customPomodoroMinutes, setCustomPomodoroMinutes] = useState(String(storedTimer.timerPreset || 90));
+  const [customPomodoroError, setCustomPomodoroError] = useState("");
   const [activeTimer, setActiveTimer] = useState(null);
   const [tickNowMs, setTickNowMs] = useState(Date.now());
   const [timerBusy, setTimerBusy] = useState(false);
@@ -1149,6 +1151,10 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
       timerPreset,
     }));
   }, [manualSubjectId, timerSubjectId, timerMode, timerPreset]);
+
+  useEffect(() => {
+    setCustomPomodoroMinutes(String(timerPreset));
+  }, [timerPreset]);
 
   useEffect(() => {
     if (!activeTimer || (activeTimer.status !== "running" && activeTimer.status !== "paused")) {
@@ -1244,6 +1250,29 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
     setManualSubjectId(subjectId || subjects[0]?.id || "");
     setManualSeed(seed);
     setManualDialogOpen(true);
+  }
+
+  function applyPomodoroPreset(minutes) {
+    const normalized = Math.max(1, Math.floor(Number(minutes) || 0));
+    setTimerPreset(normalized);
+    setCustomPomodoroMinutes(String(normalized));
+    setCustomPomodoroError("");
+  }
+
+  function applyCustomPomodoroMinutes() {
+    const rawValue = String(customPomodoroMinutes || "").trim();
+    if (!/^\d+$/.test(rawValue)) {
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
+      return;
+    }
+
+    const parsedMinutes = Number(rawValue);
+    if (!Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
+      return;
+    }
+
+    applyPomodoroPreset(parsedMinutes);
   }
 
   function resetTimerFlowState() {
@@ -1447,13 +1476,38 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
                   <TabsContent value="pomodoro" className="m-0">
                     <div className="grid grid-cols-6 gap-2">
                       {[25, 45, 60, 90, 120].map((preset) => (
-                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => setTimerPreset(preset)}>{preset}</Button>
+                        <Button key={preset} type="button" variant={timerPreset === preset ? "default" : "secondary"} className={cn("rounded-xl", timerPreset === preset ? "bg-blue-600 hover:bg-blue-500" : "")} onClick={() => applyPomodoroPreset(preset)}>{preset}</Button>
                       ))}
                       <div className={cn("flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold", darkMode ? "bg-slate-100 text-slate-700" : "bg-slate-200 text-slate-700")}>
-                        <button type="button" onClick={() => setTimerPreset((prev) => Math.max(5, prev - 5))}>-</button>
+                        <button type="button" onClick={() => applyPomodoroPreset(Math.max(5, timerPreset - 5))}>-</button>
                         <span>{timerPreset}</span>
-                        <button type="button" onClick={() => setTimerPreset((prev) => prev + 5)}>+</button>
+                        <button type="button" onClick={() => applyPomodoroPreset(timerPreset + 5)}>+</button>
                       </div>
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <Label className={cn("text-xs", darkMode ? "text-slate-300" : "text-slate-600")}>Eigene Dauer (Minuten)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={customPomodoroMinutes}
+                          onChange={(e) => {
+                            setCustomPomodoroMinutes(e.target.value);
+                            if (customPomodoroError) setCustomPomodoroError("");
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              applyCustomPomodoroMinutes();
+                            }
+                          }}
+                          inputMode="numeric"
+                          placeholder="z. B. 75"
+                          className={cn("h-10", customPomodoroError ? "border-red-500 focus-visible:ring-red-500" : "")}
+                        />
+                        <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={applyCustomPomodoroMinutes}>
+                          Übernehmen
+                        </Button>
+                      </div>
+                      {customPomodoroError ? <p className="text-xs text-red-500">{customPomodoroError}</p> : null}
                     </div>
                   </TabsContent>
 
