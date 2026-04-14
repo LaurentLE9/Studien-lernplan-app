@@ -2869,114 +2869,105 @@ export default function StudyPlannerApp() {
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
-              <p className="text-sm text-muted-foreground">Klare Übersicht über Fächer, Aufgaben und Lernzeiten</p>
             </div>
 
-            <div className="flex w-full max-w-[920px] flex-col gap-3 xl:items-end">
-              <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-                <div className="relative w-full lg:w-80 xl:w-96">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen nach Aufgabe oder Fach" className="pl-9" />
-                </div>
-                <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-3 xl:ml-auto">
+              <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
-              <div className="flex w-full flex-wrap gap-3 lg:justify-end">
-                <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Aufgabe</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl rounded-3xl">
-                    <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
-                    <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
-                  </DialogContent>
-                </Dialog>
+              <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Aufgabe</Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl rounded-3xl">
+                  <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
+                  <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                </DialogContent>
+              </Dialog>
 
-                <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                  <DialogContent className="max-w-lg rounded-3xl">
-                    <DialogHeader><DialogTitle>Datenverwaltung & Backup</DialogTitle></DialogHeader>
-                    <div className="grid gap-5">
-                      <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
-                            <p className="text-xs text-muted-foreground">Kacheln per Drag & Drop anordnen</p>
-                          </div>
-                          <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
+              <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
+                <DialogContent className="max-w-lg rounded-3xl">
+                  <DialogHeader><DialogTitle>Datenverwaltung & Backup</DialogTitle></DialogHeader>
+                  <div className="grid gap-5">
+                    <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
+                          <p className="text-xs text-muted-foreground">Kacheln per Drag & Drop anordnen</p>
                         </div>
-                      </div>
-
-                      <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
-                        <div className="mb-2 flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold">Sync-Health</p>
-                          <Badge variant={cloudSyncError ? "destructive" : "secondary"}>{cloudSyncError ? "Warnung" : "OK"}</Badge>
-                        </div>
-                        <div className="grid gap-2 text-xs">
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Session User</span><span className="font-medium">{session?.user?.id ? "aktiv" : "fehlt"}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">user_id</span><span className="font-medium truncate max-w-[180px]">{session?.user?.id || "-"}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Supabase ENV</span><span className="font-medium">{hasSupabaseEnv ? "konfiguriert" : "fehlt"}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Cloud-Hydration</span><span className="font-medium">{isCloudHydrated ? "fertig" : "ausstehend"}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Load Query</span><span className="font-medium">/user_plans?user_id=eq.&lt;id&gt;&amp;select=data</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Save Query</span><span className="font-medium">POST /user_plans?on_conflict=user_id</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
-                          {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                        <Button onClick={handleExportData} variant="default" className="rounded-xl h-12 flex items-center gap-2">
-                          <Download className="h-4 w-4" />Exportieren
+                        <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
+                          <Pencil className="h-4 w-4" />
                         </Button>
-                        <label className="contents">
-                          <Button asChild variant="outline" className="rounded-xl h-12 flex items-center gap-2 cursor-pointer">
-                            <span><Upload className="h-4 w-4" />Importieren</span>
-                          </Button>
-                          <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
-                        </label>
-                      </div>
-                      
-                      {importError && <div className="bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm">{importError}</div>}
-                      
-                      <Separator />
-                      
-                      <div className="bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl space-y-2">
-                        <p className="text-sm font-semibold">📊 Deine Daten</p>
-                        <div className="grid grid-cols-3 gap-2 text-xs">
-                          <div>
-                            <p className="text-gray-600 dark:text-gray-400">Fächer</p>
-                            <p className="text-lg font-bold">{data.subjects.length}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600 dark:text-gray-400">Aufgaben</p>
-                            <p className="text-lg font-bold">{data.tasks.length}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600 dark:text-gray-400">Lernzeiten</p>
-                            <p className="text-lg font-bold">{data.studySessions.length}</p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg text-sm">
-                        <p className="font-semibold text-blue-900 dark:text-blue-300">💡 Neue Features:</p>
-                        <ul className="text-xs text-blue-800 dark:text-blue-400 space-y-1 list-disc list-inside">
-                          <li>Wiederholende Aufgaben (wöchentlich/monatlich)</li>
-                          <li>Automatische Backup-Funktion</li>
-                          <li>Volle Datenverwaltung</li>
-                        </ul>
                       </div>
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
+
+                    <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">Sync-Health</p>
+                        <Badge variant={cloudSyncError ? "destructive" : "secondary"}>{cloudSyncError ? "Warnung" : "OK"}</Badge>
+                      </div>
+                      <div className="grid gap-2 text-xs">
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Session User</span><span className="font-medium">{session?.user?.id ? "aktiv" : "fehlt"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">user_id</span><span className="font-medium truncate max-w-[180px]">{session?.user?.id || "-"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Supabase ENV</span><span className="font-medium">{hasSupabaseEnv ? "konfiguriert" : "fehlt"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Cloud-Hydration</span><span className="font-medium">{isCloudHydrated ? "fertig" : "ausstehend"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Load Query</span><span className="font-medium">/user_plans?user_id=eq.&lt;id&gt;&amp;select=data</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Save Query</span><span className="font-medium">POST /user_plans?on_conflict=user_id</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
+                        {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button onClick={handleExportData} variant="default" className="rounded-xl h-12 flex items-center gap-2">
+                        <Download className="h-4 w-4" />Exportieren
+                      </Button>
+                      <label className="contents">
+                        <Button asChild variant="outline" className="rounded-xl h-12 flex items-center gap-2 cursor-pointer">
+                          <span><Upload className="h-4 w-4" />Importieren</span>
+                        </Button>
+                        <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
+                      </label>
+                    </div>
+                    
+                    {importError && <div className="bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm">{importError}</div>}
+                    
+                    <Separator />
+                    
+                    <div className="bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl space-y-2">
+                      <p className="text-sm font-semibold">📊 Deine Daten</p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Fächer</p>
+                          <p className="text-lg font-bold">{data.subjects.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Aufgaben</p>
+                          <p className="text-lg font-bold">{data.tasks.length}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600 dark:text-gray-400">Lernzeiten</p>
+                          <p className="text-lg font-bold">{data.studySessions.length}</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg text-sm">
+                      <p className="font-semibold text-blue-900 dark:text-blue-300">💡 Neue Features:</p>
+                      <ul className="text-xs text-blue-800 dark:text-blue-400 space-y-1 list-disc list-inside">
+                        <li>Wiederholende Aufgaben (wöchentlich/monatlich)</li>
+                        <li>Automatische Backup-Funktion</li>
+                        <li>Volle Datenverwaltung</li>
+                      </ul>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
 
