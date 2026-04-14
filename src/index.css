@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+}
+
 :root {
   --background: 0 0% 98%;
   --foreground: 222 47% 11%;
@@ -30,4 +37,5 @@
 body {
   @apply bg-background text-foreground antialiased;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  overflow-x: hidden;
 }

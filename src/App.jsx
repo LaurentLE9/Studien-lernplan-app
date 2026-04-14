@@ -1442,7 +1442,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
             <Plus className="mr-2 h-4 w-4" />Lerneinheit anlegen<ChevronDown className="ml-2 h-4 w-4" />
           </Button>
           {manualPickerOpen ? (
-            <div className={cn("absolute right-0 top-full z-50 mt-3 w-[300px] rounded-[1.2rem] border p-3 shadow-2xl", floatingClass)}>
+            <div className={cn("absolute right-0 top-full z-50 mt-3 w-[min(300px,calc(100vw-1rem))] rounded-[1.2rem] border p-3 shadow-2xl", floatingClass)}>
               <div className="mb-2 flex items-center justify-between"><p className="text-sm font-medium">Fach auswählen</p><Button size="icon" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setManualPickerOpen(false)}><X className="h-4 w-4" /></Button></div>
               <div className="grid gap-2">
                 {subjects.map((subject) => (
@@ -1460,7 +1460,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
             <Play className="mr-2 h-4 w-4" />Timer<ChevronDown className="ml-2 h-4 w-4" />
           </Button>
           {timerOpen ? (
-            <div className={cn("absolute right-0 top-full z-50 mt-3 w-[360px] rounded-[1.2rem] border p-4 shadow-2xl", floatingClass)}>
+            <div className={cn("absolute right-0 top-full z-50 mt-3 w-[min(360px,calc(100vw-1rem))] rounded-[1.2rem] border p-4 shadow-2xl", floatingClass)}>
               <Tabs value={timerMode} onValueChange={setTimerMode}>
                 <TabsList className={cn("grid w-full grid-cols-2 rounded-2xl", darkMode ? "bg-[#2a3554]" : "bg-slate-200")}>
                   <TabsTrigger value="stopwatch">Stoppuhr</TabsTrigger>
@@ -2719,8 +2719,8 @@ export default function StudyPlannerApp() {
     : null;
 
   return (
-    <div className={cn("min-h-screen transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
-        <div className={cn("mx-auto min-h-screen max-w-7xl", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_1fr]" : "lg:grid lg:grid-cols-[260px_1fr]")}>
+    <div className={cn("min-h-screen w-full overflow-x-hidden transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
+      <div className={cn("flex min-h-screen w-full overflow-x-hidden", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_minmax(0,1fr)]" : "lg:grid lg:grid-cols-[260px_minmax(0,1fr)]")}>
           <aside className={cn("hidden border-r p-4 backdrop-blur lg:block", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
           <div className="flex h-full flex-col">
             <div>
