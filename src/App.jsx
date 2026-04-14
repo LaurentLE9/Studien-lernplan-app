@@ -1588,13 +1588,62 @@ function SemesterForm({ onSave, initialValue, onDone }) {
 }
 
 function TaskForm({ subjects, onSave, initialValue, onDone }) {
-  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: subjects[0]?.id || "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
+  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
+  const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
+  const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
+    initialValue?.title && initialSubject?.name && initialValue.title === initialSubject.name ? initialSubject.name : ""
+  );
+  const [errors, setErrors] = useState({ title: "", subjectId: "" });
+
+  function validateTaskForm(currentForm) {
+    const nextErrors = { title: "", subjectId: "" };
+    if (!currentForm.title.trim()) {
+      nextErrors.title = "Bitte gib einen Titel ein.";
+    }
+    if (!currentForm.subjectId) {
+      nextErrors.subjectId = "Bitte wähle ein Fach aus.";
+    }
+    setErrors(nextErrors);
+    return !nextErrors.title && !nextErrors.subjectId;
+  }
+
+  function shouldAutofillTitleFromSubject(currentTitle) {
+    const trimmedTitle = currentTitle.trim();
+    if (!trimmedTitle) return true;
+    return Boolean(lastAutofilledTitle) && trimmedTitle === lastAutofilledTitle;
+  }
+
+  function handleSubjectChange(subjectId) {
+    const selectedSubject = subjects.find((subject) => subject.id === subjectId) || null;
+    const shouldAutofill = selectedSubject && shouldAutofillTitleFromSubject(form.title);
+    setForm((prev) => ({
+      ...prev,
+      subjectId,
+      title: shouldAutofill ? selectedSubject.name : prev.title,
+    }));
+    if (shouldAutofill) {
+      setLastAutofilledTitle(selectedSubject.name);
+    }
+    setErrors((prev) => ({ ...prev, subjectId: "" }));
+  }
+
+  function handleTitleChange(value) {
+    setForm((prev) => ({ ...prev, title: value }));
+    setErrors((prev) => ({ ...prev, title: "" }));
+  }
+
+  function handleSaveClick() {
+    if (!validateTaskForm(form)) return;
+    onSave({ ...initialValue, ...form });
+    onDone?.();
+  }
+
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
       <div className="grid gap-2"><Label>Beschreibung / Notizen</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId} onValueChange={(value) => setForm({ ...form, subjectId: value })}><SelectTrigger><SelectValue placeholder="Fach wählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select></div>
+        <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1608,7 +1657,7 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
         <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Dringend markieren</span><Switch checked={form.urgent} onCheckedChange={(checked) => setForm({ ...form, urgent: checked })} /></label>
         <div className="grid gap-2"><Label>Wiederholen</Label><Select value={form.recurringPattern} onValueChange={(value) => setForm({ ...form, recurringPattern: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Nicht wiederholen</SelectItem><SelectItem value="weekly">Wöchentlich</SelectItem><SelectItem value="monthly">Monatlich</SelectItem></SelectContent></Select></div>
       </div>
-      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={() => { if (!form.title.trim() || !form.subjectId) return; onSave({ ...initialValue, ...form }); onDone?.(); }}>Speichern</Button></div>
+      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
     </div>
   );
 }
