@@ -1606,7 +1606,7 @@ function SettingsBackupPage({
   lastCloudLoadAt,
   lastCloudSaveAt,
   data,
-  setIsEditingDashboard,
+  onStartDashboardEdit,
 }) {
   return (
     <div className="grid gap-6">
@@ -1623,7 +1623,7 @@ function SettingsBackupPage({
                 <CardTitle>Dashboard-Bearbeitung</CardTitle>
                 <CardDescription>Kacheln per Drag & Drop anordnen</CardDescription>
               </div>
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
+              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={onStartDashboardEdit}>
                 <Pencil className="h-4 w-4" />
               </Button>
             </div>
@@ -1644,6 +1644,18 @@ function SettingsBackupPage({
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
                 {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
+              </div>
+            </div>
+
+            <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50") }>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
+                  <p className="text-xs text-muted-foreground">Startet den Bearbeitungsmodus und öffnet danach direkt die Dashboard-Ansicht.</p>
+                </div>
+                <Button variant="outline" className="rounded-xl" onClick={onStartDashboardEdit}>
+                  <Pencil className="mr-2 h-4 w-4" />Dashboard bearbeiten
+                </Button>
               </div>
             </div>
 
@@ -2815,6 +2827,14 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance } }));
   };
 
+  const handleStartDashboardEdit = () => {
+    setIsEditingDashboard(true);
+    if (page !== "dashboard") {
+      setPage("dashboard");
+      setMobileNavOpen(false);
+    }
+  };
+
   const themeDock = typeof document !== "undefined"
     ? createPortal(
         <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center">
@@ -2969,6 +2989,25 @@ export default function StudyPlannerApp() {
           </header>
 
           <main className="p-4 md:p-6 lg:p-8">
+          {isEditingDashboard ? (
+            <div className="sticky top-4 z-40 mb-4">
+              <div className={cn("flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur md:flex-row md:items-center md:justify-between", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
+                <div>
+                  <p className="text-sm font-semibold">Dashboard-Bearbeitung aktiv</p>
+                  <p className="text-xs text-muted-foreground">Änderungen werden direkt übernommen. Du kannst die Bearbeitung jetzt jederzeit beenden.</p>
+                </div>
+                <div className="flex gap-2 self-end md:self-auto">
+                  <Button variant="outline" className="rounded-xl" onClick={() => setIsEditingDashboard(false)}>
+                    Abbrechen
+                  </Button>
+                  <Button className="rounded-xl bg-blue-600 hover:bg-blue-500" onClick={() => setIsEditingDashboard(false)}>
+                    Fertig
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {cloudSyncError ? (
             <div className={cn("mb-4 rounded-xl border px-4 py-3 text-sm", darkMode ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "border-amber-300 bg-amber-50 text-amber-800")}>
               {cloudSyncError}
@@ -3624,7 +3663,7 @@ export default function StudyPlannerApp() {
               lastCloudLoadAt={lastCloudLoadAt}
               lastCloudSaveAt={lastCloudSaveAt}
               data={data}
-              setIsEditingDashboard={setIsEditingDashboard}
+              onStartDashboardEdit={handleStartDashboardEdit}
             />
           ) : null}
 
