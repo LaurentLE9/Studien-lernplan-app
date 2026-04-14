@@ -1594,6 +1594,123 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   );
 }
 
+function SettingsBackupPage({
+  darkMode,
+  handleExportData,
+  handleImportData,
+  importError,
+  cloudSyncError,
+  hasSupabaseEnv,
+  isCloudHydrated,
+  session,
+  lastCloudLoadAt,
+  lastCloudSaveAt,
+  data,
+  setIsEditingDashboard,
+}) {
+  return (
+    <div className="grid gap-6">
+      <div>
+        <h2 className="text-2xl font-semibold tracking-tight">Datenverwaltung & Backup</h2>
+        <p className="mt-1 text-sm text-muted-foreground">Verwalte dein Dashboard, prüfe den Sync-Status und sichere deine Daten.</p>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.05fr_.95fr]">
+        <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle>Dashboard-Bearbeitung</CardTitle>
+                <CardDescription>Kacheln per Drag & Drop anordnen</CardDescription>
+              </div>
+              <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50") }>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold">Sync-Health</p>
+                <Badge variant={cloudSyncError ? "destructive" : "secondary"}>{cloudSyncError ? "Warnung" : "OK"}</Badge>
+              </div>
+              <div className="grid gap-2 text-xs">
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Session User</span><span className="font-medium">{session?.user?.id ? "aktiv" : "fehlt"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">user_id</span><span className="font-medium truncate max-w-[180px]">{session?.user?.id || "-"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Supabase ENV</span><span className="font-medium">{hasSupabaseEnv ? "konfiguriert" : "fehlt"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Cloud-Hydration</span><span className="font-medium">{isCloudHydrated ? "fertig" : "ausstehend"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Load Query</span><span className="font-medium">/user_plans?user_id=eq.&lt;id&gt;&amp;select=data</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Save Query</span><span className="font-medium">POST /user_plans?on_conflict=user_id</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
+                <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
+                {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Button onClick={handleExportData} variant="default" className="h-12 rounded-xl flex items-center gap-2">
+                <Download className="h-4 w-4" />Exportieren
+              </Button>
+              <label className="contents">
+                <Button asChild variant="outline" className="h-12 rounded-xl flex items-center gap-2 cursor-pointer">
+                  <span><Upload className="h-4 w-4" />Importieren</span>
+                </Button>
+                <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
+              </label>
+            </div>
+
+            {importError ? <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-400">{importError}</div> : null}
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6">
+          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+            <CardHeader>
+              <CardTitle>Deine Daten</CardTitle>
+              <CardDescription>Aktueller Stand deiner Inhalte</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
+                <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
+                  <p className="text-muted-foreground">Fächer</p>
+                  <p className="mt-1 text-lg font-bold">{data.subjects.length}</p>
+                </div>
+                <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
+                  <p className="text-muted-foreground">Aufgaben</p>
+                  <p className="mt-1 text-lg font-bold">{data.tasks.length}</p>
+                </div>
+                <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
+                  <p className="text-muted-foreground">Lernzeiten</p>
+                  <p className="mt-1 text-lg font-bold">{data.studySessions.length}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+            <CardHeader>
+              <CardTitle>Neue Features</CardTitle>
+              <CardDescription>Hinweise zu aktuellen Funktionen</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="grid gap-2 text-sm text-muted-foreground">
+                <li>Wiederholende Aufgaben (wöchentlich/monatlich)</li>
+                <li>Automatische Backup-Funktion</li>
+                <li>Volle Datenverwaltung</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
   const [form, setForm] = useState(initialValue || { name: "", color: "#3b82f6", description: "", semesterId: semesters[0]?.id || "", goal: "", targetHours: 30 });
 
@@ -1853,7 +1970,6 @@ export default function StudyPlannerApp() {
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -2601,7 +2717,6 @@ export default function StudyPlannerApp() {
         const imported = importDataFromJSON(content, data);
         setData(imported);
         setImportError(null);
-        setSettingsDialogOpen(false);
       } catch (error) {
         setImportError((error instanceof Error) ? error.message : "Import failed");
       }
@@ -2688,9 +2803,10 @@ export default function StudyPlannerApp() {
     { id: "subjects", label: "Fächer", icon: GraduationCap },
     { id: "tracking", label: "Lernzeiterfassung", icon: Clock3 },
     { id: "stats", label: "Statistik", icon: BarChart3 },
+    { id: "settings-backup", label: "Einstellungen & Backup", icon: Settings },
   ];
 
-  const currentPageLabel = navItems.find((n) => n.id === page)?.label;
+  const currentPageLabel = navItems.find((n) => n.id === page)?.label || "Dashboard";
   const handlePageChange = (nextPage) => {
     setPage(nextPage);
     setMobileNavOpen(false);
@@ -2759,10 +2875,6 @@ export default function StudyPlannerApp() {
                     </button>
                   );
                 })}
-                <button onClick={() => setSettingsDialogOpen(true)} title={sidebarCollapsed ? "Einstellungen & Backup" : undefined} className={cn("flex rounded-2xl px-3 py-3 text-left text-sm transition hover:bg-muted", sidebarCollapsed ? "justify-center" : "items-center gap-3")}>
-                  <Settings className="h-4 w-4 shrink-0" />
-                  {!sidebarCollapsed ? "Einstellungen & Backup" : null}
-                </button>
               </nav>
             </div>
 
@@ -2837,10 +2949,7 @@ export default function StudyPlannerApp() {
                     <Button
                       variant="outline"
                       className="rounded-xl"
-                      onClick={() => {
-                        setSettingsDialogOpen(true);
-                        setMobileNavOpen(false);
-                      }}
+                      onClick={() => handlePageChange("settings-backup")}
                     >
                       <Settings className="mr-2 h-4 w-4" />
                       Einstellungen
@@ -2884,90 +2993,7 @@ export default function StudyPlannerApp() {
                 </DialogContent>
               </Dialog>
 
-              <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-                <DialogContent className="max-w-lg rounded-3xl">
-                  <DialogHeader><DialogTitle>Datenverwaltung & Backup</DialogTitle></DialogHeader>
-                  <div className="grid gap-5">
-                    <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
-                          <p className="text-xs text-muted-foreground">Kacheln per Drag & Drop anordnen</p>
-                        </div>
-                        <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setIsEditingDashboard((prev) => !prev)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50")}>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-sm font-semibold">Sync-Health</p>
-                        <Badge variant={cloudSyncError ? "destructive" : "secondary"}>{cloudSyncError ? "Warnung" : "OK"}</Badge>
-                      </div>
-                      <div className="grid gap-2 text-xs">
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Session User</span><span className="font-medium">{session?.user?.id ? "aktiv" : "fehlt"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">user_id</span><span className="font-medium truncate max-w-[180px]">{session?.user?.id || "-"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Supabase ENV</span><span className="font-medium">{hasSupabaseEnv ? "konfiguriert" : "fehlt"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Cloud-Hydration</span><span className="font-medium">{isCloudHydrated ? "fertig" : "ausstehend"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Load Query</span><span className="font-medium">/user_plans?user_id=eq.&lt;id&gt;&amp;select=data</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Save Query</span><span className="font-medium">POST /user_plans?on_conflict=user_id</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Load</span><span className="font-medium">{lastCloudLoadAt ? formatDateTimeDisplay(lastCloudLoadAt) : "-"}</span></div>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Letzter Cloud-Save</span><span className="font-medium">{lastCloudSaveAt ? formatDateTimeDisplay(lastCloudSaveAt) : "-"}</span></div>
-                        {cloudSyncError ? <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-amber-200 dark:text-amber-200">{cloudSyncError}</p> : null}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button onClick={handleExportData} variant="default" className="rounded-xl h-12 flex items-center gap-2">
-                        <Download className="h-4 w-4" />Exportieren
-                      </Button>
-                      <label className="contents">
-                        <Button asChild variant="outline" className="rounded-xl h-12 flex items-center gap-2 cursor-pointer">
-                          <span><Upload className="h-4 w-4" />Importieren</span>
-                        </Button>
-                        <input type="file" accept=".json" onChange={handleImportData} style={{ display: "none" }} />
-                      </label>
-                    </div>
-                    
-                    {importError && <div className="bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-400 p-3 rounded-lg text-sm">{importError}</div>}
-                    
-                    <Separator />
-                    
-                    <div className="bg-slate-100 dark:bg-slate-800/50 p-4 rounded-xl space-y-2">
-                      <p className="text-sm font-semibold">📊 Deine Daten</p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div>
-                          <p className="text-gray-600 dark:text-gray-400">Fächer</p>
-                          <p className="text-lg font-bold">{data.subjects.length}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600 dark:text-gray-400">Aufgaben</p>
-                          <p className="text-lg font-bold">{data.tasks.length}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600 dark:text-gray-400">Lernzeiten</p>
-                          <p className="text-lg font-bold">{data.studySessions.length}</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2 bg-blue-50 dark:bg-blue-500/10 p-3 rounded-lg text-sm">
-                      <p className="font-semibold text-blue-900 dark:text-blue-300">💡 Neue Features:</p>
-                      <ul className="text-xs text-blue-800 dark:text-blue-400 space-y-1 list-disc list-inside">
-                        <li>Wiederholende Aufgaben (wöchentlich/monatlich)</li>
-                        <li>Automatische Backup-Funktion</li>
-                        <li>Volle Datenverwaltung</li>
-                      </ul>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              
             </div>
           </div>
 
@@ -3583,6 +3609,23 @@ export default function StudyPlannerApp() {
               <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Wochenübersicht</CardTitle><CardDescription>Lernstunden pro Tag in dieser Woche</CardDescription></CardHeader><CardContent className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={studyStats.weekLine} margin={{ top: 28, right: 12, left: 0, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="day" /><YAxis /><Tooltip formatter={(value) => formatMinutes(Math.round(Number(value) * 60))} /><Line type="monotone" dataKey="Stunden" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} label={(props) => <LinePointLabel {...props} darkMode={darkMode} />} /></LineChart></ResponsiveContainer></CardContent></Card><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Verteilung der Lernzeit</CardTitle><CardDescription>Alle Fächer bleiben in der Statistik sichtbar</CardDescription></CardHeader><CardContent className="grid gap-4 xl:grid-cols-[1fr_220px]"><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={studyStats.bySubject} dataKey="minutes" nameKey="name" innerRadius={65} outerRadius={100} paddingAngle={3}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip formatter={(value) => formatMinutes(Number(value))} /></PieChart></ResponsiveContainer></div><div className="grid content-start gap-2">{studyStats.bySubject.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><span className="font-medium">{formatMinutes(subject.minutes)}</span></div>)}</div></CardContent></Card></div>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Stunden pro Fach</CardTitle><CardDescription>Direkter Vergleich der Lernzeit</CardDescription></CardHeader><CardContent className="h-[390px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={studyStats.bySubject} margin={{ top: 42, right: 12, left: 0, bottom: 24 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} height={62} tick={(props) => <SubjectAxisTick {...props} darkMode={darkMode} />} /><YAxis domain={[0, "dataMax + 4"]} /><Tooltip formatter={(_value, _name, item) => [formatMinutes(item?.payload?.minutes || 0), item?.payload?.name || "Lernzeit"]} /><Bar dataKey="hours" radius={[8, 8, 0, 0]}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}<LabelList position="top" dataKey="hours" content={(props) => <BarTopLabel {...props} darkMode={darkMode} />} /></Bar></BarChart></ResponsiveContainer></CardContent></Card>
             </div>
+          ) : null}
+
+          {page === "settings-backup" ? (
+            <SettingsBackupPage
+              darkMode={darkMode}
+              handleExportData={handleExportData}
+              handleImportData={handleImportData}
+              importError={importError}
+              cloudSyncError={cloudSyncError}
+              hasSupabaseEnv={hasSupabaseEnv}
+              isCloudHydrated={isCloudHydrated}
+              session={session}
+              lastCloudLoadAt={lastCloudLoadAt}
+              lastCloudSaveAt={lastCloudSaveAt}
+              data={data}
+              setIsEditingDashboard={setIsEditingDashboard}
+            />
           ) : null}
 
           <Dialog open={todaySubjectDialogOpen} onOpenChange={setTodaySubjectDialogOpen}>
