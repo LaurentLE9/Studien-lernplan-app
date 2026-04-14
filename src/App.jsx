@@ -980,6 +980,7 @@ function ManualStudyDialog({
   const [breakMinutesTouched, setBreakMinutesTouched] = useState(false);
   const [activity, setActivity] = useState("");
   const [note, setNote] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -1028,17 +1029,22 @@ function ManualStudyDialog({
   const placeholderClass = darkMode ? "placeholder:text-slate-400" : "placeholder:text-slate-500";
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
 
-  function saveEntry() {
+  async function saveEntry() {
     if (!selectedSubjectId || durationMinutes <= 0) return;
-    onSaveEntry({
-      id: initialValue?.id || crypto.randomUUID(),
-      subjectId: selectedSubjectId,
-      durationMinutes,
-      createdAt: new Date(`${entryDate}T${endTime}:00`).toISOString(),
-      source: initialValue?.source || "manual-entry",
-      note: [activity, note].filter(Boolean).join(" • ") || "Lerneinheit manuell angelegt",
-    });
-    onOpenChange(false);
+    try {
+      setIsSaving(true);
+      await Promise.resolve(onSaveEntry({
+        id: initialValue?.id || crypto.randomUUID(),
+        subjectId: selectedSubjectId,
+        durationMinutes,
+        createdAt: new Date(`${entryDate}T${endTime}:00`).toISOString(),
+        source: initialValue?.source || "manual-entry",
+        note: [activity, note].filter(Boolean).join(" • ") || "Lerneinheit manuell angelegt",
+      }));
+      onOpenChange(false);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -1095,8 +1101,8 @@ function ManualStudyDialog({
             <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Notiz</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Kurze Notiz" className={cn("mt-2 min-h-[100px] resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0", placeholderClass)} /></div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} className="h-11 rounded-full bg-slate-600 text-base font-semibold text-white hover:bg-slate-500">Abbrechen</Button>
-              <Button type="button" onClick={saveEntry} className="h-11 rounded-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500"><Check className="mr-2 h-5 w-5" />{submitLabel}</Button>
+              <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} className="h-11 rounded-full bg-slate-600 text-base font-semibold text-white hover:bg-slate-500" disabled={isSaving}>Abbrechen</Button>
+              <Button type="button" onClick={saveEntry} className="h-11 rounded-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500" disabled={isSaving}><Check className="mr-2 h-5 w-5" />{submitLabel}</Button>
             </div>
           </div>
         </div>
@@ -1128,6 +1134,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   const [timerBusy, setTimerBusy] = useState(false);
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
+  const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
 
   useEffect(() => {
     if (!manualSubjectId && subjects[0]?.id) setManualSubjectId(subjects[0].id);
@@ -1239,6 +1246,23 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
     setManualDialogOpen(true);
   }
 
+  function resetTimerFlowState() {
+    setActiveTimer(null);
+    setTimerOpen(false);
+    setExpireDialogOpen(false);
+    setTickNowMs(Date.now());
+  }
+
+  async function stopAndResetTimerSession(strategy = "finish", sessionToClose = activeTimer) {
+    if (!userId || !sessionToClose) return;
+    if (strategy === "cancel") {
+      await cancelTimerSession(userId, sessionToClose.id);
+    } else {
+      await finishTimerSession(userId, sessionToClose.id);
+    }
+    resetTimerFlowState();
+  }
+
   async function handleTimerSubjectPick(subjectId) {
     setTimerSubjectId(subjectId);
     setTimerOpen(false);
@@ -1334,9 +1358,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
         });
       }
 
-      await finishTimerSession(userId, activeTimer.id);
-      setActiveTimer(null);
-      setExpireDialogOpen(false);
+      await stopAndResetTimerSession("finish", activeTimer);
     } catch (error) {
       console.error("Finish timer with save failed:", error);
     } finally {
@@ -1348,13 +1370,30 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
     if (!activeTimer || !userId) return;
     try {
       setTimerBusy(true);
-      await cancelTimerSession(userId, activeTimer.id);
-      setActiveTimer(null);
-      setExpireDialogOpen(false);
+      await stopAndResetTimerSession("cancel", activeTimer);
     } catch (error) {
       console.error("Cancel timer failed:", error);
     } finally {
       setTimerBusy(false);
+    }
+  }
+
+  async function handleManualSaveEntry(entry) {
+    onSaveSession(entry);
+
+    if (!activeTimer || !isTimerBackedManualEntry(entry?.source)) {
+      setManualSeed(null);
+      return;
+    }
+
+    try {
+      setTimerBusy(true);
+      await stopAndResetTimerSession("finish", activeTimer);
+    } catch (error) {
+      console.error("Finish timer after manual save failed:", error);
+    } finally {
+      setTimerBusy(false);
+      setManualSeed(null);
     }
   }
 
@@ -1491,7 +1530,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
         darkMode={darkMode}
         selectedSubjectId={manualSubjectId}
         onSelectedSubjectChange={setManualSubjectId}
-        onSaveEntry={onSaveSession}
+        onSaveEntry={handleManualSaveEntry}
         initialValue={manualSeed}
         liveBreakMinutes={livePauseMinutes}
         title="Lerneinheit anlegen"
