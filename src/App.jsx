@@ -2020,6 +2020,7 @@ export default function StudyPlannerApp() {
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
+  const [dashboardHeaderExpanded, setDashboardHeaderExpanded] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
@@ -2952,6 +2953,64 @@ export default function StudyPlannerApp() {
     return semesterSummaries.find((semester) => semester.id === selectedSemesterId) || semesterSummaries[0];
   }, [semesterSummaries, selectedSemesterId]);
 
+  const dashboardSemesterEndInfo = useMemo(() => {
+    const today = startOfDay(new Date());
+
+    const parsed = semesters.map((semester) => {
+      const start = semester.startDate ? startOfDay(new Date(semester.startDate)) : null;
+      const end = semester.endDate ? startOfDay(new Date(semester.endDate)) : null;
+      const startValid = start && !Number.isNaN(start.getTime());
+      const endValid = end && !Number.isNaN(end.getTime());
+      return {
+        ...semester,
+        startDateParsed: startValid ? start : null,
+        endDateParsed: endValid ? end : null,
+      };
+    });
+
+    const activeWithEnd = parsed.find((semester) => {
+      if (!semester.startDateParsed || !semester.endDateParsed) return false;
+      return semester.startDateParsed.getTime() <= today.getTime() && today.getTime() <= semester.endDateParsed.getTime();
+    });
+
+    if (activeWithEnd) {
+      const remaining = daysUntil(activeWithEnd.endDateParsed);
+      if (remaining < 0) {
+        return {
+          label: `Semester seit ${Math.abs(remaining)} Tagen vorbei`,
+          tone: darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-100 text-amber-800",
+        };
+      }
+      if (remaining === 0) {
+        return {
+          label: "Semester endet heute",
+          tone: darkMode ? "bg-emerald-500/10 text-emerald-200" : "bg-emerald-100 text-emerald-800",
+        };
+      }
+      return {
+        label: `${remaining} Tage bis Semesterende`,
+        tone: darkMode ? "bg-blue-500/10 text-blue-200" : "bg-blue-100 text-blue-800",
+      };
+    }
+
+    const activeWithoutEnd = parsed.find((semester) => {
+      if (!semester.startDateParsed || semester.endDateParsed) return false;
+      return semester.startDateParsed.getTime() <= today.getTime();
+    });
+
+    if (activeWithoutEnd) {
+      return {
+        label: "Semesterende nicht gesetzt",
+        tone: darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-100 text-amber-800",
+      };
+    }
+
+    return {
+      label: "Kein Semester aktiv",
+      tone: darkMode ? "bg-slate-700/60 text-slate-200" : "bg-slate-100 text-slate-700",
+    };
+  }, [semesters, darkMode]);
+
   useEffect(() => {
     if (!semesters.length) {
       if (selectedSemesterId) setSelectedSemesterId("");
@@ -3473,7 +3532,30 @@ export default function StudyPlannerApp() {
 
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
+              {page === "dashboard" ? (
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 rounded-xl"
+                    onClick={() => setDashboardHeaderExpanded((prev) => !prev)}
+                    aria-label={dashboardHeaderExpanded ? "Dashboard-Details einklappen" : "Dashboard-Details ausklappen"}
+                  >
+                    {dashboardHeaderExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              ) : (
+                <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
+              )}
+              {page === "dashboard" ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Badge className={cn("border-0", dashboardSemesterEndInfo.tone)}>
+                    {dashboardSemesterEndInfo.label}
+                  </Badge>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 xl:ml-auto">
@@ -3492,6 +3574,16 @@ export default function StudyPlannerApp() {
               
             </div>
           </div>
+
+          {page === "dashboard" ? (
+            <div className={cn("overflow-hidden transition-all duration-300 ease-out", dashboardHeaderExpanded ? "mb-6 max-h-48 opacity-100" : "mb-0 max-h-0 opacity-0")}>
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                <CardContent className="p-5 text-sm text-muted-foreground">
+                  Zusätzlicher Dashboard-Bereich. Hier können später weitere kompakte Header-Informationen ergänzt werden.
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
 
           
           {page === "dashboard" ? (
