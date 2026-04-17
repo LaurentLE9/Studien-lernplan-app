@@ -525,6 +525,7 @@ export async function loadUserPlannerData(userId) {
           subjects: Array.isArray(rawData.subjects) ? rawData.subjects.length : 0,
           tasks: Array.isArray(rawData.tasks) ? rawData.tasks.length : 0,
           studySessions: Array.isArray(rawData.studySessions) ? rawData.studySessions.length : 0,
+          exams: Array.isArray(rawData.exams) ? rawData.exams.length : 0,
           todayFocus: Array.isArray(rawData.todayFocus) ? rawData.todayFocus.length : 0,
         },
       });
@@ -575,6 +576,7 @@ export async function saveUserPlannerData(userId, plannerData) {
         subjects: Array.isArray(plannerData?.subjects) ? plannerData.subjects.length : 0,
         tasks: Array.isArray(plannerData?.tasks) ? plannerData.tasks.length : 0,
         studySessions: Array.isArray(plannerData?.studySessions) ? plannerData.studySessions.length : 0,
+        exams: Array.isArray(plannerData?.exams) ? plannerData.exams.length : 0,
         todayFocus: Array.isArray(plannerData?.todayFocus) ? plannerData.todayFocus.length : 0,
       },
     });
@@ -614,6 +616,7 @@ export function normalizeDefaultData() {
     topics: [],
     tasks: [],
     studySessions: [],
+    exams: [],
     todayFocus: [],
     settings: {
       appearance: "light",
@@ -886,6 +889,100 @@ export async function updateTopicRecord(userId, topicId, patch) {
 export async function deleteTopicRecord(userId, topicId) {
   await supabaseRequest(
     `/topics?id=eq.${topicId}&user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+}
+
+const EXAM_SELECT = "id,user_id,subject_id,title,exam_date,exam_time,location,notes,status,is_archived,created_at,updated_at";
+
+function mapExamRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    subjectId: row.subject_id || "",
+    title: row.title || "",
+    examDate: row.exam_date || "",
+    examTime: row.exam_time || "",
+    location: row.location || "",
+    notes: row.notes || "",
+    status: row.status === "written" ? "written" : "open",
+    isArchived: Boolean(row.is_archived),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function loadExams(userId) {
+  const rows = await supabaseRequest(
+    `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}&order=exam_date.asc,exam_time.asc.nulls_last,created_at.asc`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+  return Array.isArray(rows) ? rows.map(mapExamRow).filter(Boolean) : [];
+}
+
+export async function createExamRecord(userId, exam) {
+  const rows = await supabaseRequest(
+    `/exams?select=${EXAM_SELECT}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        id: exam.id,
+        user_id: userId,
+        subject_id: exam.subjectId || null,
+        title: exam.title,
+        exam_date: exam.examDate || null,
+        exam_time: exam.examTime || null,
+        location: exam.location || null,
+        notes: exam.notes || null,
+        status: exam.status === "written" ? "written" : "open",
+        is_archived: Boolean(exam.isArchived),
+      }),
+    }
+  );
+  return mapExamRow(rows?.[0] || null);
+}
+
+export async function updateExamRecord(userId, examId, patch) {
+  const payload = {};
+
+  if (Object.prototype.hasOwnProperty.call(patch, "subjectId")) payload.subject_id = patch.subjectId || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "title")) payload.title = patch.title;
+  if (Object.prototype.hasOwnProperty.call(patch, "examDate")) payload.exam_date = patch.examDate || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "examTime")) payload.exam_time = patch.examTime || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "location")) payload.location = patch.location || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "notes")) payload.notes = patch.notes || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "status")) payload.status = patch.status === "written" ? "written" : "open";
+  if (Object.prototype.hasOwnProperty.call(patch, "isArchived")) payload.is_archived = Boolean(patch.isArchived);
+
+  const rows = await supabaseRequest(
+    `/exams?id=eq.${examId}&user_id=eq.${userId}&select=${EXAM_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  return mapExamRow(rows?.[0] || null);
+}
+
+export async function deleteExamRecord(userId, examId) {
+  await supabaseRequest(
+    `/exams?id=eq.${examId}&user_id=eq.${userId}`,
     {
       method: "DELETE",
       headers: { apikey: SUPABASE_ANON_KEY },

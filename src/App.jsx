@@ -35,6 +35,7 @@ import {
     LogOut,
   } from "lucide-react";
   import AuthScreen from "@/components/AuthScreen";
+  import ExamsPage from "@/components/ExamsPage";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
@@ -71,6 +72,10 @@ import {
   markTopicAsReviewed,
   calculateNextReviewAt,
   MAX_REVIEW_GAP_DURING_SEMESTER,
+  loadExams,
+  createExamRecord,
+  updateExamRecord,
+  deleteExamRecord,
 } from "@/lib/cloudStore";
 import {
   Card,
@@ -229,6 +234,7 @@ function exportDataToJSON(data) {
       topics: data.topics,
       tasks: data.tasks,
       studySessions: data.studySessions,
+      exams: data.exams,
       settings: data.settings,
     },
   };
@@ -245,6 +251,7 @@ function importDataFromJSON(jsonString, existingData) {
       topics: imported.data.topics || existingData.topics || [],
       tasks: imported.data.tasks || existingData.tasks,
       studySessions: imported.data.studySessions || existingData.studySessions,
+      exams: imported.data.exams || existingData.exams || [],
       settings: { ...existingData.settings, ...(imported.data.settings || {}) },
       seeds: existingData.seeds,
     };
@@ -598,6 +605,7 @@ function usePersistentState() {
           topics: [],
           tasks: [],
           studySessions: [],
+          exams: [],
           todayFocus: [],
           settings: {
             appearance: "light",
@@ -614,6 +622,7 @@ function usePersistentState() {
         topics: parsed.topics || [],
         tasks: parsed.tasks || [],
         studySessions: parsed.studySessions || [],
+        exams: parsed.exams || [],
         todayFocus: parsed.todayFocus || [],
         settings: {
           appearance: parsed.settings?.appearance || "light",
@@ -629,6 +638,7 @@ function usePersistentState() {
         topics: [],
         tasks: [],
         studySessions: [],
+        exams: [],
         todayFocus: [],
         settings: {
           appearance: "light",
@@ -2021,6 +2031,9 @@ export default function StudyPlannerApp() {
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [activeLearningPlanTab, setActiveLearningPlanTab] = useState("plan");
+  const [examFilter, setExamFilter] = useState({ subjectId: "all", status: "all" });
+  const [examDialogOpen, setExamDialogOpen] = useState(false);
+  const [editingExam, setEditingExam] = useState(null);
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(true);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -2085,6 +2098,7 @@ export default function StudyPlannerApp() {
               ...cloudData,
               subjects: prev.subjects,
               topics: prev.topics,
+              exams: prev.exams,
             };
             writeUserCache(session.user.id, merged);
             return merged;
@@ -2197,6 +2211,12 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, topics: mapped }));
   };
 
+  const syncExamsFromDatabase = async (userId) => {
+    if (!userId) return;
+    const rows = await loadExams(userId);
+    setData((prev) => ({ ...prev, exams: rows }));
+  };
+
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
     syncSubjectsFromDatabase(session.user.id).catch((err) => {
@@ -2210,6 +2230,14 @@ export default function StudyPlannerApp() {
     syncTopicsFromDatabase(session.user.id).catch((err) => {
       console.error("Topic sync error:", err);
       setCloudSyncError(err?.message || "Themen konnten nicht aus Supabase geladen werden");
+    });
+  }, [session?.user?.id, isCloudHydrated]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+    syncExamsFromDatabase(session.user.id).catch((err) => {
+      console.error("Exam sync error:", err);
+      setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
     });
   }, [session?.user?.id, isCloudHydrated]);
 
@@ -2231,6 +2259,7 @@ export default function StudyPlannerApp() {
             ...cloudData,
             subjects: current.subjects,
             topics: current.topics,
+            exams: current.exams,
           };
           const currentJson = JSON.stringify(current);
           const cloudJson = JSON.stringify(mergedCloudData);
@@ -3255,6 +3284,107 @@ export default function StudyPlannerApp() {
     setEditingTask(null);
   }
 
+  async function saveExam(exam) {
+    const userId = session?.user?.id;
+    const payload = {
+      ...exam,
+      id: exam.id || crypto.randomUUID(),
+      status: exam.status === "written" ? "written" : "open",
+      isArchived: Boolean(exam.isArchived),
+    };
+
+    if (!userId) {
+      setData((prev) => {
+        const nowIso = new Date().toISOString();
+        const existingExam = prev.exams.find((entry) => entry.id === payload.id) || null;
+        const nextExam = {
+          ...existingExam,
+          ...payload,
+          createdAt: existingExam?.createdAt || nowIso,
+          updatedAt: nowIso,
+        };
+        return {
+          ...prev,
+          exams: existingExam
+            ? prev.exams.map((entry) => (entry.id === payload.id ? nextExam : entry))
+            : [nextExam, ...prev.exams],
+        };
+      });
+      setEditingExam(null);
+      setExamDialogOpen(false);
+      return;
+    }
+
+    try {
+      if (data.exams.some((entry) => entry.id === payload.id)) {
+        await updateExamRecord(userId, payload.id, payload);
+      } else {
+        await createExamRecord(userId, payload);
+      }
+      await syncExamsFromDatabase(userId);
+      setEditingExam(null);
+      setExamDialogOpen(false);
+    } catch (err) {
+      console.error("Save exam error:", err);
+      setCloudSyncError(err?.message || "Klausur konnte nicht gespeichert werden");
+    }
+  }
+
+  async function markExamWritten(exam) {
+    const userId = session?.user?.id;
+    if (!userId || !exam?.id) return;
+
+    try {
+      await updateExamRecord(userId, exam.id, { status: "written" });
+      await syncExamsFromDatabase(userId);
+    } catch (err) {
+      console.error("Mark exam written error:", err);
+      setCloudSyncError(err?.message || "Klausur konnte nicht als geschrieben markiert werden");
+    }
+  }
+
+  async function archiveExam(exam) {
+    const userId = session?.user?.id;
+    if (!userId || !exam?.id) return;
+
+    try {
+      await updateExamRecord(userId, exam.id, { isArchived: true });
+      await syncExamsFromDatabase(userId);
+    } catch (err) {
+      console.error("Archive exam error:", err);
+      setCloudSyncError(err?.message || "Klausur konnte nicht archiviert werden");
+    }
+  }
+
+  async function restoreExam(exam) {
+    const userId = session?.user?.id;
+    if (!userId || !exam?.id) return;
+
+    try {
+      await updateExamRecord(userId, exam.id, { status: "open", isArchived: false });
+      await syncExamsFromDatabase(userId);
+    } catch (err) {
+      console.error("Restore exam error:", err);
+      setCloudSyncError(err?.message || "Klausur konnte nicht wiederhergestellt werden");
+    }
+  }
+
+  async function deleteExam(id) {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setData((prev) => ({ ...prev, exams: prev.exams.filter((exam) => exam.id !== id) }));
+      return;
+    }
+
+    try {
+      await deleteExamRecord(userId, id);
+      await syncExamsFromDatabase(userId);
+    } catch (err) {
+      console.error("Delete exam error:", err);
+      setCloudSyncError(err?.message || "Klausur konnte nicht gelöscht werden");
+    }
+  }
+
   function deleteTask(id) {
     setData((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
   }
@@ -3406,6 +3536,7 @@ export default function StudyPlannerApp() {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "learning-plan", label: "Lernplan", icon: BookOpen },
     { id: "tasks", label: "Aufgaben", icon: ListTodo },
+    { id: "exams", label: "Klausuren", icon: CalendarClock },
     { id: "semester-config", label: "Semesterkonfiguration", icon: CalendarClock },
     { id: "subjects", label: "Fächer", icon: GraduationCap },
     { id: "tracking", label: "Lernzeiterfassung", icon: Clock3 },
@@ -4253,6 +4384,26 @@ export default function StudyPlannerApp() {
                 </div>
               </TabsContent>
             </Tabs>
+          ) : null}
+
+          {page === "exams" ? (
+            <ExamsPage
+              darkMode={darkMode}
+              examSubjects={[...data.subjects, ...archivedSubjects]}
+              subjectsById={subjectsById}
+              exams={data.exams}
+              examFilter={examFilter}
+              setExamFilter={setExamFilter}
+              examDialogOpen={examDialogOpen}
+              setExamDialogOpen={setExamDialogOpen}
+              editingExam={editingExam}
+              setEditingExam={setEditingExam}
+              saveExam={saveExam}
+              markExamWritten={markExamWritten}
+              archiveExam={archiveExam}
+              restoreExam={restoreExam}
+              deleteExam={deleteExam}
+            />
           ) : null}
 
           {page === "tracking" ? (
