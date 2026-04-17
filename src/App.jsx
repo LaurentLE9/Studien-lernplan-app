@@ -62,6 +62,14 @@ import {
   archiveSubjectRecord,
   unarchiveSubjectRecord,
   deleteSubjectRecord,
+  loadTopics,
+  createTopicRecord,
+  updateTopicRecord,
+  deleteTopicRecord,
+  markTopicAsLearnedNew,
+  markTopicAsReviewed,
+  calculateNextReviewAt,
+  MAX_REVIEW_GAP_DURING_SEMESTER,
 } from "@/lib/cloudStore";
 import {
   Card,
@@ -217,6 +225,7 @@ function exportDataToJSON(data) {
     exportedAt: new Date().toISOString(),
     data: {
       subjects: data.subjects,
+      topics: data.topics,
       tasks: data.tasks,
       studySessions: data.studySessions,
       settings: data.settings,
@@ -232,6 +241,7 @@ function importDataFromJSON(jsonString, existingData) {
     
     return {
       subjects: imported.data.subjects || existingData.subjects,
+      topics: imported.data.topics || existingData.topics || [],
       tasks: imported.data.tasks || existingData.tasks,
       studySessions: imported.data.studySessions || existingData.studySessions,
       settings: { ...existingData.settings, ...(imported.data.settings || {}) },
@@ -542,6 +552,11 @@ function makeInitialSubjects() {
     description: "",
     semester: "2. Semester",
     goal: "",
+    includeInLearningPlan: true,
+    priority: null,
+    newTopicEveryDays: 3,
+    nextNewTopicDueAt: null,
+    paused: false,
   }));
 }
 
@@ -579,6 +594,7 @@ function usePersistentState() {
       if (!raw) {
         return {
           subjects: makeInitialSubjects(),
+          topics: [],
           tasks: [],
           studySessions: [],
           todayFocus: [],
@@ -594,6 +610,7 @@ function usePersistentState() {
       const parsed = JSON.parse(raw);
       return {
         subjects: parsed.subjects?.length ? parsed.subjects : makeInitialSubjects(),
+        topics: parsed.topics || [],
         tasks: parsed.tasks || [],
         studySessions: parsed.studySessions || [],
         todayFocus: parsed.todayFocus || [],
@@ -608,6 +625,7 @@ function usePersistentState() {
     } catch {
       return {
         subjects: makeInitialSubjects(),
+        topics: [],
         tasks: [],
         studySessions: [],
         todayFocus: [],
@@ -1724,7 +1742,19 @@ function SettingsBackupPage({
 }
 
 function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
-  const [form, setForm] = useState(initialValue || { name: "", color: "#3b82f6", description: "", semesterId: semesters[0]?.id || "", goal: "", targetHours: 30 });
+  const [form, setForm] = useState(initialValue || {
+    name: "",
+    color: "#3b82f6",
+    description: "",
+    semesterId: semesters[0]?.id || "",
+    goal: "",
+    targetHours: 30,
+    includeInLearningPlan: true,
+    paused: false,
+    newTopicEveryDays: 3,
+    nextNewTopicDueAt: "",
+    priority: "",
+  });
 
   useEffect(() => {
     if (!semesters.length) return;
@@ -1741,6 +1771,15 @@ function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
       <div className="grid gap-2"><Label>Beschreibung</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
       <div className="grid gap-2"><Label>Semester</Label><Select value={form.semesterId} onValueChange={(value) => setForm({ ...form, semesterId: value })}><SelectTrigger><SelectValue placeholder="Semester wählen" /></SelectTrigger><SelectContent>{semesters.map((semester) => <SelectItem key={semester.id} value={semester.id}>{semester.name}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid gap-2"><Label>Ziel / Notiz</Label><Textarea value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Im Lernplan aktiv</span><Switch checked={form.includeInLearningPlan !== false} onCheckedChange={(checked) => setForm({ ...form, includeInLearningPlan: checked })} /></label>
+        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Fach pausieren</span><Switch checked={Boolean(form.paused)} onCheckedChange={(checked) => setForm({ ...form, paused: checked })} /></label>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid gap-2"><Label>Neue Themen alle X Tage</Label><Input type="number" min={1} value={form.newTopicEveryDays || 3} onChange={(e) => setForm({ ...form, newTopicEveryDays: Math.max(1, Number(e.target.value) || 1) })} /></div>
+        <div className="grid gap-2"><Label>Nächstes neues Thema fällig</Label><Input type="date" value={form.nextNewTopicDueAt ? formatDateInput(form.nextNewTopicDueAt) : ""} onChange={(e) => setForm({ ...form, nextNewTopicDueAt: e.target.value ? new Date(`${e.target.value}T08:00:00`).toISOString() : null })} /></div>
+        <div className="grid gap-2"><Label>Priorität (optional)</Label><Input type="number" min={1} value={form.priority ?? ""} onChange={(e) => setForm({ ...form, priority: e.target.value ? Number(e.target.value) : null })} placeholder="z. B. 1" /></div>
+      </div>
       <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={() => { if (!form.name.trim() || !form.semesterId) return; onSave({ ...initialValue, ...form }); onDone?.(); }}>Speichern</Button></div>
     </div>
   );
@@ -1987,6 +2026,8 @@ export default function StudyPlannerApp() {
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
   const [lastDeletedSession, setLastDeletedSession] = useState(null);
+  const [newTopicDraftBySubject, setNewTopicDraftBySubject] = useState({});
+  const [expandedLearningSubjectIds, setExpandedLearningSubjectIds] = useState({});
   const [todaySubjectDialogOpen, setTodaySubjectDialogOpen] = useState(false);
   const [todaySubjectDraft, setTodaySubjectDraft] = useState({ subjectId: "", note: "" });
   const [importError, setImportError] = useState(null);
@@ -2034,8 +2075,15 @@ export default function StudyPlannerApp() {
         console.info("[app-sync] load:start", { userId: session.user.id });
         const cloudData = await loadUserPlannerData(session.user.id);
         if (!cancelled && cloudData) {
-          setData(cloudData);
-          writeUserCache(session.user.id, cloudData);
+          setData((prev) => {
+            const merged = {
+              ...cloudData,
+              subjects: prev.subjects,
+              topics: prev.topics,
+            };
+            writeUserCache(session.user.id, merged);
+            return merged;
+          });
         }
         if (!cancelled) {
           setIsCloudHydrated(true);
@@ -2097,8 +2145,14 @@ export default function StudyPlannerApp() {
       semester: semestersById[row.semester_id || row.group_id]?.name || "Ohne Semester",
       goal: row.goal || "",
       targetHours: Number(row.target_hours || 0),
+      includeInLearningPlan: row.include_in_learning_plan !== false,
+      priority: Number.isFinite(Number(row.priority)) ? Number(row.priority) : null,
+      newTopicEveryDays: Math.max(1, Number(row.new_topic_every_days || 3)),
+      nextNewTopicDueAt: row.next_new_topic_due_at || null,
+      paused: Boolean(row.paused),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
     });
 
     const active = subjects.filter((row) => !row.is_archived).map(mapRowToSubject);
@@ -2117,11 +2171,40 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, subjects: active }));
   };
 
+  const syncTopicsFromDatabase = async (userId) => {
+    if (!userId) return;
+    const rows = await loadTopics(userId);
+    const mapped = rows.map((row) => ({
+      id: row.id,
+      subjectId: row.subject_id,
+      title: row.title,
+      orderIndex: Math.max(0, Number(row.order_index || 0)),
+      status: row.status || "new",
+      lastStudiedAt: row.last_studied_at || null,
+      nextReviewAt: row.next_review_at || null,
+      reviewStep: Math.max(0, Number(row.review_step || 0)),
+      completed: Boolean(row.completed),
+      isPausedToday: Boolean(row.is_paused_today),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+
+    setData((prev) => ({ ...prev, topics: mapped }));
+  };
+
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
     syncSubjectsFromDatabase(session.user.id).catch((err) => {
       console.error("Subject sync error:", err);
       setCloudSyncError(err?.message || "Fächer konnten nicht aus Supabase geladen werden");
+    });
+  }, [session?.user?.id, isCloudHydrated]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+    syncTopicsFromDatabase(session.user.id).catch((err) => {
+      console.error("Topic sync error:", err);
+      setCloudSyncError(err?.message || "Themen konnten nicht aus Supabase geladen werden");
     });
   }, [session?.user?.id, isCloudHydrated]);
 
@@ -2139,14 +2222,19 @@ export default function StudyPlannerApp() {
         if (!isMounted || !cloudData) return;
 
         setData((current) => {
+          const mergedCloudData = {
+            ...cloudData,
+            subjects: current.subjects,
+            topics: current.topics,
+          };
           const currentJson = JSON.stringify(current);
-          const cloudJson = JSON.stringify(cloudData);
+          const cloudJson = JSON.stringify(mergedCloudData);
           if (currentJson === cloudJson) {
             return current;
           }
           setLastCloudLoadAt(new Date().toISOString());
           setCloudSyncError(null);
-          return cloudData;
+          return mergedCloudData;
         });
       } catch (err) {
         console.error("Cloud polling refresh failed:", err);
@@ -2452,6 +2540,369 @@ export default function StudyPlannerApp() {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [data.todayFocus, subjectsById, today]);
 
+  const learningPlanModel = useMemo(() => {
+    const now = new Date();
+    const todayStart = startOfDay(now);
+    const tomorrowStart = new Date(todayStart);
+    tomorrowStart.setDate(todayStart.getDate() + 1);
+    const soonLimit = new Date(todayStart);
+    soonLimit.setDate(todayStart.getDate() + 3);
+
+    const toTs = (value) => {
+      if (!value) return null;
+      const parsed = new Date(value).getTime();
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const subjectMap = Object.fromEntries(data.subjects.map((subject) => [subject.id, subject]));
+    const activeSubjects = data.subjects
+      .filter((subject) => subject.includeInLearningPlan !== false && !subject.paused)
+      .sort((a, b) => {
+        const pA = Number.isFinite(Number(a.priority)) ? Number(a.priority) : Number.MAX_SAFE_INTEGER;
+        const pB = Number.isFinite(Number(b.priority)) ? Number(b.priority) : Number.MAX_SAFE_INTEGER;
+        if (pA !== pB) return pA - pB;
+        return (a.name || "").localeCompare(b.name || "", "de");
+      });
+
+    const activeSubjectSet = new Set(activeSubjects.map((subject) => subject.id));
+    const topicRows = (data.topics || []).map((topic) => ({
+      ...topic,
+      subject: subjectMap[topic.subjectId],
+      nextReviewTs: toTs(topic.nextReviewAt),
+      orderIndex: Math.max(0, Number(topic.orderIndex || 0)),
+    }));
+
+    const reviewCandidates = topicRows
+      .filter((topic) => activeSubjectSet.has(topic.subjectId))
+      .filter((topic) => !topic.completed)
+      .filter((topic) => topic.status === "review" || topic.status === "learning")
+      .filter((topic) => !topic.isPausedToday)
+      .filter((topic) => topic.nextReviewTs !== null);
+
+    const overdueReviews = reviewCandidates
+      .filter((topic) => topic.nextReviewTs < todayStart.getTime())
+      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
+
+    const dueTodayReviews = reviewCandidates
+      .filter((topic) => topic.nextReviewTs >= todayStart.getTime() && topic.nextReviewTs < tomorrowStart.getTime())
+      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
+
+    const soonReviews = reviewCandidates
+      .filter((topic) => topic.nextReviewTs >= tomorrowStart.getTime() && topic.nextReviewTs < soonLimit.getTime())
+      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
+
+    const topicsBySubject = new Map();
+    topicRows.forEach((topic) => {
+      if (!topicsBySubject.has(topic.subjectId)) {
+        topicsBySubject.set(topic.subjectId, []);
+      }
+      topicsBySubject.get(topic.subjectId).push(topic);
+    });
+
+    for (const [subjectId, topics] of topicsBySubject) {
+      topics.sort((a, b) => {
+        if (a.orderIndex !== b.orderIndex) return a.orderIndex - b.orderIndex;
+        return (a.title || "").localeCompare(b.title || "", "de");
+      });
+      topicsBySubject.set(subjectId, topics);
+    }
+
+    const newTopicsReady = activeSubjects
+      .map((subject) => {
+        const allTopics = topicsBySubject.get(subject.id) || [];
+        const nextNewTopic = allTopics.find((topic) => !topic.completed && topic.status === "new") || null;
+        if (!nextNewTopic) return null;
+        const dueTs = toTs(subject.nextNewTopicDueAt);
+        const isDue = dueTs === null || dueTs < tomorrowStart.getTime();
+        return isDue ? { subject, topic: nextNewTopic, dueTs } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const aTs = a.dueTs ?? 0;
+        const bTs = b.dueTs ?? 0;
+        if (aTs !== bTs) return aTs - bTs;
+        return (a.subject.name || "").localeCompare(b.subject.name || "", "de");
+      });
+
+    const subjectOverview = data.subjects
+      .filter((subject) => !subject.isArchived)
+      .map((subject) => {
+        const topics = topicsBySubject.get(subject.id) || [];
+        const openTopics = topics.filter((topic) => !topic.completed).length;
+        const dueReviewsCount = topics.filter((topic) => {
+          const ts = toTs(topic.nextReviewAt);
+          return !topic.completed
+            && (topic.status === "review" || topic.status === "learning")
+            && ts !== null
+            && ts < tomorrowStart.getTime();
+        }).length;
+
+        const nextNewTopic = topics.find((topic) => !topic.completed && topic.status === "new") || null;
+        return {
+          subject,
+          openTopics,
+          dueReviewsCount,
+          nextNewTopic,
+          dueAt: subject.nextNewTopicDueAt || null,
+          topics,
+        };
+      })
+      .sort((a, b) => (a.subject.name || "").localeCompare(b.subject.name || "", "de"));
+
+    return {
+      overdueReviews,
+      dueTodayReviews,
+      soonReviews,
+      newTopicsReady,
+      subjectOverview,
+      topicsBySubject,
+    };
+  }, [data.subjects, data.topics]);
+
+  const upsertTopicInState = (topicRow) => {
+    if (!topicRow) return;
+    const mapped = {
+      id: topicRow.id,
+      subjectId: topicRow.subject_id || topicRow.subjectId,
+      title: topicRow.title,
+      orderIndex: Math.max(0, Number(topicRow.order_index ?? topicRow.orderIndex ?? 0)),
+      status: topicRow.status || "new",
+      lastStudiedAt: topicRow.last_studied_at ?? topicRow.lastStudiedAt ?? null,
+      nextReviewAt: topicRow.next_review_at ?? topicRow.nextReviewAt ?? null,
+      reviewStep: Math.max(0, Number(topicRow.review_step ?? topicRow.reviewStep ?? 0)),
+      completed: Boolean(topicRow.completed),
+      isPausedToday: Boolean(topicRow.is_paused_today ?? topicRow.isPausedToday),
+      createdAt: topicRow.created_at ?? topicRow.createdAt,
+      updatedAt: topicRow.updated_at ?? topicRow.updatedAt,
+    };
+
+    setData((prev) => ({
+      ...prev,
+      topics: prev.topics.some((topic) => topic.id === mapped.id)
+        ? prev.topics.map((topic) => (topic.id === mapped.id ? mapped : topic))
+        : [...prev.topics, mapped],
+    }));
+  };
+
+  async function createTopicForSubject(subjectId) {
+    const title = String(newTopicDraftBySubject[subjectId] || "").trim();
+    if (!title) return;
+
+    const existingTopics = (learningPlanModel.topicsBySubject.get(subjectId) || []);
+    const nextOrderIndex = existingTopics.length ? Math.max(...existingTopics.map((topic) => Number(topic.orderIndex || 0))) + 1 : 0;
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: [
+          ...prev.topics,
+          {
+            id: crypto.randomUUID(),
+            subjectId,
+            title,
+            orderIndex: nextOrderIndex,
+            status: "new",
+            lastStudiedAt: null,
+            nextReviewAt: null,
+            reviewStep: 0,
+            completed: false,
+            isPausedToday: false,
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      }));
+      setNewTopicDraftBySubject((prev) => ({ ...prev, [subjectId]: "" }));
+      return;
+    }
+
+    try {
+      const created = await createTopicRecord(userId, {
+        id: crypto.randomUUID(),
+        subjectId,
+        title,
+        orderIndex: nextOrderIndex,
+        status: "new",
+      });
+      upsertTopicInState(created);
+      setNewTopicDraftBySubject((prev) => ({ ...prev, [subjectId]: "" }));
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Create topic error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht angelegt werden");
+    }
+  }
+
+  async function markTopicAsNewLearned(topic) {
+    const subject = subjectsById[topic.subjectId];
+    if (!subject) return;
+
+    const userId = session?.user?.id;
+    if (!userId) {
+      const nowIso = new Date().toISOString();
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? {
+          ...entry,
+          status: "review",
+          reviewStep: 0,
+          lastStudiedAt: nowIso,
+          nextReviewAt: calculateNextReviewAt(0, new Date(), MAX_REVIEW_GAP_DURING_SEMESTER),
+          isPausedToday: false,
+        } : entry),
+        subjects: prev.subjects.map((entry) => entry.id === subject.id ? {
+          ...entry,
+          nextNewTopicDueAt: new Date(Date.now() + Math.max(1, Number(entry.newTopicEveryDays || 3)) * 86400000).toISOString(),
+        } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const result = await markTopicAsLearnedNew(userId, topic, subject, {
+        maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
+      });
+      upsertTopicInState(result.updatedTopic);
+      setData((prev) => ({
+        ...prev,
+        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: result.nextNewTopicDueAt } : entry),
+      }));
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Mark new topic learned error:", err);
+      setCloudSyncError(err?.message || "Neues Thema konnte nicht verarbeitet werden");
+    }
+  }
+
+  async function markTopicAsReviewDone(topic) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      const nextStep = Math.max(0, Number(topic.reviewStep || 0)) + 1;
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? {
+          ...entry,
+          status: "review",
+          reviewStep: nextStep,
+          lastStudiedAt: new Date().toISOString(),
+          nextReviewAt: calculateNextReviewAt(nextStep, new Date(), MAX_REVIEW_GAP_DURING_SEMESTER),
+          isPausedToday: false,
+        } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await markTopicAsReviewed(userId, topic, {
+        maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
+      });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Mark review topic error:", err);
+      setCloudSyncError(err?.message || "Wiederholung konnte nicht gespeichert werden");
+    }
+  }
+
+  async function skipTopicToTomorrow(topic) {
+    const tomorrowIso = new Date(Date.now() + 86400000).toISOString();
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? {
+          ...entry,
+          nextReviewAt: tomorrowIso,
+          isPausedToday: false,
+        } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await updateTopicRecord(userId, topic.id, {
+        nextReviewAt: tomorrowIso,
+        isPausedToday: false,
+      });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Skip topic error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht verschoben werden");
+    }
+  }
+
+  async function pauseTopicForToday(topic) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, isPausedToday: true } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: true });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Pause topic for today error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht pausiert werden");
+    }
+  }
+
+  async function toggleLearningPlanFlag(subject, enabled) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, includeInLearningPlan: enabled } : entry),
+      }));
+      return;
+    }
+
+    try {
+      await updateSubjectRecord(userId, subject.id, {
+        ...subject,
+        includeInLearningPlan: enabled,
+      });
+      await syncSubjectsFromDatabase(userId);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Toggle learning plan flag error:", err);
+      setCloudSyncError(err?.message || "Fachstatus konnte nicht gespeichert werden");
+    }
+  }
+
+  async function toggleSubjectPaused(subject, paused) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, paused } : entry),
+      }));
+      return;
+    }
+
+    try {
+      await updateSubjectRecord(userId, subject.id, {
+        ...subject,
+        paused,
+      });
+      await syncSubjectsFromDatabase(userId);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Pause subject error:", err);
+      setCloudSyncError(err?.message || "Fachpause konnte nicht gespeichert werden");
+    }
+  }
+
   const groupedSubjects = useMemo(() => {
     const semestersById = Object.fromEntries(semesters.map((semester) => [semester.id, semester]));
     const bucket = new Map();
@@ -2538,6 +2989,7 @@ export default function StudyPlannerApp() {
         await createSubjectRecord(userId, payload);
       }
       await syncSubjectsFromDatabase(userId);
+      await syncTopicsFromDatabase(userId);
       setEditingSubject(null);
     } catch (err) {
       console.error("Save subject error:", err);
@@ -2555,6 +3007,7 @@ export default function StudyPlannerApp() {
     try {
       await archiveSubjectRecord(userId, id);
       await syncSubjectsFromDatabase(userId);
+      await syncTopicsFromDatabase(userId);
     } catch (err) {
       console.error("Archive subject error:", err);
       setCloudSyncError(err?.message || "Fach konnte nicht archiviert werden");
@@ -2568,6 +3021,7 @@ export default function StudyPlannerApp() {
     try {
       await unarchiveSubjectRecord(userId, id);
       await syncSubjectsFromDatabase(userId);
+      await syncTopicsFromDatabase(userId);
     } catch (err) {
       console.error("Restore subject error:", err);
       setCloudSyncError(err?.message || "Fach konnte nicht wiederhergestellt werden");
@@ -2584,6 +3038,7 @@ export default function StudyPlannerApp() {
     try {
       await deleteSubjectRecord(userId, id);
       await syncSubjectsFromDatabase(userId);
+      await syncTopicsFromDatabase(userId);
     } catch (err) {
       console.error("Permanently delete subject error:", err);
       setCloudSyncError(err?.message || "Fach konnte nicht gelöscht werden");
@@ -2600,6 +3055,7 @@ export default function StudyPlannerApp() {
     try {
       await archiveSubjectRecord(userId, id);
       await syncSubjectsFromDatabase(userId);
+      await syncTopicsFromDatabase(userId);
     } catch (err) {
       console.error("Archive subject error:", err);
       setCloudSyncError(err?.message || "Fach konnte nicht archiviert werden");
@@ -2810,6 +3266,7 @@ export default function StudyPlannerApp() {
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "learning-plan", label: "Lernplan", icon: BookOpen },
     { id: "tasks", label: "Aufgaben", icon: ListTodo },
     { id: "semester-config", label: "Semesterkonfiguration", icon: CalendarClock },
     { id: "subjects", label: "Fächer", icon: GraduationCap },
@@ -3158,6 +3615,188 @@ export default function StudyPlannerApp() {
             </DndContext>
           
 ) : null}
+
+          {page === "learning-plan" ? (
+            <div className="grid gap-6">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <Card className={cn("rounded-2xl border shadow-sm lg:col-span-2", getSurfaceClass(darkMode))}>
+                  <CardHeader>
+                    <CardTitle>Jetzt wiederholen</CardTitle>
+                    <CardDescription>Überfällige und heute fällige Wiederholungen stehen oben.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    {[...learningPlanModel.overdueReviews, ...learningPlanModel.dueTodayReviews].length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Keine fälligen Wiederholungen.</p>
+                    ) : (
+                      [...learningPlanModel.overdueReviews, ...learningPlanModel.dueTodayReviews].map((topic) => {
+                        const isOverdue = topic.nextReviewAt && new Date(topic.nextReviewAt).getTime() < startOfDay(new Date()).getTime();
+                        return (
+                          <div key={topic.id} className={cn("rounded-2xl border p-4", isOverdue ? "border-red-400/40 bg-red-500/5" : "border-amber-400/40 bg-amber-500/5")}>
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                              <div>
+                                <p className="font-semibold">{topic.subject?.name || "Fach"} - {topic.title}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {isOverdue ? "Überfällig" : "Heute fällig"}
+                                  {topic.nextReviewAt ? ` · ${formatDateDisplay(topic.nextReviewAt)}` : ""}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button size="sm" className="rounded-xl" onClick={() => markTopicAsReviewDone(topic)}>Wiederholt</Button>
+                                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => skipTopicToTomorrow(topic)}>Überspringen</Button>
+                                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                  <CardHeader>
+                    <CardTitle>Jetzt neu lernen</CardTitle>
+                    <CardDescription>Freigeschaltete neue Themen je aktivem Fach.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    {learningPlanModel.newTopicsReady.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Heute keine neuen Themen freigeschaltet.</p>
+                    ) : learningPlanModel.newTopicsReady.map((entry) => (
+                      <div key={entry.topic.id} className="rounded-2xl border p-4">
+                        <p className="font-semibold">{entry.subject.name} - {entry.topic.title}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">Nächstes neues Thema ist jetzt dran.</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button size="sm" className="rounded-xl" onClick={() => markTopicAsNewLearned(entry.topic)}>Neu gelernt</Button>
+                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(entry.topic)}>Heute nicht</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                <CardHeader>
+                  <CardTitle>Bald fällig</CardTitle>
+                  <CardDescription>Wiederholungen der nächsten Tage (frühzeitig planen).</CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-3 md:grid-cols-2">
+                  {learningPlanModel.soonReviews.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Keine bald fälligen Themen.</p>
+                  ) : learningPlanModel.soonReviews.slice(0, 8).map((topic) => (
+                    <div key={topic.id} className="rounded-xl border p-3">
+                      <p className="font-medium">{topic.subject?.name || "Fach"} - {topic.title}</p>
+                      <p className="text-xs text-muted-foreground">Fällig am {formatDateDisplay(topic.nextReviewAt)}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                <CardHeader>
+                  <CardTitle>Fachübersicht</CardTitle>
+                  <CardDescription>
+                    Pro Fach: Status, fällige Wiederholungen, nächstes neues Thema und Themenverwaltung.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  {learningPlanModel.subjectOverview.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Noch keine Fächer vorhanden.</p>
+                  ) : learningPlanModel.subjectOverview.map((entry) => {
+                    const { subject, topics, openTopics, dueReviewsCount, nextNewTopic, dueAt } = entry;
+                    const expanded = Boolean(expandedLearningSubjectIds[subject.id]);
+                    const dueText = !dueAt
+                      ? "heute"
+                      : (new Date(dueAt).getTime() < startOfDay(new Date()).getTime()
+                        ? "überfällig"
+                        : (isSameDay(new Date(dueAt), new Date()) ? "heute" : `am ${formatDateDisplay(dueAt)}`));
+
+                    return (
+                      <div key={subject.id} className="rounded-2xl border p-4">
+                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color || "#94a3b8" }} />
+                              <p className="font-semibold">{subject.name}</p>
+                            </div>
+                            <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
+                              <p>Aktiv im Lernplan: {subject.includeInLearningPlan !== false ? "ja" : "nein"}</p>
+                              <p>Pausiert: {subject.paused ? "ja" : "nein"}</p>
+                              <p>Offene Themen: {openTopics}</p>
+                              <p>Wiederholungen fällig: {dueReviewsCount}</p>
+                              <p>Nächstes neues Thema: {nextNewTopic ? dueText : "kein offenes neues Thema"}</p>
+                              <p>Neue Themen alle: {Math.max(1, Number(subject.newTopicEveryDays || 3))} Tage</p>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant={subject.includeInLearningPlan !== false ? "outline" : "default"} className="rounded-xl" onClick={() => toggleLearningPlanFlag(subject, subject.includeInLearningPlan === false)}>
+                              {subject.includeInLearningPlan !== false ? "Im Lernplan aktiv" : "Im Lernplan inaktiv"}
+                            </Button>
+                            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => toggleSubjectPaused(subject, !subject.paused)}>
+                              {subject.paused ? "Fortsetzen" : "Pausieren"}
+                            </Button>
+                            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setExpandedLearningSubjectIds((prev) => ({ ...prev, [subject.id]: !expanded }))}>
+                              {expanded ? "Themen ausblenden" : "Themen anzeigen"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        {expanded ? (
+                          <div className="mt-4 grid gap-3 border-t pt-4">
+                            <div className="flex gap-2">
+                              <Input
+                                value={newTopicDraftBySubject[subject.id] || ""}
+                                onChange={(e) => setNewTopicDraftBySubject((prev) => ({ ...prev, [subject.id]: e.target.value }))}
+                                placeholder="Neues Thema hinzufügen"
+                              />
+                              <Button variant="outline" className="rounded-xl" onClick={() => createTopicForSubject(subject.id)}>Hinzufügen</Button>
+                            </div>
+
+                            {topics.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Noch keine Themen vorhanden.</p>
+                            ) : topics.map((topic) => {
+                              const isReview = topic.status === "review" || topic.status === "learning";
+                              const topicDueTag = topic.nextReviewAt
+                                ? (new Date(topic.nextReviewAt).getTime() < startOfDay(new Date()).getTime()
+                                  ? "überfällig"
+                                  : (isSameDay(new Date(topic.nextReviewAt), new Date()) ? "heute" : "bald"))
+                                : null;
+
+                              return (
+                                <div key={topic.id} className="flex flex-col gap-3 rounded-xl border p-3 md:flex-row md:items-center md:justify-between">
+                                  <div>
+                                    <p className="font-medium">{topic.title}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Status: {topic.status}
+                                      {topicDueTag ? ` · ${topicDueTag}` : ""}
+                                      {topic.nextReviewAt ? ` · Review: ${formatDateDisplay(topic.nextReviewAt)}` : ""}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {topic.status === "new" ? (
+                                      <Button size="sm" className="rounded-xl" onClick={() => markTopicAsNewLearned(topic)}>Neu gelernt</Button>
+                                    ) : null}
+                                    {isReview ? (
+                                      <Button size="sm" className="rounded-xl" onClick={() => markTopicAsReviewDone(topic)}>Wiederholt</Button>
+                                    ) : null}
+                                    {isReview ? (
+                                      <Button size="sm" variant="outline" className="rounded-xl" onClick={() => skipTopicToTomorrow(topic)}>Überspringen</Button>
+                                    ) : null}
+                                    <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+          ) : null}
 
           {page === "semester-config" ? (
             <div className="grid gap-6">
