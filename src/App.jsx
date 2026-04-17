@@ -2020,7 +2020,7 @@ export default function StudyPlannerApp() {
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
-  const [dashboardHeaderExpanded, setDashboardHeaderExpanded] = useState(false);
+  const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
@@ -2977,18 +2977,18 @@ export default function StudyPlannerApp() {
       const remaining = daysUntil(activeWithEnd.endDateParsed);
       if (remaining < 0) {
         return {
-          label: `Semester seit ${Math.abs(remaining)} Tagen vorbei`,
+          label: "Semester beendet",
           tone: darkMode ? "bg-amber-500/10 text-amber-200" : "bg-amber-100 text-amber-800",
         };
       }
       if (remaining === 0) {
         return {
-          label: "Semester endet heute",
+          label: "Noch 0 Tage bis Semesterende",
           tone: darkMode ? "bg-emerald-500/10 text-emerald-200" : "bg-emerald-100 text-emerald-800",
         };
       }
       return {
-        label: `${remaining} Tage bis Semesterende`,
+        label: `Noch ${remaining} Tage bis Semesterende`,
         tone: darkMode ? "bg-blue-500/10 text-blue-200" : "bg-blue-100 text-blue-800",
       };
     }
@@ -3533,27 +3533,27 @@ export default function StudyPlannerApp() {
           <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               {page === "dashboard" ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-start gap-2">
                   <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="h-8 w-8 rounded-xl"
-                    onClick={() => setDashboardHeaderExpanded((prev) => !prev)}
-                    aria-label={dashboardHeaderExpanded ? "Dashboard-Details einklappen" : "Dashboard-Details ausklappen"}
+                    onClick={() => setIsSemesterCountdownOpen((prev) => !prev)}
+                    aria-label={isSemesterCountdownOpen ? "Semesterende-Anzeige einklappen" : "Semesterende-Anzeige ausklappen"}
                   >
-                    {dashboardHeaderExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    {isSemesterCountdownOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </div>
               ) : (
                 <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
               )}
-              {page === "dashboard" ? (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Badge className={cn("border-0", dashboardSemesterEndInfo.tone)}>
+              {page === "dashboard" && isSemesterCountdownOpen ? (
+                <div className="mt-2 max-w-fit rounded-full border px-3 py-1 text-sm font-medium">
+                  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5", dashboardSemesterEndInfo.tone)}>
                     {dashboardSemesterEndInfo.label}
-                  </Badge>
+                  </span>
                 </div>
               ) : null}
             </div>
@@ -3574,16 +3574,6 @@ export default function StudyPlannerApp() {
               
             </div>
           </div>
-
-          {page === "dashboard" ? (
-            <div className={cn("overflow-hidden transition-all duration-300 ease-out", dashboardHeaderExpanded ? "mb-6 max-h-48 opacity-100" : "mb-0 max-h-0 opacity-0")}>
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                <CardContent className="p-5 text-sm text-muted-foreground">
-                  Zusätzlicher Dashboard-Bereich. Hier können später weitere kompakte Header-Informationen ergänzt werden.
-                </CardContent>
-              </Card>
-            </div>
-          ) : null}
 
           
           {page === "dashboard" ? (
