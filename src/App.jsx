@@ -39,6 +39,7 @@ import {
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
 import { SortableTile } from "@/components/SortableTile";
+import LearningPlanPage from "@/components/LearningPlanPage";
 
 import {
   getActiveSession,
@@ -552,7 +553,7 @@ function makeInitialSubjects() {
     description: "",
     semester: "2. Semester",
     goal: "",
-    includeInLearningPlan: true,
+    includeInLearningPlan: false,
     priority: null,
     newTopicEveryDays: 3,
     nextNewTopicDueAt: null,
@@ -1749,7 +1750,7 @@ function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
     semesterId: semesters[0]?.id || "",
     goal: "",
     targetHours: 30,
-    includeInLearningPlan: true,
+    includeInLearningPlan: false,
     paused: false,
     newTopicEveryDays: 3,
     nextNewTopicDueAt: "",
@@ -2689,7 +2690,7 @@ export default function StudyPlannerApp() {
     const title = String(newTopicDraftBySubject[subjectId] || "").trim();
     if (!title) return;
 
-    const existingTopics = (learningPlanModel.topicsBySubject.get(subjectId) || []);
+    const existingTopics = data.topics.filter((topic) => topic.subjectId === subjectId);
     const nextOrderIndex = existingTopics.length ? Math.max(...existingTopics.map((topic) => Number(topic.orderIndex || 0))) + 1 : 0;
     const userId = session?.user?.id;
 
