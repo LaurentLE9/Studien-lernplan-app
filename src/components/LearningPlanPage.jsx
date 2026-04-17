@@ -36,6 +36,12 @@ export default function LearningPlanPage({
   const selectedSubjectCount = learningPlanModel.selectedSubjects.length;
   const nowQueue = [...learningPlanModel.reviewTopics, ...learningPlanModel.newTopics]
     .sort((a, b) => (a.nextDueAt ?? Number.MAX_SAFE_INTEGER) - (b.nextDueAt ?? Number.MAX_SAFE_INTEGER));
+  const selectedSubjectIds = new Set(learningPlanModel.selectedSubjects.map((subject) => subject.id));
+  const recentStudySessions = [...(data.studySessions || [])]
+    .filter((session) => session.source !== "seed")
+    .filter((session) => selectedSubjectIds.has(session.subjectId))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 8);
 
   return (
     <Tabs value={activeLearningPlanTab} onValueChange={setActiveLearningPlanTab} className="w-full">
@@ -116,6 +122,37 @@ export default function LearningPlanPage({
                   </div>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+
+          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+            <CardHeader>
+              <CardTitle>Lernzeiten</CardTitle>
+              <CardDescription>Zuletzt erfasste Einheiten und Timer-Sitzungen für die ausgewählten Fächer.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid max-h-[420px] gap-3 overflow-y-auto pr-2">
+              {selectedSubjectCount === 0 ? (
+                <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
+              ) : recentStudySessions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Noch keine Lernzeit für die ausgewählten Fächer erfasst.</p>
+              ) : recentStudySessions.map((session) => {
+                const subject = data.subjects.find((entry) => entry.id === session.subjectId);
+                return (
+                  <div key={session.id} className="rounded-2xl border p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: subject?.color || "#94a3b8" }} />
+                          <p className="font-medium">{subject?.name || "Fach"}</p>
+                        </div>
+                        <p className="mt-1 font-semibold">{session.source === "pomodoro" ? "Timer" : session.source === "stopwatch" ? "Stoppuhr" : "Lerneinheit"}</p>
+                        <p className="text-sm text-muted-foreground">{new Date(session.createdAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}</p>
+                      </div>
+                      <Badge variant="outline">{Math.max(1, Math.round(Number(session.durationMinutes || 0)))} Min.</Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
 
