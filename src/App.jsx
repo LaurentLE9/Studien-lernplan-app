@@ -2020,6 +2020,7 @@ export default function StudyPlannerApp() {
   const [editingSemester, setEditingSemester] = useState(null);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
+  const [activeLearningPlanTab, setActiveLearningPlanTab] = useState("plan");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(true);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -2030,6 +2031,8 @@ export default function StudyPlannerApp() {
   const [lastDeletedSession, setLastDeletedSession] = useState(null);
   const [newTopicDraftBySubject, setNewTopicDraftBySubject] = useState({});
   const [expandedLearningSubjectIds, setExpandedLearningSubjectIds] = useState({});
+  const [learningPlanArchiveCollapsed, setLearningPlanArchiveCollapsed] = useState(false);
+  const [learningPlanFilter, setLearningPlanFilter] = useState({ subjectId: "all", status: "all", sort: "due" });
   const [todaySubjectDialogOpen, setTodaySubjectDialogOpen] = useState(false);
   const [todaySubjectDraft, setTodaySubjectDraft] = useState({ subjectId: "", note: "" });
   const [importError, setImportError] = useState(null);
@@ -2547,8 +2550,6 @@ export default function StudyPlannerApp() {
     const todayStart = startOfDay(now);
     const tomorrowStart = new Date(todayStart);
     tomorrowStart.setDate(todayStart.getDate() + 1);
-    const soonLimit = new Date(todayStart);
-    soonLimit.setDate(todayStart.getDate() + 3);
 
     const toTs = (value) => {
       if (!value) return null;
@@ -2556,9 +2557,8 @@ export default function StudyPlannerApp() {
       return Number.isNaN(parsed) ? null : parsed;
     };
 
-    const subjectMap = Object.fromEntries(data.subjects.map((subject) => [subject.id, subject]));
-    const activeSubjects = data.subjects
-      .filter((subject) => subject.includeInLearningPlan !== false && !subject.paused)
+    const selectedSubjects = data.subjects
+      .filter((subject) => subject.includeInLearningPlan !== false)
       .sort((a, b) => {
         const pA = Number.isFinite(Number(a.priority)) ? Number(a.priority) : Number.MAX_SAFE_INTEGER;
         const pB = Number.isFinite(Number(b.priority)) ? Number(b.priority) : Number.MAX_SAFE_INTEGER;
@@ -2566,100 +2566,115 @@ export default function StudyPlannerApp() {
         return (a.name || "").localeCompare(b.name || "", "de");
       });
 
-    const activeSubjectSet = new Set(activeSubjects.map((subject) => subject.id));
-    const topicRows = (data.topics || []).map((topic) => ({
-      ...topic,
-      subject: subjectMap[topic.subjectId],
-      nextReviewTs: toTs(topic.nextReviewAt),
-      orderIndex: Math.max(0, Number(topic.orderIndex || 0)),
-    }));
+    const selectedSubjectIds = new Set(selectedSubjects.map((subject) => subject.id));
+    const subjectMap = Object.fromEntries(data.subjects.map((subject) => [subject.id, subject]));
 
-    const reviewCandidates = topicRows
-      .filter((topic) => activeSubjectSet.has(topic.subjectId))
-      .filter((topic) => !topic.completed)
-      .filter((topic) => topic.status === "review" || topic.status === "learning")
-      .filter((topic) => !topic.isPausedToday)
-      .filter((topic) => topic.nextReviewTs !== null);
+    const topicRows = (data.topics || [])
+      .map((topic) => {
+        const subject = subjectMap[topic.subjectId] || null;
+        const nextReviewTs = toTs(topic.nextReviewAt);
+        const nextNewTopicDueAt = subject?.nextNewTopicDueAt ? toTs(subject.nextNewTopicDueAt) : null;
+        const queueStatus = topic.completed
+          ? "archived"
+          : topic.isPausedToday || subject?.paused
+            ? "postponed"
+            : topic.status === "new"
+              ? "new"
+              : "review";
 
-    const overdueReviews = reviewCandidates
-      .filter((topic) => topic.nextReviewTs < todayStart.getTime())
-      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
+        return {
+          ...topic,
+          subject,
+          nextReviewTs,
+          nextNewTopicDueAt,
+          queueStatus,
+          nextDueAt: queueStatus === "new" ? nextNewTopicDueAt : nextReviewTs,
+        };
+      })
+      .filter((topic) => selectedSubjectIds.has(topic.subjectId));
 
-    const dueTodayReviews = reviewCandidates
-      .filter((topic) => topic.nextReviewTs >= todayStart.getTime() && topic.nextReviewTs < tomorrowStart.getTime())
-      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
-
-    const soonReviews = reviewCandidates
-      .filter((topic) => topic.nextReviewTs >= tomorrowStart.getTime() && topic.nextReviewTs < soonLimit.getTime())
-      .sort((a, b) => a.nextReviewTs - b.nextReviewTs);
-
-    const topicsBySubject = new Map();
-    topicRows.forEach((topic) => {
-      if (!topicsBySubject.has(topic.subjectId)) {
-        topicsBySubject.set(topic.subjectId, []);
-      }
-      topicsBySubject.get(topic.subjectId).push(topic);
-    });
-
-    for (const [subjectId, topics] of topicsBySubject) {
-      topics.sort((a, b) => {
-        if (a.orderIndex !== b.orderIndex) return a.orderIndex - b.orderIndex;
+    const sortTopics = (rows, sortBy) => {
+      const statusRank = { review: 0, new: 1, postponed: 2, archived: 3 };
+      return [...rows].sort((a, b) => {
+        if (sortBy === "subject") {
+          const subjectDiff = (a.subject?.name || "").localeCompare(b.subject?.name || "", "de");
+          if (subjectDiff !== 0) return subjectDiff;
+        }
+        if (sortBy === "status") {
+          const statusDiff = (statusRank[a.queueStatus] ?? 99) - (statusRank[b.queueStatus] ?? 99);
+          if (statusDiff !== 0) return statusDiff;
+        }
+        if (sortBy === "title") {
+          const titleDiff = (a.title || "").localeCompare(b.title || "", "de");
+          if (titleDiff !== 0) return titleDiff;
+        }
+        const dueDiff = (a.nextDueAt ?? Number.MAX_SAFE_INTEGER) - (b.nextDueAt ?? Number.MAX_SAFE_INTEGER);
+        if (dueDiff !== 0) return dueDiff;
         return (a.title || "").localeCompare(b.title || "", "de");
       });
-      topicsBySubject.set(subjectId, topics);
-    }
+    };
 
-    const newTopicsReady = activeSubjects
+    const visibleTopics = topicRows.filter((topic) => topic.queueStatus !== "archived");
+    const archivedTopics = topicRows.filter((topic) => topic.queueStatus === "archived");
+
+    const filteredVisibleTopics = visibleTopics.filter((topic) => {
+      if (learningPlanFilter.subjectId !== "all" && topic.subjectId !== learningPlanFilter.subjectId) return false;
+      if (learningPlanFilter.status === "all") return true;
+      if (learningPlanFilter.status === "review") return topic.queueStatus === "review";
+      if (learningPlanFilter.status === "new") return topic.queueStatus === "new";
+      if (learningPlanFilter.status === "postponed") return topic.queueStatus === "postponed";
+      if (learningPlanFilter.status === "due") return topic.queueStatus === "review" && topic.nextDueAt !== null && topic.nextDueAt <= todayStart.getTime();
+      if (learningPlanFilter.status === "today") return topic.nextDueAt !== null && topic.nextDueAt >= todayStart.getTime() && topic.nextDueAt < tomorrowStart.getTime();
+      return true;
+    });
+
+    const reviewTopics = sortTopics(
+      filteredVisibleTopics.filter((topic) => topic.queueStatus === "review" && topic.nextDueAt !== null && topic.nextDueAt <= tomorrowStart.getTime()),
+      learningPlanFilter.sort
+    );
+    const newTopics = sortTopics(
+      filteredVisibleTopics.filter((topic) => topic.queueStatus === "new" && (topic.nextDueAt === null || topic.nextDueAt <= tomorrowStart.getTime())),
+      learningPlanFilter.sort
+    );
+    const postponedTopics = sortTopics(
+      filteredVisibleTopics.filter((topic) => topic.queueStatus === "postponed"),
+      learningPlanFilter.sort
+    );
+    const dueSoonTopics = sortTopics(
+      filteredVisibleTopics.filter((topic) => topic.queueStatus === "review" && topic.nextDueAt !== null && topic.nextDueAt > tomorrowStart.getTime()),
+      learningPlanFilter.sort
+    );
+    const archivedFiltered = sortTopics(
+      archivedTopics.filter((topic) => {
+        if (learningPlanFilter.subjectId !== "all" && topic.subjectId !== learningPlanFilter.subjectId) return false;
+        return true;
+      }),
+      learningPlanFilter.sort
+    );
+
+    const selectedOverview = selectedSubjects
       .map((subject) => {
-        const allTopics = topicsBySubject.get(subject.id) || [];
-        const nextNewTopic = allTopics.find((topic) => !topic.completed && topic.status === "new") || null;
-        if (!nextNewTopic) return null;
-        const dueTs = toTs(subject.nextNewTopicDueAt);
-        const isDue = dueTs === null || dueTs < tomorrowStart.getTime();
-        return isDue ? { subject, topic: nextNewTopic, dueTs } : null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => {
-        const aTs = a.dueTs ?? 0;
-        const bTs = b.dueTs ?? 0;
-        if (aTs !== bTs) return aTs - bTs;
-        return (a.subject.name || "").localeCompare(b.subject.name || "", "de");
-      });
-
-    const subjectOverview = data.subjects
-      .filter((subject) => !subject.isArchived)
-      .map((subject) => {
-        const topics = topicsBySubject.get(subject.id) || [];
-        const openTopics = topics.filter((topic) => !topic.completed).length;
-        const dueReviewsCount = topics.filter((topic) => {
-          const ts = toTs(topic.nextReviewAt);
-          return !topic.completed
-            && (topic.status === "review" || topic.status === "learning")
-            && ts !== null
-            && ts < tomorrowStart.getTime();
-        }).length;
-
-        const nextNewTopic = topics.find((topic) => !topic.completed && topic.status === "new") || null;
+        const subjectRows = topicRows.filter((topic) => topic.subjectId === subject.id && topic.queueStatus !== "archived");
         return {
           subject,
-          openTopics,
-          dueReviewsCount,
-          nextNewTopic,
-          dueAt: subject.nextNewTopicDueAt || null,
-          topics,
+          openTopics: subjectRows.filter((topic) => topic.queueStatus !== "postponed").length,
+          dueReviewsCount: subjectRows.filter((topic) => topic.queueStatus === "review" && topic.nextDueAt !== null && topic.nextDueAt <= tomorrowStart.getTime()).length,
+          newTopicsCount: subjectRows.filter((topic) => topic.queueStatus === "new").length,
+          postponedCount: subjectRows.filter((topic) => topic.queueStatus === "postponed").length,
         };
       })
       .sort((a, b) => (a.subject.name || "").localeCompare(b.subject.name || "", "de"));
 
     return {
-      overdueReviews,
-      dueTodayReviews,
-      soonReviews,
-      newTopicsReady,
-      subjectOverview,
-      topicsBySubject,
+      selectedSubjects,
+      reviewTopics,
+      newTopics,
+      postponedTopics,
+      dueSoonTopics,
+      archivedTopics: archivedFiltered,
+      selectedOverview,
     };
-  }, [data.subjects, data.topics]);
+  }, [data.subjects, data.topics, learningPlanFilter]);
 
   const upsertTopicInState = (topicRow) => {
     if (!topicRow) return;
@@ -2854,6 +2869,69 @@ export default function StudyPlannerApp() {
     } catch (err) {
       console.error("Pause topic for today error:", err);
       setCloudSyncError(err?.message || "Thema konnte nicht pausiert werden");
+    }
+  }
+
+  async function resumeTopicFromPostponed(topic) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, isPausedToday: false } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: false });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Resume topic error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht wieder aufgenommen werden");
+    }
+  }
+
+  async function archiveTopic(topic) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, completed: true } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await updateTopicRecord(userId, topic.id, { completed: true });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Archive topic error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht archiviert werden");
+    }
+  }
+
+  async function restoreArchivedTopic(topic) {
+    const userId = session?.user?.id;
+
+    if (!userId) {
+      setData((prev) => ({
+        ...prev,
+        topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, completed: false } : entry),
+      }));
+      return;
+    }
+
+    try {
+      const updated = await updateTopicRecord(userId, topic.id, { completed: false });
+      upsertTopicInState(updated);
+      setCloudSyncError(null);
+    } catch (err) {
+      console.error("Restore topic error:", err);
+      setCloudSyncError(err?.message || "Thema konnte nicht wiederhergestellt werden");
     }
   }
 
@@ -3700,185 +3778,30 @@ export default function StudyPlannerApp() {
 ) : null}
 
           {page === "learning-plan" ? (
-            <div className="grid gap-6">
-              <div className="grid gap-4 lg:grid-cols-3">
-                <Card className={cn("rounded-2xl border shadow-sm lg:col-span-2", getSurfaceClass(darkMode))}>
-                  <CardHeader>
-                    <CardTitle>Jetzt wiederholen</CardTitle>
-                    <CardDescription>Überfällige und heute fällige Wiederholungen stehen oben.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    {[...learningPlanModel.overdueReviews, ...learningPlanModel.dueTodayReviews].length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Keine fälligen Wiederholungen.</p>
-                    ) : (
-                      [...learningPlanModel.overdueReviews, ...learningPlanModel.dueTodayReviews].map((topic) => {
-                        const isOverdue = topic.nextReviewAt && new Date(topic.nextReviewAt).getTime() < startOfDay(new Date()).getTime();
-                        return (
-                          <div key={topic.id} className={cn("rounded-2xl border p-4", isOverdue ? "border-red-400/40 bg-red-500/5" : "border-amber-400/40 bg-amber-500/5")}>
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                              <div>
-                                <p className="font-semibold">{topic.subject?.name || "Fach"} - {topic.title}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  {isOverdue ? "Überfällig" : "Heute fällig"}
-                                  {topic.nextReviewAt ? ` · ${formatDateDisplay(topic.nextReviewAt)}` : ""}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                <Button size="sm" className="rounded-xl" onClick={() => markTopicAsReviewDone(topic)}>Wiederholt</Button>
-                                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => skipTopicToTomorrow(topic)}>Überspringen</Button>
-                                <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                  <CardHeader>
-                    <CardTitle>Jetzt neu lernen</CardTitle>
-                    <CardDescription>Freigeschaltete neue Themen je aktivem Fach.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3">
-                    {learningPlanModel.newTopicsReady.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Heute keine neuen Themen freigeschaltet.</p>
-                    ) : learningPlanModel.newTopicsReady.map((entry) => (
-                      <div key={entry.topic.id} className="rounded-2xl border p-4">
-                        <p className="font-semibold">{entry.subject.name} - {entry.topic.title}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">Nächstes neues Thema ist jetzt dran.</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Button size="sm" className="rounded-xl" onClick={() => markTopicAsNewLearned(entry.topic)}>Neu gelernt</Button>
-                          <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(entry.topic)}>Heute nicht</Button>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                <CardHeader>
-                  <CardTitle>Bald fällig</CardTitle>
-                  <CardDescription>Wiederholungen der nächsten Tage (frühzeitig planen).</CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-3 md:grid-cols-2">
-                  {learningPlanModel.soonReviews.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Keine bald fälligen Themen.</p>
-                  ) : learningPlanModel.soonReviews.slice(0, 8).map((topic) => (
-                    <div key={topic.id} className="rounded-xl border p-3">
-                      <p className="font-medium">{topic.subject?.name || "Fach"} - {topic.title}</p>
-                      <p className="text-xs text-muted-foreground">Fällig am {formatDateDisplay(topic.nextReviewAt)}</p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                <CardHeader>
-                  <CardTitle>Fachübersicht</CardTitle>
-                  <CardDescription>
-                    Pro Fach: Status, fällige Wiederholungen, nächstes neues Thema und Themenverwaltung.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  {learningPlanModel.subjectOverview.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Noch keine Fächer vorhanden.</p>
-                  ) : learningPlanModel.subjectOverview.map((entry) => {
-                    const { subject, topics, openTopics, dueReviewsCount, nextNewTopic, dueAt } = entry;
-                    const expanded = Boolean(expandedLearningSubjectIds[subject.id]);
-                    const dueText = !dueAt
-                      ? "heute"
-                      : (new Date(dueAt).getTime() < startOfDay(new Date()).getTime()
-                        ? "überfällig"
-                        : (isSameDay(new Date(dueAt), new Date()) ? "heute" : `am ${formatDateDisplay(dueAt)}`));
-
-                    return (
-                      <div key={subject.id} className="rounded-2xl border p-4">
-                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color || "#94a3b8" }} />
-                              <p className="font-semibold">{subject.name}</p>
-                            </div>
-                            <div className="mt-2 grid gap-1 text-sm text-muted-foreground">
-                              <p>Aktiv im Lernplan: {subject.includeInLearningPlan !== false ? "ja" : "nein"}</p>
-                              <p>Pausiert: {subject.paused ? "ja" : "nein"}</p>
-                              <p>Offene Themen: {openTopics}</p>
-                              <p>Wiederholungen fällig: {dueReviewsCount}</p>
-                              <p>Nächstes neues Thema: {nextNewTopic ? dueText : "kein offenes neues Thema"}</p>
-                              <p>Neue Themen alle: {Math.max(1, Number(subject.newTopicEveryDays || 3))} Tage</p>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant={subject.includeInLearningPlan !== false ? "outline" : "default"} className="rounded-xl" onClick={() => toggleLearningPlanFlag(subject, subject.includeInLearningPlan === false)}>
-                              {subject.includeInLearningPlan !== false ? "Im Lernplan aktiv" : "Im Lernplan inaktiv"}
-                            </Button>
-                            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => toggleSubjectPaused(subject, !subject.paused)}>
-                              {subject.paused ? "Fortsetzen" : "Pausieren"}
-                            </Button>
-                            <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setExpandedLearningSubjectIds((prev) => ({ ...prev, [subject.id]: !expanded }))}>
-                              {expanded ? "Themen ausblenden" : "Themen anzeigen"}
-                            </Button>
-                          </div>
-                        </div>
-
-                        {expanded ? (
-                          <div className="mt-4 grid gap-3 border-t pt-4">
-                            <div className="flex gap-2">
-                              <Input
-                                value={newTopicDraftBySubject[subject.id] || ""}
-                                onChange={(e) => setNewTopicDraftBySubject((prev) => ({ ...prev, [subject.id]: e.target.value }))}
-                                placeholder="Neues Thema hinzufügen"
-                              />
-                              <Button variant="outline" className="rounded-xl" onClick={() => createTopicForSubject(subject.id)}>Hinzufügen</Button>
-                            </div>
-
-                            {topics.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">Noch keine Themen vorhanden.</p>
-                            ) : topics.map((topic) => {
-                              const isReview = topic.status === "review" || topic.status === "learning";
-                              const topicDueTag = topic.nextReviewAt
-                                ? (new Date(topic.nextReviewAt).getTime() < startOfDay(new Date()).getTime()
-                                  ? "überfällig"
-                                  : (isSameDay(new Date(topic.nextReviewAt), new Date()) ? "heute" : "bald"))
-                                : null;
-
-                              return (
-                                <div key={topic.id} className="flex flex-col gap-3 rounded-xl border p-3 md:flex-row md:items-center md:justify-between">
-                                  <div>
-                                    <p className="font-medium">{topic.title}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      Status: {topic.status}
-                                      {topicDueTag ? ` · ${topicDueTag}` : ""}
-                                      {topic.nextReviewAt ? ` · Review: ${formatDateDisplay(topic.nextReviewAt)}` : ""}
-                                    </p>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {topic.status === "new" ? (
-                                      <Button size="sm" className="rounded-xl" onClick={() => markTopicAsNewLearned(topic)}>Neu gelernt</Button>
-                                    ) : null}
-                                    {isReview ? (
-                                      <Button size="sm" className="rounded-xl" onClick={() => markTopicAsReviewDone(topic)}>Wiederholt</Button>
-                                    ) : null}
-                                    {isReview ? (
-                                      <Button size="sm" variant="outline" className="rounded-xl" onClick={() => skipTopicToTomorrow(topic)}>Überspringen</Button>
-                                    ) : null}
-                                    <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            </div>
+            <LearningPlanPage
+              darkMode={darkMode}
+              data={data}
+              groupedSubjects={groupedSubjects}
+              learningPlanModel={learningPlanModel}
+              learningPlanFilter={learningPlanFilter}
+              setLearningPlanFilter={setLearningPlanFilter}
+              activeLearningPlanTab={activeLearningPlanTab}
+              setActiveLearningPlanTab={setActiveLearningPlanTab}
+              learningPlanArchiveCollapsed={learningPlanArchiveCollapsed}
+              setLearningPlanArchiveCollapsed={setLearningPlanArchiveCollapsed}
+              toggleLearningPlanFlag={toggleLearningPlanFlag}
+              toggleSubjectPaused={toggleSubjectPaused}
+              markTopicAsReviewDone={markTopicAsReviewDone}
+              markTopicAsNewLearned={markTopicAsNewLearned}
+              skipTopicToTomorrow={skipTopicToTomorrow}
+              pauseTopicForToday={pauseTopicForToday}
+              resumeTopicFromPostponed={resumeTopicFromPostponed}
+              archiveTopic={archiveTopic}
+              restoreArchivedTopic={restoreArchivedTopic}
+              getSurfaceClass={getSurfaceClass}
+              deadlineLabel={deadlineLabel}
+              deadlineCardTone={deadlineCardTone}
+            />
           ) : null}
 
           {page === "semester-config" ? (
