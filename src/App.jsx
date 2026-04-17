@@ -3944,119 +3944,134 @@ export default function StudyPlannerApp() {
                 </Dialog>
               </div>
 
-              {groupedSubjects.length === 0 ? (
-                <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardContent className="p-6 text-sm text-muted-foreground">Noch keine Fächer vorhanden.</CardContent></Card>
-              ) : groupedSubjects.map((group) => (
-                <div key={group.id} className="grid gap-4">
-                  <div className="flex items-center gap-2"><h3 className="text-lg font-semibold tracking-tight">{group.name}</h3><Badge variant="outline">{group.subjects.length}</Badge></div>
-                  <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
-                    {group.subjects.map((subject) => {
-                      const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
-                      const openTasks = data.tasks.filter((t) => t.subjectId === subject.id && t.status !== "erledigt").length;
-                      const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
-                      const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                <CardHeader className="sticky top-0 z-10 border-b backdrop-blur supports-[backdrop-filter]:bg-inherit">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle>Fächerübersicht</CardTitle>
+                      <CardDescription>Scrollt intern, damit die Seite stabil bleibt.</CardDescription>
+                    </div>
+                    <Badge variant="outline">{data.subjects.length}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="max-h-[calc(100vh-19rem)] overflow-y-auto pr-2 pt-4 lg:max-h-[calc(100vh-17rem)]">
+                  <div className="grid gap-6">
+                    {groupedSubjects.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Noch keine Fächer vorhanden.</p>
+                    ) : groupedSubjects.map((group) => (
+                      <div key={group.id} className="grid gap-4">
+                        <div className="flex items-center gap-2"><h3 className="text-lg font-semibold tracking-tight">{group.name}</h3><Badge variant="outline">{group.subjects.length}</Badge></div>
+                        <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+                          {group.subjects.map((subject) => {
+                            const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
+                            const openTasks = data.tasks.filter((t) => t.subjectId === subject.id && t.status !== "erledigt").length;
+                            const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
+                            const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
 
-                      return (
-                        <Card key={subject.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                          <CardContent className="p-5">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-start gap-3">
-                                <div className="mt-1 h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
-                                <div>
-                                  <h3 className="font-semibold">{subject.name}</h3>
-                                  <p className="text-sm text-muted-foreground">{group.name}</p>
+                            return (
+                              <Card key={subject.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                                <CardContent className="p-5">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3">
+                                      <div className="mt-1 h-4 w-4 rounded-full" style={{ backgroundColor: subject.color }} />
+                                      <div>
+                                        <h3 className="font-semibold">{subject.name}</h3>
+                                        <p className="text-sm text-muted-foreground">{group.name}</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button>
+                                      <Button variant="outline" size="icon" onClick={() => archiveSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-4 grid gap-2 text-sm">
+                                    <div className="flex items-center justify-between"><span className="text-muted-foreground">Offene Aufgaben</span><span>{openTasks}</span></div>
+                                    <div className="flex items-center justify-between"><span className="text-muted-foreground">Gelernte Zeit</span><span>{formatMinutes(totalMinutes)} / {subject.targetHours}h</span></div>
+                                  </div>
+
+                                  <div className="mt-4 space-y-2">
+                                    <div className="flex items-center justify-between text-sm"><span>Fortschritt</span><span>{progressValue}%</span></div>
+                                    <Progress value={progressValue} />
+                                  </div>
+
+                                  <div className="mt-4 flex flex-wrap gap-2">
+                                    <Button onClick={() => openTodaySubjectDialog(subject)} className="rounded-xl">
+                                      Heute lernen
+                                    </Button>
+                                    {todayFocus ? (
+                                      <Button variant="outline" onClick={() => removeTodaySubjectFocus(subject.id)} className="rounded-xl">
+                                        Heute entfernen
+                                      </Button>
+                                    ) : null}
+                                  </div>
+
+                                  {todayFocus ? (
+                                    <div className="mt-3 rounded-xl border px-3 py-2 text-sm text-muted-foreground">
+                                      {todayFocus.note || "Für heute markiert"}
+                                    </div>
+                                  ) : null}
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                      <button 
+                        onClick={() => setArchiveCollapsed(!archiveCollapsed)}
+                        className="w-full"
+                      >
+                        <CardHeader>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <h3 className="text-lg font-semibold tracking-tight">Archiv</h3>
+                              <Badge variant="outline">{archivedSubjects.length}</Badge>
+                            </div>
+                            <ChevronDown className={cn("h-5 w-5 transition-transform", archiveCollapsed && "-rotate-90")} />
+                          </div>
+                        </CardHeader>
+                      </button>
+                      
+                      {!archiveCollapsed && (
+                        <CardContent className="grid gap-3 pt-0">
+                          {archivedSubjects.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p>
+                          ) : (
+                            archivedSubjects.map((subject) => (
+                              <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} />
+                                  <span>{subject.name}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    className="rounded-lg h-8"
+                                    onClick={() => restoreSubject(subject.id)}
+                                  >
+                                    Wiederherstellen
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50"
+                                    onClick={() => permanentlyDeleteSubject(subject.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               </div>
-                              <div className="flex gap-2">
-                                <Button variant="outline" size="icon" onClick={() => setEditingSubject(subject)}><Pencil className="h-4 w-4" /></Button>
-                                <Button variant="outline" size="icon" onClick={() => archiveSubject(subject.id)}><Trash2 className="h-4 w-4" /></Button>
-                              </div>
-                            </div>
-
-                            <div className="mt-4 grid gap-2 text-sm">
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Offene Aufgaben</span><span>{openTasks}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Gelernte Zeit</span><span>{formatMinutes(totalMinutes)} / {subject.targetHours}h</span></div>
-                            </div>
-
-                            <div className="mt-4 space-y-2">
-                              <div className="flex items-center justify-between text-sm"><span>Fortschritt</span><span>{progressValue}%</span></div>
-                              <Progress value={progressValue} />
-                            </div>
-
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              <Button onClick={() => openTodaySubjectDialog(subject)} className="rounded-xl">
-                                Heute lernen
-                              </Button>
-                              {todayFocus ? (
-                                <Button variant="outline" onClick={() => removeTodaySubjectFocus(subject.id)} className="rounded-xl">
-                                  Heute entfernen
-                                </Button>
-                              ) : null}
-                            </div>
-
-                            {todayFocus ? (
-                              <div className="mt-3 rounded-xl border px-3 py-2 text-sm text-muted-foreground">
-                                {todayFocus.note || "Für heute markiert"}
-                              </div>
-                            ) : null}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                            ))
+                          )}
+                        </CardContent>
+                      )}
+                    </Card>
                   </div>
-                </div>
-              ))}
-
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-                <button 
-                  onClick={() => setArchiveCollapsed(!archiveCollapsed)}
-                  className="w-full"
-                >
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-semibold tracking-tight">Archiv</h3>
-                        <Badge variant="outline">{archivedSubjects.length}</Badge>
-                      </div>
-                      <ChevronDown className={cn("h-5 w-5 transition-transform", archiveCollapsed && "-rotate-90")} />
-                    </div>
-                  </CardHeader>
-                </button>
-                
-                {!archiveCollapsed && (
-                  <CardContent className="grid gap-3 pt-0">
-                    {archivedSubjects.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p>
-                    ) : (
-                      archivedSubjects.map((subject) => (
-                        <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} />
-                            <span>{subject.name}</span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="rounded-lg h-8"
-                              onClick={() => restoreSubject(subject.id)}
-                            >
-                              Wiederherstellen
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="icon"
-                              className="h-8 w-8 rounded-lg text-red-600 hover:bg-red-50"
-                              onClick={() => permanentlyDeleteSubject(subject.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </CardContent>
-                )}
+                </CardContent>
               </Card>
             </div>
           ) : null}
