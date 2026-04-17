@@ -2020,7 +2020,7 @@ export default function StudyPlannerApp() {
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [archivedSubjects, setArchivedSubjects] = useState([]);
-  const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(false);
+  const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(true);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
