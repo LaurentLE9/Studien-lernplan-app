@@ -739,7 +739,7 @@ export async function createSubjectRecord(userId, subject) {
         description: subject.description || "",
         goal: subject.goal || "",
         target_hours: Number(subject.targetHours || 0),
-        include_in_learning_plan: subject.includeInLearningPlan ?? false,
+        include_in_learning_plan: subject.includeInLearningPlan ?? true,
         priority: Number.isFinite(Number(subject.priority)) ? Number(subject.priority) : null,
         new_topic_every_days: Math.max(1, Number(subject.newTopicEveryDays || 3)),
         next_new_topic_due_at: toIsoDateTimeOrNull(subject.nextNewTopicDueAt),
@@ -752,6 +752,22 @@ export async function createSubjectRecord(userId, subject) {
 }
 
 export async function updateSubjectRecord(userId, subjectId, patch) {
+  const body = {};
+
+  if ("semesterId" in patch || "groupId" in patch) {
+    body.semester_id = patch.semesterId || patch.groupId || null;
+  }
+  if ("name" in patch) body.name = patch.name;
+  if ("color" in patch) body.color = patch.color;
+  if ("description" in patch) body.description = patch.description || "";
+  if ("goal" in patch) body.goal = patch.goal || "";
+  if ("targetHours" in patch) body.target_hours = Number(patch.targetHours || 0);
+  if ("includeInLearningPlan" in patch) body.include_in_learning_plan = Boolean(patch.includeInLearningPlan);
+  if ("priority" in patch) body.priority = Number.isFinite(Number(patch.priority)) ? Number(patch.priority) : null;
+  if ("newTopicEveryDays" in patch) body.new_topic_every_days = Math.max(1, Number(patch.newTopicEveryDays || 3));
+  if ("nextNewTopicDueAt" in patch) body.next_new_topic_due_at = toIsoDateTimeOrNull(patch.nextNewTopicDueAt);
+  if ("paused" in patch) body.paused = Boolean(patch.paused);
+
   const rows = await supabaseRequest(
     `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at`,
     {
@@ -760,19 +776,7 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
         apikey: SUPABASE_ANON_KEY,
         Prefer: "return=representation",
       },
-      body: JSON.stringify({
-        semester_id: patch.semesterId || patch.groupId || null,
-        name: patch.name,
-        color: patch.color,
-        description: patch.description || "",
-        goal: patch.goal || "",
-        target_hours: Number(patch.targetHours || 0),
-        include_in_learning_plan: patch.includeInLearningPlan ?? false,
-        priority: Number.isFinite(Number(patch.priority)) ? Number(patch.priority) : null,
-        new_topic_every_days: Math.max(1, Number(patch.newTopicEveryDays || 3)),
-        next_new_topic_due_at: toIsoDateTimeOrNull(patch.nextNewTopicDueAt),
-        paused: Boolean(patch.paused),
-      }),
+      body: JSON.stringify(body),
     }
   );
   return rows?.[0] || null;
