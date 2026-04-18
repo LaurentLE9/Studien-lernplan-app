@@ -2035,7 +2035,7 @@ export default function StudyPlannerApp() {
   const [examDialogOpen, setExamDialogOpen] = useState(false);
   const [editingExam, setEditingExam] = useState(null);
   const [archivedSubjects, setArchivedSubjects] = useState([]);
-  const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(true);
+  const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
