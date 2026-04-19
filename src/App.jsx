@@ -2314,23 +2314,33 @@ export default function StudyPlannerApp() {
 
   const syncTopicsFromDatabase = async (userId) => {
     if (!userId) return;
-    const rows = await loadTopics(userId);
-    const mapped = rows.map((row) => ({
-      id: row.id,
-      subjectId: row.subject_id,
-      title: row.title,
-      orderIndex: Math.max(0, Number(row.order_index || 0)),
-      status: row.status || "new",
-      lastStudiedAt: row.last_studied_at || null,
-      nextReviewAt: row.next_review_at || null,
-      reviewStep: Math.max(0, Number(row.review_step || 0)),
-      completed: Boolean(row.completed),
-      isPausedToday: Boolean(row.is_paused_today),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
-
-    setData((prev) => ({ ...prev, topics: mapped }));
+    try {
+      const rows = await loadTopics(userId);
+      console.log("[sync] Topics loaded from DB:", rows.length, rows);
+      const mapped = rows.map((row) => ({
+        id: row.id,
+        subjectId: row.subject_id,
+        title: row.title,
+        orderIndex: Math.max(0, Number(row.order_index || 0)),
+        status: row.status || "new",
+        lastStudiedAt: row.last_studied_at || null,
+        nextReviewAt: row.next_review_at || null,
+        reviewStep: Math.max(0, Number(row.review_step || 0)),
+        completed: Boolean(row.completed),
+        isPausedToday: Boolean(row.is_paused_today),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+      console.log("[sync] Topics mapped:", mapped.length, mapped);
+      setData((prev) => {
+        const updated = { ...prev, topics: mapped };
+        console.log("[sync] Topics set in state:", updated.topics.length);
+        return updated;
+      });
+    } catch (error) {
+      console.error("[sync] Error loading topics:", error);
+      throw error;
+    }
   };
 
   const syncExamsFromDatabase = async (userId) => {
