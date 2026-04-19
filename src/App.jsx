@@ -1012,6 +1012,16 @@ function ManualStudyDialog({
   title = "Einheit anlegen",
   submitLabel = "Speichern",
 }) {
+  useEffect(() => {
+    if (open) {
+      console.log("ManualStudyDialog opened:", {
+        topicsCount: topics?.length || 0,
+        subjectsCount: subjects?.length || 0,
+        selectedSubjectId,
+        topicsForSubject: topics?.filter((t) => t.subjectId === selectedSubjectId)?.length || 0,
+      });
+    }
+  }, [open, topics, subjects, selectedSubjectId]);
   const [entryDate, setEntryDate] = useState(formatDateInput(new Date()));
   const [startTime, setStartTime] = useState(new Date().toTimeString().slice(0, 5));
   const [endTime, setEndTime] = useState(new Date().toTimeString().slice(0, 5));
@@ -1185,10 +1195,12 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualSeed, setManualSeed] = useState(null);
   const [timerOpen, setTimerOpen] = useState(false);
+  const [timerTopicSelectMode, setTimerTopicSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
+  const [timerTopicId, setTimerTopicId] = useState("");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
   const [customPomodoroMinutes, setCustomPomodoroMinutes] = useState(String(storedTimer.timerPreset || 90));
@@ -1199,6 +1211,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
   const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
+  const topicsForTimerSubject = topics.filter((t) => t.subjectId === timerSubjectId);
 
   useEffect(() => {
     if (!manualSubjectId && subjects[0]?.id) setManualSubjectId(subjects[0].id);
@@ -1356,14 +1369,46 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
 
   async function handleTimerSubjectPick(subjectId) {
     setTimerSubjectId(subjectId);
+    setTimerTopicId("");
+    setTimerTopicSelectMode(true);
+  }
+
+  async function handleTimerTopicPick(topicId) {
+    setTimerTopicId(topicId);
+    setTimerTopicSelectMode(false);
     setTimerOpen(false);
 
-    if (!userId || !subjectId) return;
+    if (!userId || !timerSubjectId) return;
     if (activeTimer) return;
 
     try {
       setTimerBusy(true);
-      const created = await startTimerSession(userId, subjectId, {
+      const created = await startTimerSession(userId, timerSubjectId, {
+        mode: timerMode,
+        presetMinutes: timerPreset,
+        topicId: topicId || undefined,
+      });
+      if (created) {
+        setActiveTimer(created);
+        setTickNowMs(Date.now());
+      }
+    } catch (error) {
+      console.error("Start timer failed:", error);
+    } finally {
+      setTimerBusy(false);
+    }
+  }
+
+  async function handleTimerStartWithoutTopic() {
+    setTimerTopicSelectMode(false);
+    setTimerOpen(false);
+
+    if (!userId || !timerSubjectId) return;
+    if (activeTimer) return;
+
+    try {
+      setTimerBusy(true);
+      const created = await startTimerSession(userId, timerSubjectId, {
         mode: timerMode,
         presetMinutes: timerPreset,
       });
@@ -1574,19 +1619,50 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
                   </TabsContent>
 
                   <div className="grid gap-2 max-h-[250px] overflow-y-auto pr-1">
-                    {subjects.map((subject) => {
-                      const isSelected = selectedSubjectId === subject.id;
-                      return (
-                        <button key={subject.id} type="button" onClick={() => handleTimerSubjectPick(subject.id)} className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-white/80 ring-offset-2 ring-offset-transparent opacity-100" : "opacity-90")} style={{ backgroundColor: subject.color }}>
-                          <span>{subject.name}</span>
-                          {isSelected ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      );
-                    })}
+                    {!timerTopicSelectMode ? (
+                      <>
+                        {subjects.map((subject) => {
+                          const isSelected = timerSubjectId === subject.id;
+                          return (
+                            <button key={subject.id} type="button" onClick={() => handleTimerSubjectPick(subject.id)} className={cn("flex items-center justify-between rounded-full px-4 py-2.5 text-left text-sm font-semibold text-slate-950 transition", isSelected ? "ring-2 ring-white/80 ring-offset-2 ring-offset-transparent opacity-100" : "opacity-90")} style={{ backgroundColor: subject.color }}>
+                              <span>{subject.name}</span>
+                              {isSelected ? <Check className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-2 flex items-center justify-between">
+                          <button type="button" onClick={() => setTimerTopicSelectMode(false)} className={cn("rounded-full p-2 transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+                            <ChevronLeft className="h-4 w-4" />
+                          </button>
+                          <span className="text-sm font-semibold">{subjects.find((s) => s.id === timerSubjectId)?.name}</span>
+                          <div className="w-8" />
+                        </div>
+                        {topicsForTimerSubject.length === 0 ? (
+                          <div className={cn("rounded-xl px-4 py-3 text-center text-sm", darkMode ? "bg-slate-800/70 text-slate-400" : "bg-slate-100 text-slate-600")}>
+                            Keine Aufgaben für dieses Fach
+                          </div>
+                        ) : (
+                          <>
+                            {topicsForTimerSubject.map((topic) => (
+                              <button key={topic.id} type="button" onClick={() => handleTimerTopicPick(topic.id)} className={cn("flex items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-medium transition", darkMode ? "bg-slate-700/60 hover:bg-slate-700 text-slate-100" : "bg-slate-100 hover:bg-slate-200 text-slate-900")}>
+                                <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                                <span className="flex-1 truncate">{topic.title}</span>
+                              </button>
+                            ))}
+                            <button type="button" onClick={handleTimerStartWithoutTopic} className={cn("rounded-xl px-4 py-2.5 text-sm font-medium transition border", darkMode ? "border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500" : "border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400")}>
+                              Ohne Aufgabe starten
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </div>
 
                   <div className={cn("rounded-xl px-3 py-2 text-xs", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
-                    Auswahl eines Fachs startet die Stoppuhr automatisch.
+                    {timerTopicSelectMode ? "Wähle eine Aufgabe oder starte ohne Aufgabe" : "Auswahl eines Fachs zeigt die verfügbaren Aufgaben"}
                   </div>
                 </div>
               </Tabs>
