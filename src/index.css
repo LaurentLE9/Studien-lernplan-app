@@ -17,6 +17,8 @@ body,
   --muted: 215 25% 90%;
   --muted-foreground: 215 16% 47%;
   --border: 214 32% 84%;
+  --scrollbar-thumb: 215 18% 70%;
+  --scrollbar-thumb-hover: 215 18% 58%;
   --radius: 0.75rem;
 }
 
@@ -28,10 +30,34 @@ body,
   --muted: 217 33% 17%;
   --muted-foreground: 215 20% 65%;
   --border: 217 33% 25%;
+  --scrollbar-thumb: 217 20% 34%;
+  --scrollbar-thumb-hover: 217 20% 42%;
 }
 
 * {
   @apply border-border;
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--scrollbar-thumb)) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--scrollbar-thumb));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--scrollbar-thumb-hover));
 }
 
 body {

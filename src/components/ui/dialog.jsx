@@ -17,22 +17,27 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
-const DialogContent = React.forwardRef(({ className, children, ...props }, ref) => (
+const DialogContent = React.forwardRef(({ className, children, position = "center", showClose = true, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg",
+        "fixed z-50 grid w-full gap-4 border bg-background shadow-lg",
+        position === "right"
+          ? "left-auto right-0 top-0 h-[100dvh] max-h-[100dvh] max-w-none translate-x-0 translate-y-0 overflow-hidden p-0 sm:max-w-[440px]"
+          : "left-[50%] top-[50%] max-w-lg translate-x-[-50%] translate-y-[-50%] p-6",
         className
       )}
       {...props}
     >
       {children}
-      <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogClose>
+      {showClose ? (
+        <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogClose>
+      ) : null}
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
