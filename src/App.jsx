@@ -1219,7 +1219,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
   const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
-  const topicsForTimerSubject = topics.filter((t) => t.subjectId === timerSubjectId);
+  const topicsForTimerSubject = (topics || []).filter((t) => t.subjectId === timerSubjectId);
 
   useEffect(() => {
     if (!manualSubjectId && subjects[0]?.id) setManualSubjectId(subjects[0].id);
