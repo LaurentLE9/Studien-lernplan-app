@@ -1726,8 +1726,8 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
       <ManualStudyDialog
         open={manualDialogOpen}
         onOpenChange={setManualDialogOpen}
-        subjects={subjects}
-        topics={topics}
+        subjects={subjects || []}
+        topics={topics || []}
         darkMode={darkMode}
         selectedSubjectId={manualSubjectId}
         onSelectedSubjectChange={setManualSubjectId}
@@ -3958,7 +3958,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 xl:ml-auto">
-              <DashboardQuickActions subjects={data.subjects} topics={data.topics} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
+              <DashboardQuickActions subjects={data.subjects || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
               <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                 <DialogTrigger asChild>
@@ -4720,8 +4720,8 @@ export default function StudyPlannerApp() {
           <ManualStudyDialog
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
-            subjects={data.subjects}
-            topics={data.topics}
+            subjects={data.subjects || []}
+            topics={data.topics || []}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || data.subjects[0]?.id || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value } : prev)}
