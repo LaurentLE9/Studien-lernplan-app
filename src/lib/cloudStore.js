@@ -922,7 +922,7 @@ function mapExamRow(row) {
 
 export async function loadExams(userId) {
   const rows = await supabaseRequest(
-    `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}&order=exam_date.asc,exam_time.asc.nulls_last,created_at.asc`,
+    `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}&order=exam_date.asc,exam_time.asc.nullslast,created_at.asc`,
     {
       method: "GET",
       headers: { apikey: SUPABASE_ANON_KEY },
