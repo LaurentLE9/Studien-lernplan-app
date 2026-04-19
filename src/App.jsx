@@ -2366,6 +2366,18 @@ export default function StudyPlannerApp() {
   }, [session?.user?.id, isCloudHydrated]);
 
   useEffect(() => {
+    // Debug: Show topic status in browser console
+    console.log("[DEBUG] Current app state:", {
+      sessionUserId: session?.user?.id,
+      isCloudHydrated,
+      topicsCount: data.topics?.length || 0,
+      topics: data.topics || [],
+      subjectsCount: data.subjects?.length || 0,
+      subjects: data.subjects?.map(s => ({ id: s.id, name: s.name })) || [],
+    });
+  }, [data.topics, data.subjects, session?.user?.id, isCloudHydrated]);
+
+  useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
     syncExamsFromDatabase(session.user.id).catch((err) => {
       console.error("Exam sync error:", err);
