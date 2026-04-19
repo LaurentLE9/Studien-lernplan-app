@@ -36,6 +36,7 @@ import {
   } from "lucide-react";
   import AuthScreen from "@/components/AuthScreen";
   import ExamsPage from "@/components/ExamsPage";
+  import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
@@ -76,6 +77,12 @@ import {
   createExamRecord,
   updateExamRecord,
   deleteExamRecord,
+  loadStudyTimeEntries,
+  createStudyTimeEntry,
+  updateStudyTimeEntry,
+  deleteStudyTimeEntry,
+  getTotalTimeForTopic,
+  getTotalTimeForSubject,
 } from "@/lib/cloudStore";
 import {
   Card,
@@ -132,7 +139,7 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "study_planner_app_v3";
-const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "task-time", "today", "recent", "done"];
 const DEADLINE_SORT_OPTIONS = [
   { id: "due", label: "Fälligkeit" },
   { id: "acceptance", label: "Abnahme" },
@@ -993,9 +1000,12 @@ function ManualStudyDialog({
   open,
   onOpenChange,
   subjects,
+  topics,
   darkMode,
   selectedSubjectId,
   onSelectedSubjectChange,
+  selectedTopicId,
+  onSelectedTopicChange,
   onSaveEntry,
   initialValue,
   liveBreakMinutes,
@@ -1065,6 +1075,7 @@ function ManualStudyDialog({
       await Promise.resolve(onSaveEntry({
         id: initialValue?.id || crypto.randomUUID(),
         subjectId: selectedSubjectId,
+        topicId: selectedTopicId || undefined,
         durationMinutes,
         createdAt: new Date(`${entryDate}T${endTime}:00`).toISOString(),
         source: initialValue?.source || "manual-entry",
@@ -1127,6 +1138,27 @@ function ManualStudyDialog({
               <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Aktivität</Label><Input value={activity} onChange={(e) => setActivity(e.target.value)} placeholder="z. B. Wiederholung" className={cn("mt-2 h-auto border-0 bg-transparent px-0 text-lg font-medium shadow-none focus-visible:ring-0", placeholderClass)} /></div>
             </div>
 
+            {selectedSubjectId ? (
+              <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}>
+                <Label className={darkMode ? "text-white" : "text-slate-700"}>Aufgabe (optional)</Label>
+                <div className="mt-2 flex items-center gap-2">
+                  <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
+                    <SelectTrigger className="h-auto border-0 bg-transparent px-0 text-lg font-medium shadow-none focus:ring-0 focus:ring-offset-0"><SelectValue placeholder="Aufgabe auswählen (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      {topics
+                        .filter((t) => t.subjectId === selectedSubjectId)
+                        .map((topic) => (
+                          <SelectItem key={topic.id} value={topic.id}>
+                            {topic.title}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedTopicId ? <button type="button" onClick={() => onSelectedTopicChange("")} className="grid h-7 w-7 place-items-center rounded-full bg-slate-600/70 text-slate-200 transition hover:bg-slate-500"><X className="h-4 w-4" /></button> : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}><Label className={darkMode ? "text-white" : "text-slate-700"}>Notiz</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Kurze Notiz" className={cn("mt-2 min-h-[100px] resize-none border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0", placeholderClass)} /></div>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -1140,7 +1172,7 @@ function ManualStudyDialog({
   );
 }
 
-function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
+function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, userId }) {
   const storedTimer = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("study_planner_timer_state") || "{}");
@@ -1155,6 +1187,7 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
   const [timerOpen, setTimerOpen] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
+  const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
@@ -1610,9 +1643,12 @@ function DashboardQuickActions({ subjects, onSaveSession, darkMode, userId }) {
         open={manualDialogOpen}
         onOpenChange={setManualDialogOpen}
         subjects={subjects}
+        topics={topics}
         darkMode={darkMode}
         selectedSubjectId={manualSubjectId}
         onSelectedSubjectChange={setManualSubjectId}
+        selectedTopicId={manualTopicId}
+        onSelectedTopicChange={setManualTopicId}
         onSaveEntry={handleManualSaveEntry}
         initialValue={manualSeed}
         liveBreakMinutes={livePauseMinutes}
@@ -2050,6 +2086,8 @@ export default function StudyPlannerApp() {
   const [todaySubjectDraft, setTodaySubjectDraft] = useState({ subjectId: "", note: "" });
   const [importError, setImportError] = useState(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [studyTimeEntries, setStudyTimeEntries] = useState([]);
+  const [isLoadingTimeEntries, setIsLoadingTimeEntries] = useState(false);
   const deadlineWidgetSettings = useMemo(
     () => normalizeDeadlineWidgetSettings(data.settings?.deadlineWidget),
     [data.settings?.deadlineWidget]
@@ -2239,6 +2277,37 @@ export default function StudyPlannerApp() {
       console.error("Exam sync error:", err);
       setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
     });
+  }, [session?.user?.id, isCloudHydrated]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !isCloudHydrated) return;
+
+    let cancelled = false;
+
+    const syncStudyTimeEntries = async () => {
+      try {
+        setIsLoadingTimeEntries(true);
+        const rows = await loadStudyTimeEntries(session.user.id, {});
+        if (!cancelled) {
+          setStudyTimeEntries(rows);
+        }
+      } catch (error) {
+        console.error("Study time entries sync error:", error);
+        if (!cancelled) {
+          setStudyTimeEntries([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingTimeEntries(false);
+        }
+      }
+    };
+
+    syncStudyTimeEntries();
+
+    return () => {
+      cancelled = true;
+    };
   }, [session?.user?.id, isCloudHydrated]);
 
   useEffect(() => {
@@ -2453,6 +2522,19 @@ export default function StudyPlannerApp() {
   const today = new Date();
   const weekStart = getWeekStart(today);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const timeEntriesByTopic = useMemo(() => {
+    const mapping = {};
+    studyTimeEntries.forEach((entry) => {
+      if (entry.topicId) {
+        if (!mapping[entry.topicId]) {
+          mapping[entry.topicId] = 0;
+        }
+        mapping[entry.topicId] += entry.durationMinutes || 0;
+      }
+    });
+    return mapping;
+  }, [studyTimeEntries]);
 
   const studyStats = useMemo(() => {
     const timedSessions = data.studySessions.filter((session) => session.source !== "seed");
@@ -3389,14 +3471,37 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
   }
 
-  function saveStudySession(session) {
+  async function saveStudySession(sessionEntry) {
+    const userId = session?.user?.id;
+    
+    // Update local state
     setData((prev) => ({
       ...prev,
-      studySessions: prev.studySessions.some((s) => s.id === session.id)
-        ? prev.studySessions.map((s) => (s.id === session.id ? session : s))
-        : [session, ...prev.studySessions],
+      studySessions: prev.studySessions.some((s) => s.id === sessionEntry.id)
+        ? prev.studySessions.map((s) => (s.id === sessionEntry.id ? sessionEntry : s))
+        : [sessionEntry, ...prev.studySessions],
     }));
     setEditingSession(null);
+
+    // Also save to database if we have a userId
+    if (userId && sessionEntry.subjectId && sessionEntry.durationMinutes > 0) {
+      try {
+        await createStudyTimeEntry(userId, {
+          subjectId: sessionEntry.subjectId,
+          topicId: sessionEntry.topicId || null,
+          durationMinutes: sessionEntry.durationMinutes,
+          source: sessionEntry.source || 'manual',
+          notes: sessionEntry.note || '',
+          recordedAt: sessionEntry.createdAt || new Date().toISOString(),
+        });
+        
+        // Reload study time entries
+        const rows = await loadStudyTimeEntries(userId, {});
+        setStudyTimeEntries(rows);
+      } catch (error) {
+        console.error("Save study time entry to database failed:", error);
+      }
+    }
   }
 
   function deleteStudySession(id) {
@@ -3769,7 +3874,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 xl:ml-auto">
-              <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
+              <DashboardQuickActions subjects={data.subjects} topics={data.topics} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
               <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                 <DialogTrigger asChild>
@@ -3875,6 +3980,24 @@ export default function StudyPlannerApp() {
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
                             <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
+                          </Card>
+                        </SortableTile>
+                      );
+                    }
+                    if (widgetId === "task-time") {
+                      return (
+                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                          <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                            <CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Investierte Zeit für einzelne Lernaufgaben</CardDescription></CardHeader>
+                            <CardContent className="px-3 pb-5 sm:px-5">
+                              <TopicTimeStatsCard 
+                                darkMode={darkMode} 
+                                topics={data.topics} 
+                                subjects={data.subjects} 
+                                timeEntriesByTopic={timeEntriesByTopic}
+                                getSurfaceClass={getSurfaceClass}
+                              />
+                            </CardContent>
                           </Card>
                         </SortableTile>
                       );
@@ -4514,9 +4637,12 @@ export default function StudyPlannerApp() {
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
             subjects={data.subjects}
+            topics={data.topics}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || data.subjects[0]?.id || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value } : prev)}
+            selectedTopicId={editingSession?.topicId || ""}
+            onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, topicId: value || undefined } : prev)}
             onSaveEntry={saveStudySession}
             initialValue={editingSession ? buildSessionSeedFromEntry(editingSession) : null}
             title="Lerneinheit bearbeiten"

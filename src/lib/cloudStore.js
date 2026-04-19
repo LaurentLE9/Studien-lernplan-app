@@ -7,7 +7,7 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
-const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "today", "recent", "done"];
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "task-time", "today", "recent", "done"];
 const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
@@ -1199,4 +1199,149 @@ export async function cancelTimerSession(userId, sessionId) {
     }
   );
   return mapTimerSession(rows?.[0] || null);
+}
+
+/**
+ * Study Time Entries CRUD
+ * Flexible time tracking linked to subjects and optional topics
+ */
+const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,duration_minutes,source,notes,recorded_at,created_at,updated_at";
+
+function mapStudyTimeEntry(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    userId: row.user_id,
+    subjectId: row.subject_id,
+    topicId: row.topic_id || null,
+    durationMinutes: Number(row.duration_minutes || 0),
+    source: row.source || "manual",
+    notes: row.notes || "",
+    recordedAt: row.recorded_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function loadStudyTimeEntries(userId, options = {}) {
+  let query = `/study_time_entries?user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`;
+
+  if (options.subjectId) {
+    query += `&subject_id=eq.${options.subjectId}`;
+  }
+  if (options.topicId) {
+    query += `&topic_id=eq.${options.topicId}`;
+  }
+
+  query += "&order=recorded_at.desc";
+
+  if (options.limit) {
+    query += `&limit=${Math.max(1, Number(options.limit))}`;
+  }
+
+  const rows = await supabaseRequest(query, {
+    method: "GET",
+    headers: { apikey: SUPABASE_ANON_KEY },
+  });
+
+  return Array.isArray(rows) ? rows.map(mapStudyTimeEntry) : [];
+}
+
+export async function createStudyTimeEntry(userId, entry) {
+  if (!entry.subjectId) {
+    throw new Error("subjectId ist erforderlich");
+  }
+  if (!entry.durationMinutes || entry.durationMinutes <= 0) {
+    throw new Error("durationMinutes muss größer als 0 sein");
+  }
+
+  const rows = await supabaseRequest(
+    `/study_time_entries?select=${STUDY_TIME_ENTRY_SELECT}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify({
+        id: entry.id || crypto.randomUUID(),
+        user_id: userId,
+        subject_id: entry.subjectId,
+        topic_id: entry.topicId || null,
+        duration_minutes: Math.max(1, Math.round(Number(entry.durationMinutes))),
+        source: entry.source || "manual",
+        notes: entry.notes || "",
+        recorded_at: entry.recordedAt || new Date().toISOString(),
+      }),
+    }
+  );
+
+  return mapStudyTimeEntry(rows?.[0] || null);
+}
+
+export async function updateStudyTimeEntry(userId, entryId, patch) {
+  const payload = {};
+
+  if ("durationMinutes" in patch) {
+    payload.duration_minutes = Math.max(1, Math.round(Number(patch.durationMinutes)));
+  }
+  if ("notes" in patch) {
+    payload.notes = patch.notes || "";
+  }
+  if ("source" in patch) {
+    payload.source = patch.source || "manual";
+  }
+  if ("recordedAt" in patch) {
+    payload.recorded_at = toIsoDateTimeOrNull(patch.recordedAt);
+  }
+
+  const rows = await supabaseRequest(
+    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`,
+    {
+      method: "PATCH",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Prefer: "return=representation",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  return mapStudyTimeEntry(rows?.[0] || null);
+}
+
+export async function deleteStudyTimeEntry(userId, entryId) {
+  await supabaseRequest(
+    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}`,
+    {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+}
+
+export async function getTotalTimeForTopic(userId, topicId) {
+  const rows = await supabaseRequest(
+    `/study_time_entries?user_id=eq.${userId}&topic_id=eq.${topicId}&select=duration_minutes`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((sum, row) => sum + Number(row.duration_minutes || 0), 0);
+}
+
+export async function getTotalTimeForSubject(userId, subjectId) {
+  const rows = await supabaseRequest(
+    `/study_time_entries?user_id=eq.${userId}&subject_id=eq.${subjectId}&select=duration_minutes`,
+    {
+      method: "GET",
+      headers: { apikey: SUPABASE_ANON_KEY },
+    }
+  );
+
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((sum, row) => sum + Number(row.duration_minutes || 0), 0);
 }
