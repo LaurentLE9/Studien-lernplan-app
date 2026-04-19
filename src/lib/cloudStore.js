@@ -825,14 +825,20 @@ export async function deleteSubjectRecord(userId, subjectId) {
 const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,last_studied_at,next_review_at,review_step,completed,is_paused_today,created_at,updated_at";
 
 export async function loadTopics(userId) {
-  const rows = await supabaseRequest(
-    `/topics?user_id=eq.${userId}&select=${TOPIC_SELECT}&order=order_index.asc`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return Array.isArray(rows) ? rows : [];
+  try {
+    const rows = await supabaseRequest(
+      `/topics?user_id=eq.${userId}&select=${TOPIC_SELECT}&order=order_index.asc`,
+      {
+        method: "GET",
+        headers: { apikey: SUPABASE_ANON_KEY },
+      }
+    );
+    logSyncDebug("loadTopics:success", { userId, count: Array.isArray(rows) ? rows.length : 0 });
+    return Array.isArray(rows) ? rows : [];
+  } catch (error) {
+    logSyncDebug("loadTopics:error", { userId, error: error?.message });
+    throw error;
+  }
 }
 
 export async function createTopicRecord(userId, topic) {
