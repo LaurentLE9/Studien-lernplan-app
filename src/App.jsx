@@ -1190,7 +1190,7 @@ function ManualStudyDialog({
   );
 }
 
-function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, userId }) {
+function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMode, userId }) {
   const storedTimer = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem("study_planner_timer_state") || "{}");
@@ -1203,12 +1203,12 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualSeed, setManualSeed] = useState(null);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [timerTopicSelectMode, setTimerTopicSelectMode] = useState(false);
+  const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
-  const [timerTopicId, setTimerTopicId] = useState("");
+  const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
   const [timerMode, setTimerMode] = useState(storedTimer.timerMode || "stopwatch");
   const [timerPreset, setTimerPreset] = useState(storedTimer.timerPreset || 90);
   const [customPomodoroMinutes, setCustomPomodoroMinutes] = useState(String(storedTimer.timerPreset || 90));
@@ -1219,7 +1219,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
   const intervalRef = useRef(null);
   const floatingClass = darkMode ? "border-slate-800 bg-[#1b2237] text-slate-50" : "border-slate-200 bg-white text-slate-900";
   const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
-  const topicsForTimerSubject = (topics || []).filter((t) => t.subjectId === timerSubjectId);
+  const tasksForTimerSubject = (tasks || []).filter((task) => task.subjectId === timerSubjectId);
 
   useEffect(() => {
     if (!manualSubjectId && subjects[0]?.id) setManualSubjectId(subjects[0].id);
@@ -1230,10 +1230,11 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
     localStorage.setItem("study_planner_timer_state", JSON.stringify({
       manualSubjectId,
       timerSubjectId,
+      timerTaskId,
       timerMode,
       timerPreset,
     }));
-  }, [manualSubjectId, timerSubjectId, timerMode, timerPreset]);
+  }, [manualSubjectId, timerSubjectId, timerTaskId, timerMode, timerPreset]);
 
   useEffect(() => {
     setCustomPomodoroMinutes(String(timerPreset));
@@ -1377,13 +1378,13 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
 
   async function handleTimerSubjectPick(subjectId) {
     setTimerSubjectId(subjectId);
-    setTimerTopicId("");
-    setTimerTopicSelectMode(true);
+    setTimerTaskId("");
+    setTimerTaskSelectMode(true);
   }
 
-  async function handleTimerTopicPick(topicId) {
-    setTimerTopicId(topicId);
-    setTimerTopicSelectMode(false);
+  async function handleTimerTaskPick(taskId) {
+    setTimerTaskId(taskId);
+    setTimerTaskSelectMode(false);
     setTimerOpen(false);
 
     if (!userId || !timerSubjectId) return;
@@ -1394,7 +1395,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
       const created = await startTimerSession(userId, timerSubjectId, {
         mode: timerMode,
         presetMinutes: timerPreset,
-        topicId: topicId || undefined,
+        taskId: taskId || undefined,
       });
       if (created) {
         setActiveTimer(created);
@@ -1407,8 +1408,8 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
     }
   }
 
-  async function handleTimerStartWithoutTopic() {
-    setTimerTopicSelectMode(false);
+  async function handleTimerStartWithoutTask() {
+    setTimerTaskSelectMode(false);
     setTimerOpen(false);
 
     if (!userId || !timerSubjectId) return;
@@ -1469,6 +1470,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
     const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
     const start = new Date(now.getTime() - durationMinutes * 60000);
+    const taskLabel = selectedTask?.title || null;
     openManualWithSeed(activeTimer.subjectId, {
       date: formatDateInput(now),
       startTime: toTimeInputValue(start),
@@ -1476,8 +1478,8 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
       breakMinutes: String(getCurrentPauseMinutes(activeTimer, nowMs)),
       activity: activeTimer.mode === "pomodoro" ? "Pomodoro" : "Stoppuhr",
       note: activeTimer.mode === "pomodoro"
-        ? `Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
-        : "Stoppuhr-Sitzung",
+        ? `${taskLabel ? `Aufgabe: ${taskLabel} · ` : ""}Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
+        : taskLabel || "Stoppuhr-Sitzung",
       source: activeTimer.mode || "stopwatch",
     });
   }
@@ -1488,17 +1490,19 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
       setTimerBusy(true);
       const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
       const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+      const taskLabel = selectedTask?.title || null;
 
       if (elapsedSeconds > 0 && activeTimer.subjectId) {
         onSaveSession({
           id: crypto.randomUUID(),
           subjectId: activeTimer.subjectId,
+          taskId: selectedTask?.id || undefined,
           durationMinutes,
           createdAt: new Date().toISOString(),
           source: activeTimer.mode || "stopwatch",
           note: activeTimer.mode === "pomodoro"
-            ? `Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
-            : "Stoppuhr-Sitzung",
+            ? `${taskLabel ? `Aufgabe: ${taskLabel} · ` : ""}Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
+            : taskLabel || "Stoppuhr-Sitzung",
         });
       }
 
@@ -1543,6 +1547,9 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
 
   const selectedSubjectId = activeTimer?.subjectId || timerSubjectId;
   const timerSubject = subjects.find((subject) => subject.id === selectedSubjectId);
+  const selectedTask = tasks.find((task) => task.id === timerTaskId) || null;
+  const timerTaskChoices = tasksForTimerSubject.length > 0 ? tasksForTimerSubject : (tasks || []);
+  const showingFallbackTasks = tasksForTimerSubject.length === 0 && (tasks || []).length > 0;
   const displaySeconds = activeTimer ? getDisplaySeconds(activeTimer) : 0;
   const timerDisplay = `${String(Math.floor(displaySeconds / 3600)).padStart(2, "0")}:${String(Math.floor((displaySeconds % 3600) / 60)).padStart(2, "0")}:${String(displaySeconds % 60).padStart(2, "0")}`;
   const isRunning = activeTimer?.status === "running";
@@ -1585,7 +1592,12 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
                 <div className="mt-4 grid gap-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{timerMode === "pomodoro" ? `${timerPreset} Min.` : "Stoppuhr"}</span>
-                    {timerSubject ? <span className="rounded-full px-3 py-1 text-xs font-semibold text-slate-950" style={{ backgroundColor: timerSubject.color }}>{timerSubject.name}</span> : null}
+                    <div className="flex items-center gap-2">
+                      {selectedTask ? <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", darkMode ? "bg-slate-700 text-slate-100" : "bg-slate-200 text-slate-800")}>
+                        {selectedTask.title}
+                      </span> : null}
+                      {timerSubject ? <span className="rounded-full px-3 py-1 text-xs font-semibold text-slate-950" style={{ backgroundColor: timerSubject.color }}>{timerSubject.name}</span> : null}
+                    </div>
                   </div>
 
                   <TabsContent value="pomodoro" className="m-0">
@@ -1627,7 +1639,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
                   </TabsContent>
 
                   <div className="grid gap-2 max-h-[250px] overflow-y-auto pr-1">
-                    {!timerTopicSelectMode ? (
+                    {!timerTaskSelectMode ? (
                       <>
                         {subjects.map((subject) => {
                           const isSelected = timerSubjectId === subject.id;
@@ -1642,25 +1654,34 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
                     ) : (
                       <>
                         <div className="mb-2 flex items-center justify-between">
-                          <button type="button" onClick={() => setTimerTopicSelectMode(false)} className={cn("rounded-full p-2 transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
+                          <button type="button" onClick={() => setTimerTaskSelectMode(false)} className={cn("rounded-full p-2 transition", darkMode ? "text-slate-400 hover:text-slate-200" : "text-slate-600 hover:text-slate-900")}>
                             <ChevronLeft className="h-4 w-4" />
                           </button>
                           <span className="text-sm font-semibold">{subjects.find((s) => s.id === timerSubjectId)?.name}</span>
                           <div className="w-8" />
                         </div>
-                        {topicsForTimerSubject.length === 0 ? (
+                        {timerTaskChoices.length === 0 ? (
                           <div className={cn("rounded-xl px-4 py-3 text-center text-sm", darkMode ? "bg-slate-800/70 text-slate-400" : "bg-slate-100 text-slate-600")}>
-                            Keine Aufgaben für dieses Fach
+                            Noch keine Aufgaben angelegt
                           </div>
                         ) : (
                           <>
-                            {topicsForTimerSubject.map((topic) => (
-                              <button key={topic.id} type="button" onClick={() => handleTimerTopicPick(topic.id)} className={cn("flex items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-medium transition", darkMode ? "bg-slate-700/60 hover:bg-slate-700 text-slate-100" : "bg-slate-100 hover:bg-slate-200 text-slate-900")}>
+                            {showingFallbackTasks ? (
+                              <div className={cn("rounded-xl px-4 py-2 text-xs", darkMode ? "bg-slate-800/60 text-slate-400" : "bg-slate-100 text-slate-600")}>
+                                Für dieses Fach gibt es noch keine Aufgaben. Alle Aufgaben werden angezeigt.
+                              </div>
+                            ) : null}
+                            {timerTaskChoices.map((task) => {
+                              const taskSubject = subjects.find((subject) => subject.id === task.subjectId);
+                              return (
+                              <button key={task.id} type="button" onClick={() => handleTimerTaskPick(task.id)} className={cn("flex items-center gap-2 rounded-xl px-4 py-2.5 text-left text-sm font-medium transition", darkMode ? "bg-slate-700/60 hover:bg-slate-700 text-slate-100" : "bg-slate-100 hover:bg-slate-200 text-slate-900")}>
                                 <ChevronRight className="h-4 w-4 flex-shrink-0" />
-                                <span className="flex-1 truncate">{topic.title}</span>
+                                <span className="flex-1 truncate">{task.title}</span>
+                                {taskSubject ? <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", darkMode ? "bg-slate-600 text-slate-100" : "bg-slate-200 text-slate-700")}>{taskSubject.name}</span> : null}
                               </button>
-                            ))}
-                            <button type="button" onClick={handleTimerStartWithoutTopic} className={cn("rounded-xl px-4 py-2.5 text-sm font-medium transition border", darkMode ? "border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500" : "border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400")}>
+                            );
+                            })}
+                            <button type="button" onClick={handleTimerStartWithoutTask} className={cn("rounded-xl px-4 py-2.5 text-sm font-medium transition border", darkMode ? "border-slate-600 text-slate-400 hover:text-slate-200 hover:border-slate-500" : "border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400")}>
                               Ohne Aufgabe starten
                             </button>
                           </>
@@ -1670,7 +1691,7 @@ function DashboardQuickActions({ subjects, topics, onSaveSession, darkMode, user
                   </div>
 
                   <div className={cn("rounded-xl px-3 py-2 text-xs", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
-                    {timerTopicSelectMode ? "Wähle eine Aufgabe oder starte ohne Aufgabe" : "Auswahl eines Fachs zeigt die verfügbaren Aufgaben"}
+                    {timerTaskSelectMode ? "Wähle eine Aufgabe oder starte ohne Aufgabe" : "Auswahl eines Fachs zeigt die verfügbaren Aufgaben"}
                   </div>
                 </div>
               </Tabs>
@@ -3980,7 +4001,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-3 xl:ml-auto">
-              <DashboardQuickActions subjects={data.subjects || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
+              <DashboardQuickActions subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
               <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                 <DialogTrigger asChild>
