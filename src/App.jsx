@@ -1152,19 +1152,27 @@ function ManualStudyDialog({
               <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}>
                 <Label className={darkMode ? "text-white" : "text-slate-700"}>Aufgabe (optional)</Label>
                 <div className="mt-2 flex items-center gap-2">
-                  <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
-                    <SelectTrigger className="h-auto border-0 bg-transparent px-0 text-lg font-medium shadow-none focus:ring-0 focus:ring-offset-0"><SelectValue placeholder="Aufgabe auswählen (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      {topics
-                        .filter((t) => t.subjectId === selectedSubjectId)
-                        .map((topic) => (
-                          <SelectItem key={topic.id} value={topic.id}>
-                            {topic.title}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedTopicId ? <button type="button" onClick={() => onSelectedTopicChange("")} className="grid h-7 w-7 place-items-center rounded-full bg-slate-600/70 text-slate-200 transition hover:bg-slate-500"><X className="h-4 w-4" /></button> : null}
+                  {topics.filter((t) => t.subjectId === selectedSubjectId).length === 0 ? (
+                    <div className={cn("w-full px-3 py-2 rounded-lg text-sm", darkMode ? "bg-slate-800/70 text-slate-400" : "bg-slate-100 text-slate-600")}>
+                      Keine Aufgaben für dieses Fach
+                    </div>
+                  ) : (
+                    <>
+                      <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
+                        <SelectTrigger className="h-auto border-0 bg-transparent px-0 text-lg font-medium shadow-none focus:ring-0 focus:ring-offset-0"><SelectValue placeholder="Aufgabe auswählen (optional)" /></SelectTrigger>
+                        <SelectContent>
+                          {topics
+                            .filter((t) => t.subjectId === selectedSubjectId)
+                            .map((topic) => (
+                              <SelectItem key={topic.id} value={topic.id}>
+                                {topic.title}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedTopicId ? <button type="button" onClick={() => onSelectedTopicChange("")} className="grid h-7 w-7 place-items-center rounded-full bg-slate-600/70 text-slate-200 transition hover:bg-slate-500"><X className="h-4 w-4" /></button> : null}
+                    </>
+                  )}
                 </div>
               </div>
             ) : null}
