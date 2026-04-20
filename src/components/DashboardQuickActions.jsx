@@ -99,7 +99,7 @@ export default function DashboardQuickActions({
     : "border-slate-200 bg-white";
   const mutedTextClass = darkMode ? "text-slate-400" : "text-slate-600";
   const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
-  const tasksForTimerSubject = (tasks || []).filter((task) => task.subjectId === timerSubjectId);
+  const tasksForTimerSubject = (tasks || []).filter((task) => task.subjectId === timerSubjectId && !task.isCompleted && !task.archived);
 
   useEffect(() => {
     if (!timerSubjectId && subjects[0]?.id) setTimerSubjectId(subjects[0].id);
@@ -382,6 +382,7 @@ export default function DashboardQuickActions({
           id: crypto.randomUUID(),
           subjectId: activeTimer.subjectId,
           taskId: selectedTask?.id || undefined,
+          topicId: selectedTask?.id || undefined,
           durationMinutes,
           createdAt: new Date().toISOString(),
           source: activeTimer.mode || "stopwatch",
@@ -433,8 +434,7 @@ export default function DashboardQuickActions({
   const selectedSubjectId = activeTimer?.subjectId || timerSubjectId;
   const timerSubject = subjects.find((subject) => subject.id === selectedSubjectId);
   const selectedTask = tasks.find((task) => task.id === timerTaskId) || null;
-  const timerTaskChoices = tasksForTimerSubject.length > 0 ? tasksForTimerSubject : (tasks || []);
-  const showingFallbackTasks = tasksForTimerSubject.length === 0 && (tasks || []).length > 0;
+  const timerTaskChoices = tasksForTimerSubject;
   const displaySeconds = activeTimer ? getDisplaySeconds(activeTimer) : 0;
   const timerDisplay = `${String(Math.floor(displaySeconds / 3600)).padStart(2, "0")}:${String(Math.floor((displaySeconds % 3600) / 60)).padStart(2, "0")}:${String(displaySeconds % 60).padStart(2, "0")}`;
   const isPaused = activeTimer?.status === "paused";
@@ -686,15 +686,10 @@ export default function DashboardQuickActions({
 
                         {timerTaskChoices.length === 0 ? (
                           <div className={cn("rounded-[1rem] border px-4 py-4 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                            Noch keine Aufgaben vorhanden.
+                            Noch keine offenen Aufgaben fuer dieses Fach vorhanden.
                           </div>
                         ) : (
                           <>
-                            {showingFallbackTasks ? (
-                              <div className={cn("rounded-[1rem] border px-4 py-3 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                                Fuer dieses Fach gibt es noch keine Aufgaben. Deshalb werden alle Aufgaben angezeigt.
-                              </div>
-                            ) : null}
                             {timerTaskChoices.map((task) => {
                               const taskSubject = subjects.find((subject) => subject.id === task.subjectId);
                               return (
