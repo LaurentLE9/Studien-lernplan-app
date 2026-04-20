@@ -87,6 +87,17 @@ body {
     radial-gradient(circle at top right, rgba(15, 23, 42, 0.05), transparent 34%);
 }
 
+input[type="date"] {
+  background-color: hsl(var(--surface-soft));
+  color: hsl(var(--foreground));
+  opacity: 1;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.9;
+}
+
 #app {
   isolation: isolate;
 }
