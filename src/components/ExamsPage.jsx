@@ -235,15 +235,18 @@ export default function ExamsPage({
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold tracking-tight">Klausuren</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-[2rem]">Klausuren</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Pruefungen, Status und naechste Termine im Blick behalten.</p>
+        </div>
         <Dialog open={examDialogOpen} onOpenChange={(open) => { setExamDialogOpen(open); if (!open) setEditingExam(null); }}>
           <DialogTrigger asChild>
-            <Button variant="outline" className="rounded-xl" onClick={() => setEditingExam(null)}>
+            <Button variant="outline" className="h-11 rounded-[1rem] px-4" onClick={() => setEditingExam(null)}>
               <Plus className="mr-2 h-4 w-4" />Klausur anlegen
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl rounded-3xl">
+          <DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]">
             <DialogHeader>
               <DialogTitle>{editingExam ? "Klausur bearbeiten" : "Klausur anlegen"}</DialogTitle>
             </DialogHeader>
@@ -252,7 +255,7 @@ export default function ExamsPage({
         </Dialog>
       </div>
 
-      <Card className={cn("rounded-2xl border shadow-sm", darkMode ? "bg-slate-900/80" : "bg-white") }>
+      <Card className={cn("rounded-[1.4rem] border shadow-[var(--shadow-soft)]", darkMode ? "bg-slate-900/80" : "bg-white") }>
         <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
           <div className="grid gap-2">
             <Label>Fach</Label>
@@ -294,7 +297,7 @@ export default function ExamsPage({
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card className={cn("rounded-2xl border shadow-sm", darkMode ? "bg-slate-900/80" : "bg-white") }>
+        <Card className={cn("rounded-[1.4rem] border shadow-[var(--shadow-soft)]", darkMode ? "bg-slate-900/80" : "bg-white") }>
           <CardHeader>
             <CardTitle>Offene Klausuren</CardTitle>
             <CardDescription>Bevorstehende Prüfungen in aufsteigender Reihenfolge.</CardDescription>
@@ -321,7 +324,7 @@ export default function ExamsPage({
           </CardContent>
         </Card>
 
-        <Card className={cn("rounded-2xl border shadow-sm", darkMode ? "bg-slate-900/80" : "bg-white") }>
+        <Card className={cn("rounded-[1.4rem] border shadow-[var(--shadow-soft)]", darkMode ? "bg-slate-900/80" : "bg-white") }>
           <CardHeader>
             <CardTitle>Archiv / geschriebene Klausuren</CardTitle>
             <CardDescription>Bereits geschriebene oder archivierte Prüfungen in absteigender Reihenfolge.</CardDescription>

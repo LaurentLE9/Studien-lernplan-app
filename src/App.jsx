@@ -34,9 +34,11 @@ import {
   X,
     LogOut,
   } from "lucide-react";
-  import AuthScreen from "@/components/AuthScreen";
-  import ExamsPage from "@/components/ExamsPage";
-  import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
+import AuthScreen from "@/components/AuthScreen";
+import DashboardQuickActionsPanel from "@/components/DashboardQuickActions";
+import ExamsPage from "@/components/ExamsPage";
+import ManualStudySheet from "@/components/ManualStudySheet";
+import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
@@ -4663,7 +4665,6 @@ export default function StudyPlannerApp() {
   const currentPageLabel = navItems.find((n) => n.id === page)?.label || "Dashboard";
   const handlePageChange = (nextPage) => {
     setPage(nextPage);
-    setMobileNavOpen(false);
   };
   const handleAppearanceChange = (appearance) => {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance } }));
@@ -4673,7 +4674,6 @@ export default function StudyPlannerApp() {
     setIsEditingDashboard(true);
     if (page !== "dashboard") {
       setPage("dashboard");
-      setMobileNavOpen(false);
     }
   };
 
@@ -4699,26 +4699,26 @@ export default function StudyPlannerApp() {
   return (
     <div className={cn("min-h-screen w-full overflow-x-hidden transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
       <div className={cn("flex min-h-screen w-full overflow-x-hidden", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_minmax(0,1fr)]" : "lg:grid lg:grid-cols-[260px_minmax(0,1fr)]")}>
-          <aside className={cn("hidden border-r p-4 backdrop-blur lg:block", darkMode ? "border-slate-800 bg-slate-900/80" : "border-slate-200 bg-white/80")}>
+          <aside className={cn("hidden border-r px-4 py-5 backdrop-blur-xl lg:block", darkMode ? "border-slate-800/85 bg-slate-950/86" : "border-slate-200/80 bg-white/86")}>
           <div className="flex h-full flex-col">
             <div>
               <div className={cn("flex items-center px-2 py-3", sidebarCollapsed ? "justify-center" : "justify-between gap-3")}>
                 <div className={cn("flex items-center gap-3", sidebarCollapsed && "justify-center")}> 
-                  <div className="rounded-2xl bg-primary/10 p-2 text-primary"><BookOpen className="h-5 w-5" /></div>
+                  <div className="rounded-[1.2rem] bg-primary/12 p-3 text-primary"><BookOpen className="h-5 w-5" /></div>
                   {!sidebarCollapsed ? (
-                    <div><p className="text-sm text-muted-foreground">Study Planner</p><h1 className="text-lg font-semibold tracking-tight">Studien- & Lernplan</h1></div>
+                    <div><p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Study Planner</p><h1 className="mt-1 text-lg font-semibold tracking-tight">Studien- & Lernplan</h1></div>
                   ) : null}
                 </div>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="shrink-0 rounded-xl"
+                  className="shrink-0 rounded-[1rem]"
                   onClick={() => setData((prev) => ({ ...prev, settings: { ...prev.settings, sidebarCollapsed: !sidebarCollapsed } }))}
                 >
                   {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
                 </Button>
               </div>
-              <nav className="mt-6 grid gap-1">
+              <nav className="mt-6 grid gap-1.5">
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   return (
@@ -4727,9 +4727,9 @@ export default function StudyPlannerApp() {
                       onClick={() => handlePageChange(item.id)}
                       title={sidebarCollapsed ? item.label : undefined}
                       className={cn(
-                        "flex rounded-2xl px-3 py-3 text-left text-sm transition",
+                        "flex rounded-[1.15rem] px-3 py-3 text-left text-sm font-semibold transition",
                         sidebarCollapsed ? "justify-center" : "items-center gap-3",
-                        page === item.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
+                        page === item.id ? "bg-primary text-primary-foreground shadow-[var(--shadow-xs)]" : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -4741,17 +4741,17 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="mt-auto pt-6">
-              <Separator className="mb-4" />
+              <Separator className="mb-4 bg-border/70" />
               <div className={cn("mx-auto w-full", sidebarCollapsed ? "" : "max-w-[220px]")}>
                 <div className={cn("pt-1", darkMode ? "border-slate-700" : "border-slate-200")}>
-                  <div className={cn("flex items-center gap-2 rounded-xl p-3 text-xs font-medium", darkMode ? "bg-slate-800/50 text-slate-400" : "bg-slate-100/50 text-slate-600")}>
+                  <div className={cn("flex items-center gap-2 rounded-[1rem] border border-border/60 bg-muted/55 p-3 text-xs font-medium text-muted-foreground", darkMode ? "bg-slate-900/70" : "")}>
                     {session?.user?.email || "User"}
                   </div>
                   <Button
                     onClick={handleLogout}
                     variant="outline"
                     size="sm"
-                    className="mt-2 w-full rounded-xl border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                    className="mt-2 w-full rounded-[1rem] border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     {!sidebarCollapsed ? "Logout" : ""}
@@ -4763,86 +4763,105 @@ export default function StudyPlannerApp() {
         </aside>
 
         <div className="min-w-0">
-          <header className={cn("sticky top-0 z-30 border-b px-4 py-3 backdrop-blur lg:hidden", darkMode ? "border-slate-800 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
+          <header className={cn("sticky top-0 z-30 border-b px-4 py-4 backdrop-blur-xl lg:hidden", darkMode ? "border-slate-800/85 bg-slate-950/92" : "border-slate-200/80 bg-white/90")}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Studien- & Lernplan</p>
-                <h1 className="truncate text-base font-semibold">{currentPageLabel}</h1>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Studien- & Lernplan</p>
+                <h1 className="truncate text-lg font-semibold tracking-tight">{currentPageLabel}</h1>
               </div>
               <Button
                 variant="outline"
                 size="icon"
-                className="rounded-xl"
-                onClick={() => setMobileNavOpen((prev) => !prev)}
+                className="rounded-[1rem]"
+                onClick={() => setMobileNavOpen(true)}
                 aria-label="Menü umschalten"
               >
                 <Menu className="h-4 w-4" />
               </Button>
             </div>
 
-            {mobileNavOpen ? (
-              <div className="mt-3 grid gap-2 border-t pt-3">
-                <nav className="grid grid-cols-2 gap-2">
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handlePageChange(item.id)}
-                        className={cn(
-                          "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition",
-                          page === item.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-                        )}
-                      >
-                        <Icon className="h-4 w-4" />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    );
-                  })}
-                </nav>
+          </header>
 
-                <div className="grid gap-2 border-t pt-3">
-                  <div className={cn("rounded-xl px-3 py-2 text-xs font-medium", darkMode ? "bg-slate-800/70 text-slate-300" : "bg-slate-100 text-slate-600")}>
-                    {session?.user?.email || "User"}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => handlePageChange("settings-backup")}
-                    >
-                      <Settings className="mr-2 h-4 w-4" />
-                      Einstellungen
+          <Dialog open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
+            <DialogContent
+              position="left"
+              showClose={false}
+              className={cn("border-r", darkMode ? "border-slate-800 bg-slate-950 text-slate-50" : "border-slate-200 bg-white text-slate-900")}
+            >
+              <div className="flex h-full flex-col">
+                <div className="border-b border-border/70 px-4 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-[1.15rem] bg-primary/12 p-3 text-primary">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">Study Planner</p>
+                        <h2 className="mt-1 text-lg font-semibold tracking-tight">Studien- & Lernplan</h2>
+                      </div>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => setMobileNavOpen(false)}>
+                      <X className="h-4 w-4" />
                     </Button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <nav className="grid gap-1.5">
+                    {navItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handlePageChange(item.id)}
+                          className={cn(
+                            "flex items-center gap-3 rounded-[1.1rem] px-3 py-3 text-left text-sm font-semibold transition",
+                            page === item.id
+                              ? "bg-primary text-primary-foreground shadow-[var(--shadow-xs)]"
+                              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+
+                <div className="border-t border-border/70 p-4">
+                  <div className="rounded-[1.2rem] border border-border/70 bg-muted/45 p-3">
+                    <div className="rounded-[0.95rem] bg-[hsl(var(--surface)/0.78)] px-3 py-2 text-xs font-medium text-muted-foreground">
+                      {session?.user?.email || "User"}
+                    </div>
                     <Button
                       onClick={handleLogout}
                       variant="outline"
-                      className="rounded-xl border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
+                      className="mt-2 w-full border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30"
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
+                      <LogOut className="h-4 w-4" />
                       Logout
                     </Button>
                   </div>
                 </div>
               </div>
-            ) : null}
-          </header>
+            </DialogContent>
+          </Dialog>
 
           <main className="p-4 md:p-6 lg:p-8">
           {isEditingDashboard ? (
-            <div className="sticky top-4 z-40 mb-4">
-              <div className={cn("flex flex-col gap-3 rounded-2xl border px-4 py-3 shadow-lg backdrop-blur md:flex-row md:items-center md:justify-between", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
+            <div className="sticky top-4 z-40 mb-5">
+              <div className={cn("flex flex-col gap-3 rounded-[1.35rem] border px-4 py-3 shadow-[var(--shadow-medium)] backdrop-blur-xl md:flex-row md:items-center md:justify-between", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
                 <div>
                   <p className="text-sm font-semibold">Dashboard-Bearbeitung aktiv</p>
                   <p className="text-xs text-muted-foreground">Änderungen werden direkt übernommen. Du kannst die Bearbeitung jetzt jederzeit beenden.</p>
                 </div>
                 <div className="flex gap-2 self-end md:self-auto">
-                  <Button variant="outline" className="rounded-xl" onClick={() => setIsEditingDashboard(false)}>
+                  <Button variant="outline" className="rounded-[1rem]" onClick={() => setIsEditingDashboard(false)}>
                     Abbrechen
                   </Button>
-                  <Button className="rounded-xl bg-blue-600 hover:bg-blue-500" onClick={() => setIsEditingDashboard(false)}>
+                  <Button className="rounded-[1rem] bg-blue-600 hover:bg-blue-500" onClick={() => setIsEditingDashboard(false)}>
                     Fertig
                   </Button>
                 </div>
@@ -4851,21 +4870,21 @@ export default function StudyPlannerApp() {
           ) : null}
 
           {cloudSyncError ? (
-            <div className={cn("mb-4 rounded-xl border px-4 py-3 text-sm", darkMode ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "border-amber-300 bg-amber-50 text-amber-800")}>
+            <div className={cn("mb-5 rounded-[1.2rem] border px-4 py-3 text-sm shadow-[var(--shadow-xs)]", darkMode ? "border-amber-500/30 bg-amber-500/10 text-amber-100" : "border-amber-300 bg-amber-50 text-amber-800")}>
               {cloudSyncError}
             </div>
           ) : null}
 
-          <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="mb-6 flex flex-col gap-4 rounded-[1.35rem] border border-border/70 bg-[hsl(var(--surface)/0.86)] px-4 py-4 shadow-[var(--shadow-xs)] backdrop-blur sm:px-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
               {page === "dashboard" ? (
                 <div className="flex items-start gap-2">
-                  <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
+                  <h2 className="text-2xl font-semibold tracking-tight sm:text-[2rem]">{currentPageLabel}</h2>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 rounded-xl"
+                    className="h-9 w-9 rounded-[1rem]"
                     onClick={() => setIsSemesterCountdownOpen((prev) => !prev)}
                     aria-label={isSemesterCountdownOpen ? "Semesterende-Anzeige einklappen" : "Semesterende-Anzeige ausklappen"}
                   >
@@ -4873,10 +4892,10 @@ export default function StudyPlannerApp() {
                   </Button>
                 </div>
               ) : (
-                <h2 className="text-2xl font-semibold tracking-tight">{currentPageLabel}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight sm:text-[2rem]">{currentPageLabel}</h2>
               )}
               {page === "dashboard" && isSemesterCountdownOpen ? (
-                <div className="mt-2 max-w-fit rounded-full border px-3 py-1 text-sm font-medium">
+                <div className="mt-3 max-w-fit rounded-full border border-border/70 bg-[hsl(var(--surface)/0.9)] px-3 py-1.5 text-sm font-medium">
                   <span className={cn("inline-flex items-center rounded-full px-2 py-0.5", dashboardSemesterEndInfo.tone)}>
                     {dashboardSemesterEndInfo.label}
                   </span>
@@ -4885,13 +4904,13 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActions subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
+              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
               <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className={cn("h-12 rounded-[1.15rem] px-5 text-sm font-semibold shadow-[0_20px_45px_-30px_rgba(15,23,42,0.8)]", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
+                  <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl rounded-3xl">
+                <DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]">
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
                   <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
@@ -5613,7 +5632,7 @@ export default function StudyPlannerApp() {
           ) : null}
 
           <Dialog open={todaySubjectDialogOpen} onOpenChange={setTodaySubjectDialogOpen}>
-            <DialogContent className="max-w-lg rounded-3xl">
+            <DialogContent mobileSheet className="max-w-lg rounded-[1.6rem]">
               <DialogHeader><DialogTitle>Heute lernen</DialogTitle></DialogHeader>
               <div className="grid gap-4">
                 <div className="grid gap-2">
@@ -5636,15 +5655,15 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={semesterDialogOpen} onOpenChange={(open) => { setSemesterDialogOpen(open); if (!open) setEditingSemester(null); }}>
-            <DialogContent className="max-w-xl rounded-3xl">
+            <DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]">
               <DialogHeader><DialogTitle>{editingSemester ? "Semester bearbeiten" : "Semester anlegen"}</DialogTitle></DialogHeader>
               <SemesterForm initialValue={editingSemester} onSave={saveSemesterRecord} onDone={() => { setSemesterDialogOpen(false); setEditingSemester(null); }} />
             </DialogContent>
           </Dialog>
 
-          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent className="max-w-xl rounded-3xl"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent className="max-w-2xl rounded-3xl"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
-          <ManualStudyDialog
+          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
             subjects={data.subjects || []}
@@ -5657,6 +5676,7 @@ export default function StudyPlannerApp() {
             onSaveEntry={saveStudySession}
             initialValue={editingSession ? buildSessionSeedFromEntry(editingSession) : null}
             title="Lerneinheit bearbeiten"
+            submitLabel="Aenderungen speichern"
             submitLabel="Änderungen speichern"
           />
                   <button

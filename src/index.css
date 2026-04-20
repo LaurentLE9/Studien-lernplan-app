@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,26 +12,42 @@ body,
 }
 
 :root {
-  --background: 0 0% 98%;
-  --foreground: 222 47% 11%;
-  --primary: 217 91% 60%;
+  --background: 220 30% 97%;
+  --foreground: 224 36% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 36% 12%;
+  --primary: 220 88% 58%;
   --primary-foreground: 0 0% 100%;
-  --muted: 215 25% 90%;
-  --muted-foreground: 215 16% 47%;
-  --border: 214 32% 84%;
-  --scrollbar-thumb: 215 18% 70%;
-  --scrollbar-thumb-hover: 215 18% 58%;
-  --radius: 0.75rem;
+  --muted: 220 24% 92%;
+  --muted-foreground: 218 16% 43%;
+  --border: 220 24% 84%;
+  --surface: 0 0% 100%;
+  --surface-soft: 220 36% 95%;
+  --surface-strong: 220 30% 99%;
+  --shadow-soft: 0 18px 48px -30px rgba(15, 23, 42, 0.28);
+  --shadow-medium: 0 28px 70px -36px rgba(15, 23, 42, 0.36);
+  --shadow-xs: 0 10px 24px -18px rgba(15, 23, 42, 0.24);
+  --scrollbar-thumb: 218 20% 69%;
+  --scrollbar-thumb-hover: 218 20% 56%;
+  --radius: 1rem;
 }
 
 .dark {
-  --background: 222 47% 8%;
+  --background: 226 45% 8%;
   --foreground: 210 40% 98%;
-  --primary: 217 91% 60%;
+  --card: 225 32% 12%;
+  --card-foreground: 210 40% 98%;
+  --primary: 220 88% 60%;
   --primary-foreground: 0 0% 100%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 65%;
-  --border: 217 33% 25%;
+  --muted: 223 28% 18%;
+  --muted-foreground: 216 18% 69%;
+  --border: 222 26% 24%;
+  --surface: 224 33% 12%;
+  --surface-soft: 223 26% 16%;
+  --surface-strong: 225 42% 10%;
+  --shadow-soft: 0 18px 58px -30px rgba(2, 6, 23, 0.72);
+  --shadow-medium: 0 30px 80px -36px rgba(2, 6, 23, 0.86);
+  --shadow-xs: 0 12px 28px -20px rgba(2, 6, 23, 0.72);
   --scrollbar-thumb: 217 20% 34%;
   --scrollbar-thumb-hover: 217 20% 42%;
 }
@@ -62,6 +80,51 @@ body,
 
 body {
   @apply bg-background text-foreground antialiased;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Manrope", "Aptos", "Segoe UI", sans-serif;
   overflow-x: hidden;
+  background-image:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.07), transparent 32%),
+    radial-gradient(circle at top right, rgba(15, 23, 42, 0.05), transparent 34%);
+}
+
+#app {
+  isolation: isolate;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.18);
+}
+
+@layer components {
+  .app-shell {
+    background-color: hsl(var(--background));
+  }
+
+  .app-surface {
+    background: hsl(var(--surface) / 0.92);
+    border: 1px solid hsl(var(--border) / 0.72);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(16px);
+  }
+
+  .app-surface-soft {
+    background: hsl(var(--surface-soft) / 0.9);
+    border: 1px solid hsl(var(--border) / 0.62);
+  }
+
+  .app-surface-strong {
+    background: hsl(var(--surface-strong) / 0.98);
+    border: 1px solid hsl(var(--border) / 0.72);
+    box-shadow: var(--shadow-medium);
+  }
+
+  .app-field-panel {
+    background: hsl(var(--surface-soft) / 0.85);
+    border: 1px solid hsl(var(--border) / 0.56);
+    border-radius: 1.2rem;
+  }
+
+  .app-page-grid {
+    @apply grid gap-5 sm:gap-6;
+  }
 }
