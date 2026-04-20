@@ -2973,10 +2973,22 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
     onDone?.();
   }
 
+  function openDatePicker(event) {
+    const input = event.currentTarget;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Keep native fallback behavior for browsers that block programmatic open.
+      }
+    }
+  }
+
   const toggleFieldClass = "flex items-center justify-between gap-4 rounded-[1rem] border border-border bg-[hsl(var(--surface-soft))] px-4 py-3";
+  const dateInputClass = "h-12 cursor-pointer";
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-5">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div className="grid gap-4">
           <div className="grid gap-2">
@@ -3008,6 +3020,8 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                 type="date"
                 value={form.createdAt}
                 onChange={(e) => setForm((prev) => ({ ...prev, createdAt: e.target.value }))}
+                onClick={openDatePicker}
+                className={dateInputClass}
               />
             </div>
             <div className="grid gap-2">
@@ -3017,6 +3031,8 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                 type="date"
                 value={form.dueDate}
                 onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                onClick={openDatePicker}
+                className={dateInputClass}
               />
             </div>
             <div className="grid gap-2 sm:col-span-2 xl:col-span-1">
@@ -3026,13 +3042,15 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                 type="date"
                 value={form.acceptanceDate}
                 onChange={(e) => setForm((prev) => ({ ...prev, acceptanceDate: e.target.value }))}
+                onClick={openDatePicker}
+                className={dateInputClass}
               />
             </div>
           </div>
         </div>
 
         <div className="grid gap-4">
-          <div className="grid gap-4 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-4">
+          <div className="grid gap-4 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-5">
             <div className="grid gap-2">
               <Label>Fach</Label>
               <Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}>
@@ -3090,7 +3108,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
             </div>
           </div>
 
-          <div className="grid gap-3 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-4">
+          <div className="grid gap-3 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-5">
             <label className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Heute lernen</span>
@@ -3110,7 +3128,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
         </div>
       </div>
 
-      <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-3 pt-3 sm:flex-row sm:justify-end">
         {onDone ? <Button variant="outline" onClick={onDone} className="w-full sm:w-auto">Abbrechen</Button> : null}
         <Button onClick={handleSaveClick} className="w-full sm:w-auto">Speichern</Button>
       </div>
@@ -5106,9 +5124,9 @@ export default function StudyPlannerApp() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent mobileSheet className="max-w-[52rem] rounded-[1.6rem]">
+                <DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-h-[88dvh] sm:max-w-[68rem] sm:overflow-y-auto sm:p-7">
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
-                  <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                  <TaskDialogForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
               </Dialog>
 
@@ -5858,7 +5876,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-w-[52rem] rounded-[1.6rem]"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-h-[88dvh] sm:max-w-[68rem] sm:overflow-y-auto sm:p-7"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskDialogForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
