@@ -2898,6 +2898,17 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
     onDone?.();
   }
 
+  function openDatePicker(event) {
+    const input = event.currentTarget;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Keep native fallback behavior for browsers that block programmatic open.
+      }
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
@@ -2907,9 +2918,9 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} /></div>
-        <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-        <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} /></div>
+        <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
+        <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
+        <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Status</Label><Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent></Select></div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -5124,9 +5135,9 @@ export default function StudyPlannerApp() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-w-[68rem] sm:p-7">
+                <DialogContent mobileSheet className="rounded-[1.6rem] sm:max-w-[56rem] sm:p-6">
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
-                  <TaskDialogForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                  <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
               </Dialog>
 
@@ -5876,7 +5887,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-w-[68rem] sm:p-7"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskDialogForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="rounded-[1.6rem] sm:max-w-[56rem] sm:p-6"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
