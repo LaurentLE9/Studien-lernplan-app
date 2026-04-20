@@ -123,6 +123,39 @@ export default function ManualStudySheet({
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem("manualStudySheetWidth");
+    return saved ? parseInt(saved, 10) : 600;
+  });
+
+  const panelWidthRef = React.useRef(panelWidth);
+  useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
+
+  const handleDrag = React.useCallback((e) => {
+    const newWidth = document.documentElement.clientWidth - e.clientX;
+    if (newWidth >= 400 && newWidth <= 900) {
+      setPanelWidth(newWidth);
+    }
+  }, []);
+
+  const stopDrag = React.useCallback(() => {
+    document.removeEventListener("mousemove", handleDrag);
+    document.removeEventListener("mouseup", stopDrag);
+    localStorage.setItem("manualStudySheetWidth", panelWidthRef.current);
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+  }, [handleDrag]);
+
+  const startDrag = React.useCallback((e) => {
+    e.preventDefault();
+    document.addEventListener("mousemove", handleDrag);
+    document.addEventListener("mouseup", stopDrag);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+  }, [handleDrag, stopDrag]);
+
   useEffect(() => {
     if (!open) return;
     const seed = initialValue || {};
@@ -197,9 +230,17 @@ export default function ManualStudySheet({
       <DialogContent
         position="right"
         showClose={false}
-        className={cn("border-l", darkMode ? "border-slate-800 bg-[#0f172a] text-slate-50" : "border-slate-200 bg-white text-slate-900")}
+        className={cn("border-l !max-w-none sm:!max-w-none transition-none", darkMode ? "border-slate-800 bg-[#0f172a] text-slate-50" : "border-slate-200 bg-white text-slate-900")}
+        style={{ width: `${panelWidth}px` }}
       >
-        <div className="flex h-full min-h-0 flex-col">
+        <div
+          className={cn(
+            "absolute left-0 top-0 bottom-0 w-1 sm:w-2 cursor-ew-resize hover:bg-black/10 dark:hover:bg-white/10 transition-colors z-50",
+            darkMode ? "bg-transparent" : "bg-transparent"
+          )}
+          onMouseDown={startDrag}
+        />
+        <div className="flex h-full min-h-0 flex-col pl-[2px]">
           <div className={cn("border-b px-4 pb-4 pt-5 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/72" : "border-slate-200 bg-white")}>
             <div className="flex items-start justify-between gap-4">
               <DialogHeader className="space-y-2">
@@ -373,16 +414,25 @@ export default function ManualStudySheet({
 
           <div className={cn("border-t px-4 py-4 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/72" : "border-slate-200 bg-white")}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className={cn("flex items-center gap-2 text-sm", !selectedSubjectId || durationMinutes <= 0 ? "text-destructive" : "text-muted-foreground")}>
                 <PencilLine className="h-4 w-4" />
-                {durationMinutes > 0 ? `${formatMinutes(durationMinutes)} werden gespeichert.` : "Bitte eine gueltige Dauer eingeben."}
+                {!selectedSubjectId 
+                  ? "Bitte Fach waehlen." 
+                  : durationMinutes > 0 
+                    ? `${formatMinutes(durationMinutes)} werden gespeichert.` 
+                    : "Bitte gueltige Dauer eingeben."}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Button type="button" variant="outline" className="h-11 rounded-[1rem] px-4" onClick={() => onOpenChange(false)} disabled={isSaving}>
                   Abbrechen
                 </Button>
-                <Button type="button" className="h-11 rounded-[1rem] px-4" onClick={saveEntry} disabled={isSaving || !selectedSubjectId || durationMinutes <= 0}>
+                <Button 
+                  type="button" 
+                  className={cn("h-11 rounded-[1rem] px-4", (!selectedSubjectId || durationMinutes <= 0) && "opacity-50 cursor-not-allowed")} 
+                  onClick={saveEntry} 
+                  disabled={isSaving || !selectedSubjectId || durationMinutes <= 0}
+                >
                   <Check className="h-4 w-4" />
                   {submitLabel}
                 </Button>

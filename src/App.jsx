@@ -5922,7 +5922,7 @@ export default function StudyPlannerApp() {
             subjects={data.subjects || []}
             topics={data.topics || []}
             darkMode={darkMode}
-            selectedSubjectId={editingSession?.subjectId || data.subjects[0]?.id || ""}
+            selectedSubjectId={editingSession?.subjectId || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value } : prev)}
             selectedTopicId={editingSession?.topicId || ""}
             onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, topicId: value || undefined } : prev)}

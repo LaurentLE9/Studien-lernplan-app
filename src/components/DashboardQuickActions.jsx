@@ -67,7 +67,7 @@ export default function DashboardQuickActions({
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
-  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || "");
+  const [manualSubjectId, setManualSubjectId] = useState("");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
@@ -103,17 +103,16 @@ export default function DashboardQuickActions({
 
   useEffect(() => {
     if (!timerSubjectId && subjects[0]?.id) setTimerSubjectId(subjects[0].id);
-  }, [subjects, manualSubjectId, timerSubjectId]);
+  }, [subjects, timerSubjectId]);
 
   useEffect(() => {
     localStorage.setItem("study_planner_timer_state", JSON.stringify({
-      manualSubjectId,
       timerSubjectId,
       timerTaskId,
       timerMode,
       timerPreset,
     }));
-  }, [manualSubjectId, timerSubjectId, timerTaskId, timerMode, timerPreset]);
+  }, [timerSubjectId, timerTaskId, timerMode, timerPreset]);
 
   useEffect(() => {
     setCustomPomodoroMinutes(String(timerPreset));
