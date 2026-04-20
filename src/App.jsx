@@ -2802,19 +2802,22 @@ function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
     }));
   }, [semesters]);
 
+  const popupFieldClass = "border-border/90 bg-[hsl(var(--surface-soft))]";
+  const popupToggleClass = "flex items-center justify-between rounded-[1rem] border border-border/90 bg-[hsl(var(--surface-soft))] px-4 py-3";
+
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2"><Label>Fachname</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-      <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Farbe</Label><input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="h-10 w-full rounded-md border bg-transparent" /></div><div className="grid gap-2"><Label>Zielstunden</Label><Input type="number" value={form.targetHours} onChange={(e) => setForm({ ...form, targetHours: Number(e.target.value) || 0 })} /></div></div>
-      <div className="grid gap-2"><Label>Beschreibung</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Fachname</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={popupFieldClass} /></div>
+      <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Farbe</Label><input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="h-12 w-full rounded-[1rem] border border-border/90 bg-[hsl(var(--surface-soft))] p-1" /></div><div className="grid gap-2"><Label>Zielstunden</Label><Input type="number" value={form.targetHours} onChange={(e) => setForm({ ...form, targetHours: Number(e.target.value) || 0 })} className={popupFieldClass} /></div></div>
+      <div className="grid gap-2"><Label>Beschreibung</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={cn("min-h-[100px]", popupFieldClass)} /></div>
       <div className="grid gap-2"><Label>Semester</Label><Select value={form.semesterId} onValueChange={(value) => setForm({ ...form, semesterId: value })}><SelectTrigger><SelectValue placeholder="Semester wählen" /></SelectTrigger><SelectContent>{semesters.map((semester) => <SelectItem key={semester.id} value={semester.id}>{semester.name}</SelectItem>)}</SelectContent></Select></div>
-      <div className="grid gap-2"><Label>Ziel / Notiz</Label><Textarea value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Ziel / Notiz</Label><Textarea value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} className={cn("min-h-[100px]", popupFieldClass)} /></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Im Lernplan aktiv</span><Switch checked={form.includeInLearningPlan !== false} onCheckedChange={(checked) => setForm({ ...form, includeInLearningPlan: checked })} /></label>
-        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Fach pausieren</span><Switch checked={Boolean(form.paused)} onCheckedChange={(checked) => setForm({ ...form, paused: checked })} /></label>
+        <label className={popupToggleClass}><span className="text-sm">Im Lernplan aktiv</span><Switch checked={form.includeInLearningPlan !== false} onCheckedChange={(checked) => setForm({ ...form, includeInLearningPlan: checked })} /></label>
+        <label className={popupToggleClass}><span className="text-sm">Fach pausieren</span><Switch checked={Boolean(form.paused)} onCheckedChange={(checked) => setForm({ ...form, paused: checked })} /></label>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="grid gap-2"><Label>Neue Themen alle X Tage</Label><Input type="number" min={1} value={form.newTopicEveryDays || 3} onChange={(e) => setForm({ ...form, newTopicEveryDays: Math.max(1, Number(e.target.value) || 1) })} /></div>
+        <div className="grid gap-2"><Label>Neue Themen alle X Tage</Label><Input type="number" min={1} value={form.newTopicEveryDays || 3} onChange={(e) => setForm({ ...form, newTopicEveryDays: Math.max(1, Number(e.target.value) || 1) })} className={popupFieldClass} /></div>
         <div className="grid gap-2"><Label>Nächstes neues Thema fällig</Label><Input type="date" value={form.nextNewTopicDueAt ? formatDateInput(form.nextNewTopicDueAt) : ""} onChange={(e) => setForm({ ...form, nextNewTopicDueAt: e.target.value ? new Date(`${e.target.value}T08:00:00`).toISOString() : null })} /></div>
         <div className="grid gap-2"><Label>Priorität (optional)</Label><Input type="number" min={1} value={form.priority ?? ""} onChange={(e) => setForm({ ...form, priority: e.target.value ? Number(e.target.value) : null })} placeholder="z. B. 1" /></div>
       </div>
@@ -2900,21 +2903,21 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
-      <div className="grid gap-2"><Label>Beschreibung / Notizen</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={cn(popupFieldClass, errors.title ? "border-red-500 focus-visible:ring-red-500" : "")} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
+      <div className="grid gap-2"><Label>Beschreibung / Notizen</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={cn("min-h-[100px]", popupFieldClass)} /></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} /></div>
-        <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-        <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} /></div>
+        <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} className={popupFieldClass} /></div>
+        <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} className={popupFieldClass} /></div>
+        <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} className={popupFieldClass} /></div>
         <div className="grid gap-2"><Label>Status</Label><Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent></Select></div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Heute lernen</span><Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm({ ...form, flaggedToday: checked })} /></label>
-        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Dringend markieren</span><Switch checked={form.urgent} onCheckedChange={(checked) => setForm({ ...form, urgent: checked })} /></label>
+        <label className={popupToggleClass}><span className="text-sm">Heute lernen</span><Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm({ ...form, flaggedToday: checked })} /></label>
+        <label className={popupToggleClass}><span className="text-sm">Dringend markieren</span><Switch checked={form.urgent} onCheckedChange={(checked) => setForm({ ...form, urgent: checked })} /></label>
         <div className="grid gap-2"><Label>Wiederholen</Label><Select value={form.recurringPattern} onValueChange={(value) => setForm({ ...form, recurringPattern: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Nicht wiederholen</SelectItem><SelectItem value="weekly">Wöchentlich</SelectItem><SelectItem value="monthly">Monatlich</SelectItem></SelectContent></Select></div>
       </div>
       <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
@@ -2972,6 +2975,9 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
     onSave({ ...initialValue, ...form });
     onDone?.();
   }
+
+  const popupFieldClass = "border-border/90 bg-[hsl(var(--surface-soft))]";
+  const popupToggleClass = "flex items-center justify-between rounded-[1rem] border border-border/90 bg-[hsl(var(--surface-soft))] px-4 py-3";
 
   const toggleFieldClass = "flex items-center justify-between gap-4 rounded-[1rem] border border-border bg-[hsl(var(--surface-soft))] px-4 py-3";
 
@@ -3036,7 +3042,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
             <div className="grid gap-2">
               <Label>Fach</Label>
               <Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}>
-                <SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}>
+<SelectTrigger className={cn(popupFieldClass, errors.subjectId ? "border-red-500 focus:ring-red-500" : "")}>
                   <SelectValue placeholder="Fach auswaehlen" />
                 </SelectTrigger>
                 <SelectContent>
@@ -5106,7 +5112,7 @@ export default function StudyPlannerApp() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent mobileSheet className="max-w-[52rem] rounded-[1.6rem]">
+                <DialogContent mobileSheet className={cn("rounded-[1.6rem] sm:max-w-[52rem]", darkMode ? "border-slate-700 bg-[#101826] shadow-[0_24px_80px_-40px_rgba(2,6,23,0.95)]" : "border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.28)]")}>
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
                   <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
@@ -5331,7 +5337,7 @@ export default function StudyPlannerApp() {
                   <DialogTrigger asChild>
                     <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-xl rounded-3xl">
+                  <DialogContent mobileSheet className={cn("rounded-[1.6rem] sm:max-w-[45rem]", darkMode ? "border-slate-700 bg-[#101826] shadow-[0_24px_80px_-40px_rgba(2,6,23,0.95)]" : "border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.28)]")}>
                     <DialogHeader><DialogTitle>Fach anlegen</DialogTitle></DialogHeader>
                     <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} semesters={semesters} />
                   </DialogContent>
@@ -5857,8 +5863,8 @@ export default function StudyPlannerApp() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-w-[52rem] rounded-[1.6rem]"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className={cn("rounded-[1.6rem] sm:max-w-[45rem]", darkMode ? "border-slate-700 bg-[#101826] shadow-[0_24px_80px_-40px_rgba(2,6,23,0.95)]" : "border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.28)]")}><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className={cn("rounded-[1.6rem] sm:max-w-[52rem]", darkMode ? "border-slate-700 bg-[#101826] shadow-[0_24px_80px_-40px_rgba(2,6,23,0.95)]" : "border-slate-200 bg-white shadow-[0_24px_80px_-40px_rgba(15,23,42,0.28)]")}><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
