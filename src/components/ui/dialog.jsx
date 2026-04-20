@@ -11,7 +11,7 @@ const DialogClose = DialogPrimitive.Close;
 const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-slate-950/78 supports-[backdrop-filter]:backdrop-blur-[1px]", className)}
+    className={cn("fixed inset-0 z-[80] bg-slate-950/78 supports-[backdrop-filter]:backdrop-blur-[1px]", className)}
     {...props}
   />
 ));
@@ -30,7 +30,7 @@ const DialogContent = React.forwardRef(({
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 grid w-full gap-4 border border-border/85 bg-[hsl(var(--surface-strong))] text-foreground shadow-[var(--shadow-medium)]",
+        "fixed z-[80] grid w-full gap-4 border border-border/85 bg-[hsl(var(--surface-strong))] text-foreground shadow-[var(--shadow-medium)]",
         position === "right"
           ? "right-0 top-0 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 overflow-hidden border-l p-0 max-w-none w-full sm:max-w-[480px]"
           : position === "left"
