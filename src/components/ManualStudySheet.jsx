@@ -230,14 +230,25 @@ export default function ManualStudySheet({
               <div className="grid gap-3 sm:grid-cols-[1.2fr_.8fr]">
                 <div className="app-field-panel p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="relative flex-1">
                       <div className="flex items-center gap-2 text-sm font-semibold">
                         <CalendarDays className="h-4 w-4" />
                         Datum
                       </div>
                       <p className="mt-2 text-lg font-semibold">{dateLabel}</p>
+                      <input
+                        type="date"
+                        value={entryDate}
+                        onChange={(e) => setEntryDate(e.target.value)}
+                        onClick={(e) => {
+                          if (typeof e.currentTarget.showPicker === "function") {
+                            try { e.currentTarget.showPicker(); } catch {}
+                          }
+                        }}
+                        className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                      />
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 relative z-10">
                       <Button type="button" variant="outline" size="icon" className="rounded-full" onClick={() => shiftDate(-1)}>
                         <ChevronLeft className="h-4 w-4" />
                       </Button>

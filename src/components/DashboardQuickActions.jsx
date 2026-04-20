@@ -67,7 +67,7 @@ export default function DashboardQuickActions({
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
-  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
+  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || "");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
@@ -102,7 +102,6 @@ export default function DashboardQuickActions({
   const tasksForTimerSubject = (tasks || []).filter((task) => task.subjectId === timerSubjectId);
 
   useEffect(() => {
-    if (!manualSubjectId && subjects[0]?.id) setManualSubjectId(subjects[0].id);
     if (!timerSubjectId && subjects[0]?.id) setTimerSubjectId(subjects[0].id);
   }, [subjects, manualSubjectId, timerSubjectId]);
 
@@ -219,7 +218,7 @@ export default function DashboardQuickActions({
   }
 
   function openManualWithSeed(subjectId, seed = null) {
-    setManualSubjectId(subjectId || subjects[0]?.id || "");
+    setManualSubjectId(subjectId || "");
     setManualTopicId(seed?.taskId || "");
     setManualSeed(seed);
     setManualDialogOpen(true);

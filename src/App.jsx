@@ -1115,8 +1115,21 @@ function ManualStudyDialog({
             <div className={cn("rounded-[1.1rem] p-3.5", fieldClass)}>
               <div className={cn("mb-2 text-sm font-semibold", darkMode ? "text-white" : "text-slate-700")}>Datum *</div>
               <div className="flex items-center justify-between gap-3">
-                <div className="text-lg font-medium">{dateLabel}</div>
-                <div className="flex gap-1">
+                <div className="relative flex-1">
+                  <div className="text-lg font-medium">{dateLabel}</div>
+                  <input
+                    type="date"
+                    value={entryDate}
+                    onChange={(e) => setEntryDate(e.target.value)}
+                    onClick={(e) => {
+                      if (typeof e.currentTarget.showPicker === "function") {
+                        try { e.currentTarget.showPicker(); } catch {}
+                      }
+                    }}
+                    className="absolute inset-0 h-full w-full opacity-0 cursor-pointer"
+                  />
+                </div>
+                <div className="flex gap-1 relative z-10">
                   <Button type="button" size="icon" variant="ghost" onClick={() => shiftDate(-1)} className="h-9 w-9 rounded-full"><ChevronLeft className="h-5 w-5" /></Button>
                   <Button type="button" size="icon" variant="ghost" onClick={() => shiftDate(1)} className="h-9 w-9 rounded-full"><ChevronRight className="h-5 w-5" /></Button>
                 </div>
@@ -1183,7 +1196,7 @@ function ManualStudyDialog({
 
             <div className="grid gap-3 md:grid-cols-2">
               <Button type="button" variant="secondary" onClick={() => onOpenChange(false)} className="h-11 rounded-full bg-slate-600 text-base font-semibold text-white hover:bg-slate-500" disabled={isSaving}>Abbrechen</Button>
-              <Button type="button" onClick={saveEntry} className="h-11 rounded-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500" disabled={isSaving}><Check className="mr-2 h-5 w-5" />{submitLabel}</Button>
+              <Button type="button" onClick={saveEntry} className="h-11 rounded-full bg-emerald-600 text-base font-semibold text-white hover:bg-emerald-500" disabled={isSaving || !selectedSubjectId || durationMinutes <= 0}><Check className="mr-2 h-5 w-5" />{submitLabel}</Button>
             </div>
           </div>
         </div>
@@ -1207,7 +1220,7 @@ function LegacyDashboardQuickActions({ subjects, tasks, topics, onSaveSession, d
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
-  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
+  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || "");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
@@ -1810,7 +1823,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
   const [timerOpen, setTimerOpen] = useState(false);
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
-  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || subjects[0]?.id || "");
+  const [manualSubjectId, setManualSubjectId] = useState(storedTimer.manualSubjectId || "");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
@@ -2917,7 +2930,7 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
@@ -5147,8 +5160,8 @@ export default function StudyPlannerApp() {
                 <DialogContent
                   mobileSheet={isMobileViewport}
                   className={cn(
-                    "rounded-[1.6rem] sm:max-w-[72rem] sm:p-6",
-                    isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] sm:overflow-hidden"
+                    "rounded-[1.6rem] sm:max-w-2xl sm:p-6",
+                    isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] overflow-y-auto"
                   )}
                 >
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
@@ -5902,7 +5915,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet={isMobileViewport} className={cn("rounded-[1.6rem] sm:max-w-[72rem] sm:p-6", isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] sm:overflow-hidden") }><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet={isMobileViewport} className={cn("rounded-[1.6rem] sm:max-w-2xl sm:p-6", isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] overflow-y-auto") }><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
