@@ -3289,10 +3289,19 @@ export default function StudyPlannerApp() {
   const [archivedSubjects, setArchivedSubjects] = useState([]);
   const [isSemesterCountdownOpen, setIsSemesterCountdownOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const handleChange = (event) => setIsMobileViewport(event.matches);
+    setIsMobileViewport(media.matches);
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, []);
   const [lastDeletedSession, setLastDeletedSession] = useState(null);
   const [newTopicDraftBySubject, setNewTopicDraftBySubject] = useState({});
   const [expandedLearningSubjectIds, setExpandedLearningSubjectIds] = useState({});
@@ -5135,7 +5144,13 @@ export default function StudyPlannerApp() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent mobileSheet className="rounded-[1.6rem] sm:max-w-[56rem] sm:p-6">
+                <DialogContent
+                  mobileSheet={isMobileViewport}
+                  className={cn(
+                    "rounded-[1.6rem] sm:max-w-[72rem] sm:p-6",
+                    isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] sm:overflow-hidden"
+                  )}
+                >
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
                   <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
@@ -5887,7 +5902,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="rounded-[1.6rem] sm:max-w-[56rem] sm:p-6"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet={isMobileViewport} className={cn("rounded-[1.6rem] sm:max-w-[72rem] sm:p-6", isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] sm:overflow-hidden") }><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
