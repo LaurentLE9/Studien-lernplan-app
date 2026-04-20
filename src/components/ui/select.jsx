@@ -27,7 +27,7 @@ const SelectContent = React.forwardRef(({ className, children, position = "poppe
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
-      className={cn("relative z-50 min-w-[12rem] overflow-hidden rounded-[1.1rem] border border-border/85 bg-[hsl(var(--surface-strong))] shadow-[var(--shadow-medium)]", className)}
+      className={cn("relative z-[95] min-w-[12rem] overflow-hidden rounded-[1.1rem] border border-border/85 bg-[hsl(var(--surface-strong))] shadow-[var(--shadow-medium)]", className)}
       position={position}
       {...props}
     >

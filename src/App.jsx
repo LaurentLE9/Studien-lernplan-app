@@ -3109,21 +3109,21 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
           </div>
 
           <div className="grid gap-3 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-5">
-            <label className={toggleFieldClass}>
+            <div className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Heute lernen</span>
                 <span className="text-xs text-muted-foreground">Im Tagesfokus anzeigen.</span>
               </div>
-              <Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, flaggedToday: checked }))} />
-            </label>
+              <Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, flaggedToday: checked }))} className="pointer-events-auto" />
+            </div>
 
-            <label className={toggleFieldClass}>
+            <div className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Dringend markieren</span>
                 <span className="text-xs text-muted-foreground">In Listen auffaelliger hervorheben.</span>
               </div>
-              <Switch checked={form.urgent} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, urgent: checked }))} />
-            </label>
+              <Switch checked={form.urgent} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, urgent: checked }))} className="pointer-events-auto" />
+            </div>
           </div>
         </div>
       </div>
@@ -5124,7 +5124,7 @@ export default function StudyPlannerApp() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
                 </DialogTrigger>
-                <DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-h-[88dvh] sm:max-w-[68rem] sm:overflow-y-auto sm:p-7">
+                <DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-w-[68rem] sm:p-7">
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
                   <TaskDialogForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
@@ -5876,7 +5876,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-h-[88dvh] sm:max-w-[68rem] sm:overflow-y-auto sm:p-7"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskDialogForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-h-[94dvh] rounded-[1.6rem] sm:max-w-[68rem] sm:p-7"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskDialogForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
