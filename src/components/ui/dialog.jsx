@@ -36,8 +36,8 @@ const DialogContent = React.forwardRef(({
           : position === "left"
             ? "left-0 top-0 h-[100dvh] max-h-[100dvh] translate-x-0 translate-y-0 overflow-hidden border-r p-0 max-w-none w-full sm:max-w-[360px]"
             : mobileSheet
-              ? "bottom-0 left-0 right-0 top-auto max-h-[92dvh] translate-x-0 translate-y-0 overflow-y-auto overscroll-contain rounded-t-[1.6rem] border-b-0 border-x-0 p-5 sm:left-[50%] sm:right-auto sm:top-[50%] sm:max-h-[calc(100dvh-4rem)] sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[1.6rem] sm:border sm:p-6"
-              : "left-[50%] top-[50%] max-h-[calc(100dvh-4rem)] w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[1.6rem] p-5 sm:w-full sm:p-6",
+              ? "bottom-0 left-0 right-0 top-auto max-h-[92dvh] translate-x-0 translate-y-0 overflow-y-auto overscroll-contain rounded-t-[1.6rem] border-b-0 border-x-0 p-5 sm:left-[50%] sm:right-auto sm:top-[50%] sm:max-h-none sm:w-full sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:overflow-visible sm:overscroll-auto sm:rounded-[1.6rem] sm:border sm:p-6"
+              : "left-[50%] top-[50%] max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain rounded-[1.6rem] p-5 sm:max-h-none sm:w-full sm:overflow-visible sm:overscroll-auto sm:p-6",
         position !== "center" ? "" : mobileSheet ? "" : "rounded-[1.6rem]",
         className
       )}
