@@ -119,8 +119,8 @@ body {
   }
 
   .app-field-panel {
-    background: hsl(var(--surface-soft) / 0.85);
-    border: 1px solid hsl(var(--border) / 0.56);
+    background: hsl(var(--surface-soft));
+    border: 1px solid hsl(var(--border) / 0.72);
     border-radius: 1.2rem;
   }
 

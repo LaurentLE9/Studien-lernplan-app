@@ -2922,6 +2922,220 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
   );
 }
 
+function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
+  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
+  const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
+  const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
+    initialValue?.title && initialSubject?.name && initialValue.title === initialSubject.name ? initialSubject.name : ""
+  );
+  const [errors, setErrors] = useState({ title: "", subjectId: "" });
+
+  function validateTaskForm(currentForm) {
+    const nextErrors = { title: "", subjectId: "" };
+    if (!currentForm.title.trim()) {
+      nextErrors.title = "Bitte gib einen Titel ein.";
+    }
+    if (!currentForm.subjectId) {
+      nextErrors.subjectId = "Bitte waehle ein Fach aus.";
+    }
+    setErrors(nextErrors);
+    return !nextErrors.title && !nextErrors.subjectId;
+  }
+
+  function shouldAutofillTitleFromSubject(currentTitle) {
+    const trimmedTitle = currentTitle.trim();
+    if (!trimmedTitle) return true;
+    return Boolean(lastAutofilledTitle) && trimmedTitle === lastAutofilledTitle;
+  }
+
+  function handleSubjectChange(subjectId) {
+    const selectedSubject = subjects.find((subject) => subject.id === subjectId) || null;
+    const shouldAutofill = selectedSubject && shouldAutofillTitleFromSubject(form.title);
+    setForm((prev) => ({
+      ...prev,
+      subjectId,
+      title: shouldAutofill ? selectedSubject.name : prev.title,
+    }));
+    if (shouldAutofill) {
+      setLastAutofilledTitle(selectedSubject.name);
+    }
+    setErrors((prev) => ({ ...prev, subjectId: "" }));
+  }
+
+  function handleTitleChange(value) {
+    setForm((prev) => ({ ...prev, title: value }));
+    setErrors((prev) => ({ ...prev, title: "" }));
+  }
+
+  function handleSaveClick() {
+    if (!validateTaskForm(form)) return;
+    onSave({ ...initialValue, ...form });
+    onDone?.();
+  }
+
+  const toggleCardClass = "flex items-center justify-between gap-4 rounded-[1rem] border border-border bg-[hsl(var(--surface-strong))] px-4 py-3";
+
+  return (
+    <div className="grid gap-5">
+      <div className="grid gap-4">
+        <section className="app-field-panel grid gap-4 p-4 sm:p-5">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">Grunddaten</h3>
+            <p className="text-xs text-muted-foreground">Titel und Beschreibung der Aufgabe.</p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="task-title">Titel</Label>
+            <Input
+              id="task-title"
+              value={form.title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}
+            />
+            {errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="task-description">Beschreibung / Notizen</Label>
+            <Textarea
+              id="task-description"
+              value={form.description}
+              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              className="min-h-[128px] resize-y"
+            />
+          </div>
+        </section>
+
+        <section className="app-field-panel grid gap-4 p-4 sm:p-5">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">Planung</h3>
+            <p className="text-xs text-muted-foreground">Fach, Prioritaet und aktueller Bearbeitungsstand.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)_minmax(0,0.85fr)]">
+            <div className="grid gap-2">
+              <Label>Fach</Label>
+              <Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}>
+                <SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}>
+                  <SelectValue placeholder="Fach auswaehlen" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Prioritaet</Label>
+              <Select value={form.priority} onValueChange={(value) => setForm((prev) => ({ ...prev, priority: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="niedrig">Niedrig</SelectItem>
+                  <SelectItem value="mittel">Mittel</SelectItem>
+                  <SelectItem value="hoch">Hoch</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2 md:col-span-2 xl:col-span-1">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="offen">Offen</SelectItem>
+                  <SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem>
+                  <SelectItem value="erledigt">Erledigt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
+
+        <section className="app-field-panel grid gap-4 p-4 sm:p-5">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">Termine</h3>
+            <p className="text-xs text-muted-foreground">Erstellungs-, Abgabe- und Abnahmedatum.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="task-created-at">Erstellungsdatum</Label>
+              <Input
+                id="task-created-at"
+                type="date"
+                value={form.createdAt}
+                onChange={(e) => setForm((prev) => ({ ...prev, createdAt: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="task-due-date">Abgabe</Label>
+              <Input
+                id="task-due-date"
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2 md:col-span-2 xl:col-span-1">
+              <Label htmlFor="task-acceptance-date">Abnahme</Label>
+              <Input
+                id="task-acceptance-date"
+                type="date"
+                value={form.acceptanceDate}
+                onChange={(e) => setForm((prev) => ({ ...prev, acceptanceDate: e.target.value }))}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="app-field-panel grid gap-4 p-4 sm:p-5">
+          <div className="grid gap-1">
+            <h3 className="text-sm font-semibold">Optionen</h3>
+            <p className="text-xs text-muted-foreground">Zusaetzliche Markierungen und Wiederholungen.</p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <label className={toggleCardClass}>
+              <div className="grid gap-1">
+                <span className="text-sm font-medium">Heute lernen</span>
+                <span className="text-xs text-muted-foreground">Die Aufgabe erscheint im Tagesfokus.</span>
+              </div>
+              <Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, flaggedToday: checked }))} />
+            </label>
+
+            <label className={toggleCardClass}>
+              <div className="grid gap-1">
+                <span className="text-sm font-medium">Dringend markieren</span>
+                <span className="text-xs text-muted-foreground">Hebt die Aufgabe in Listen deutlicher hervor.</span>
+              </div>
+              <Switch checked={form.urgent} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, urgent: checked }))} />
+            </label>
+
+            <div className="grid gap-2">
+              <Label>Wiederholen</Label>
+              <Select value={form.recurringPattern} onValueChange={(value) => setForm((prev) => ({ ...prev, recurringPattern: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nicht wiederholen</SelectItem>
+                  <SelectItem value="weekly">Woechentlich</SelectItem>
+                  <SelectItem value="monthly">Monatlich</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="flex flex-col-reverse gap-3 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
+        {onDone ? <Button variant="outline" onClick={onDone} className="w-full sm:w-auto">Abbrechen</Button> : null}
+        <Button onClick={handleSaveClick} className="w-full sm:w-auto">Speichern</Button>
+      </div>
+    </div>
+  );
+}
+
 function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
   const checkboxBase = darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100";
   return (
@@ -4912,7 +5126,7 @@ export default function StudyPlannerApp() {
                 </DialogTrigger>
                 <DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]">
                   <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
-                  <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                  <TaskDialogForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
                 </DialogContent>
               </Dialog>
 
@@ -5662,7 +5876,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskDialogForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
