@@ -2973,69 +2973,66 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
     onDone?.();
   }
 
-  const toggleCardClass = "flex items-center justify-between gap-4 rounded-[1rem] border border-border bg-[hsl(var(--surface-strong))] px-4 py-3";
+  const toggleFieldClass = "flex items-center justify-between gap-4 rounded-[1rem] border border-border bg-[hsl(var(--surface-soft))] px-4 py-3";
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(21rem,0.9fr)] lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-start">
         <div className="grid gap-4">
-          <section className="app-field-panel grid gap-4 p-4">
-            <div className="grid gap-2">
-              <Label htmlFor="task-title">Titel</Label>
-              <Input
-                id="task-title"
-                value={form.title}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}
-              />
-              {errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="task-description">Beschreibung / Notizen</Label>
-              <Textarea
-                id="task-description"
-                value={form.description}
-                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                className="min-h-[112px] resize-none lg:min-h-[148px]"
-              />
-            </div>
-          </section>
+          <div className="grid gap-2">
+            <Label htmlFor="task-title">Titel</Label>
+            <Input
+              id="task-title"
+              value={form.title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""}
+            />
+            {errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}
+          </div>
 
-          <section className="app-field-panel grid gap-4 p-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="grid gap-2">
-                <Label htmlFor="task-created-at">Erstellungsdatum</Label>
-                <Input
-                  id="task-created-at"
-                  type="date"
-                  value={form.createdAt}
-                  onChange={(e) => setForm((prev) => ({ ...prev, createdAt: e.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="task-due-date">Abgabe</Label>
-                <Input
-                  id="task-due-date"
-                  type="date"
-                  value={form.dueDate}
-                  onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                />
-              </div>
-              <div className="grid gap-2 sm:col-span-2 xl:col-span-1">
-                <Label htmlFor="task-acceptance-date">Abnahme</Label>
-                <Input
-                  id="task-acceptance-date"
-                  type="date"
-                  value={form.acceptanceDate}
-                  onChange={(e) => setForm((prev) => ({ ...prev, acceptanceDate: e.target.value }))}
-                />
-              </div>
+          <div className="grid gap-2">
+            <Label htmlFor="task-description">Beschreibung / Notizen</Label>
+            <Textarea
+              id="task-description"
+              value={form.description}
+              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              className="min-h-[124px] resize-none xl:min-h-[168px]"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2">
+              <Label htmlFor="task-created-at">Erstellungsdatum</Label>
+              <Input
+                id="task-created-at"
+                type="date"
+                value={form.createdAt}
+                onChange={(e) => setForm((prev) => ({ ...prev, createdAt: e.target.value }))}
+              />
             </div>
-          </section>
+            <div className="grid gap-2">
+              <Label htmlFor="task-due-date">Abgabe</Label>
+              <Input
+                id="task-due-date"
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+              />
+            </div>
+            <div className="grid gap-2 sm:col-span-2 xl:col-span-1">
+              <Label htmlFor="task-acceptance-date">Abnahme</Label>
+              <Input
+                id="task-acceptance-date"
+                type="date"
+                value={form.acceptanceDate}
+                onChange={(e) => setForm((prev) => ({ ...prev, acceptanceDate: e.target.value }))}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-4">
-          <section className="app-field-panel grid gap-3 p-4">
+          <div className="grid gap-4 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-4">
             <div className="grid gap-2">
               <Label>Fach</Label>
               <Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}>
@@ -3072,10 +3069,10 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                   <SelectContent>
                     <SelectItem value="offen">Offen</SelectItem>
                     <SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem>
-                    <SelectItem value="erledigt">Erledigt</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+                  <SelectItem value="erledigt">Erledigt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             </div>
 
             <div className="grid gap-2">
@@ -3091,10 +3088,10 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                 </SelectContent>
               </Select>
             </div>
-          </section>
+          </div>
 
-          <section className="app-field-panel grid gap-3 p-4">
-            <label className={toggleCardClass}>
+          <div className="grid gap-3 rounded-[1.35rem] border border-border/80 bg-[hsl(var(--surface-soft))] p-4">
+            <label className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Heute lernen</span>
                 <span className="text-xs text-muted-foreground">Im Tagesfokus anzeigen.</span>
@@ -3102,14 +3099,14 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
               <Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, flaggedToday: checked }))} />
             </label>
 
-            <label className={toggleCardClass}>
+            <label className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Dringend markieren</span>
                 <span className="text-xs text-muted-foreground">In Listen auffaelliger hervorheben.</span>
               </div>
               <Switch checked={form.urgent} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, urgent: checked }))} />
             </label>
-          </section>
+          </div>
         </div>
       </div>
 
