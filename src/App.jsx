@@ -2794,9 +2794,9 @@ function SettingsBackupPage({
 }
 
 function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
-  const [form, setForm] = useState(initialValue || {
+  const [form, setForm] = useState(() => initialValue || {
     name: "",
-    color: "#3b82f6",
+    color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
     description: "",
     semesterId: semesters[0]?.id || "",
     goal: "",
