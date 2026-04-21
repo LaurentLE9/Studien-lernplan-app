@@ -38,6 +38,7 @@ import AuthScreen from "@/components/AuthScreen";
 import DashboardQuickActionsPanel from "@/components/DashboardQuickActions";
 import ExamsPage from "@/components/ExamsPage";
 import ManualStudySheet from "@/components/ManualStudySheet";
+import EditSubjectSheet from "@/components/EditSubjectSheet";
 import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -5934,7 +5935,21 @@ export default function StudyPlannerApp() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={!!editingSubject} onOpenChange={(open) => !open && setEditingSubject(null)}><DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]"><DialogHeader><DialogTitle>Fach bearbeiten</DialogTitle></DialogHeader>{editingSubject ? <SubjectForm initialValue={editingSubject} onSave={saveSubject} onDone={() => setEditingSubject(null)} semesters={semesters} /> : null}</DialogContent></Dialog>
+          <EditSubjectSheet
+            open={!!editingSubject}
+            onOpenChange={(open) => !open && setEditingSubject(null)}
+            darkMode={darkMode}
+            subject={editingSubject}
+          >
+            {editingSubject ? (
+              <SubjectForm 
+                initialValue={editingSubject} 
+                onSave={saveSubject} 
+                onDone={() => setEditingSubject(null)} 
+                semesters={semesters} 
+              />
+            ) : null}
+          </EditSubjectSheet>
           <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet={isMobileViewport} className={cn("rounded-[1.6rem] sm:max-w-2xl sm:p-6", isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] overflow-y-auto") }><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
           <ManualStudySheet
             open={!!editingSession}
