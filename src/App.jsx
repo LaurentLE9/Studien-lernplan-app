@@ -38,7 +38,7 @@ import AuthScreen from "@/components/AuthScreen";
 import DashboardQuickActionsPanel from "@/components/DashboardQuickActions";
 import ExamsPage from "@/components/ExamsPage";
 import ManualStudySheet from "@/components/ManualStudySheet";
-import EditSubjectSheet from "@/components/EditSubjectSheet";
+import ResizablePanel from "@/components/ResizablePanel";
 import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -5173,21 +5173,19 @@ export default function StudyPlannerApp() {
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
               <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
 
-              <Dialog open={taskDialogOpen} onOpenChange={setTaskDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")}><Plus className="h-4 w-4" />Aufgabe</Button>
-                </DialogTrigger>
-                <DialogContent
-                  mobileSheet={isMobileViewport}
-                  className={cn(
-                    "rounded-[1.6rem] sm:max-w-2xl sm:p-6",
-                    isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] overflow-y-auto"
-                  )}
-                >
-                  <DialogHeader><DialogTitle>Aufgabe anlegen</DialogTitle></DialogHeader>
-                  <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
-                </DialogContent>
-              </Dialog>
+              <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
+                <Plus className="h-4 w-4" />Aufgabe
+              </Button>
+              <ResizablePanel
+                open={taskDialogOpen}
+                onOpenChange={setTaskDialogOpen}
+                darkMode={darkMode}
+                title="Aufgabe anlegen"
+                description="Erstelle eine neue Aufgabe, weise sie einem Fach zu und setze ein Fälligkeitsdatum."
+                badgeText="Neu erfassen"
+              >
+                <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+              </ResizablePanel>
 
               
             </div>
@@ -5404,17 +5402,20 @@ export default function StudyPlannerApp() {
             <div className="grid gap-6">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-2xl font-bold tracking-tight">Fächer</h2>
-                <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="rounded-xl"><Plus className="mr-2 h-4 w-4" />Fach anlegen</Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-xl rounded-3xl">
-                    <DialogHeader><DialogTitle>Fach anlegen</DialogTitle></DialogHeader>
+                  <Button variant="outline" className="rounded-xl" onClick={() => setSubjectDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />Fach anlegen
+                  </Button>
+                  <ResizablePanel 
+                    open={subjectDialogOpen} 
+                    onOpenChange={setSubjectDialogOpen}
+                    darkMode={darkMode}
+                    title="Fach anlegen"
+                    description="Erstelle ein neues Fach für dein Lernsystem."
+                    badgeText="Neu erfassen"
+                  >
                     <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} semesters={semesters} />
-                  </DialogContent>
-                </Dialog>
+                  </ResizablePanel>
               </div>
-
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                 <CardHeader className="sticky top-0 z-10 border-b backdrop-blur supports-[backdrop-filter]:bg-inherit">
                   <div className="flex items-center justify-between gap-3">
@@ -5928,18 +5929,24 @@ export default function StudyPlannerApp() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={semesterDialogOpen} onOpenChange={(open) => { setSemesterDialogOpen(open); if (!open) setEditingSemester(null); }}>
-            <DialogContent mobileSheet className="max-w-xl rounded-[1.6rem]">
-              <DialogHeader><DialogTitle>{editingSemester ? "Semester bearbeiten" : "Semester anlegen"}</DialogTitle></DialogHeader>
-              <SemesterForm initialValue={editingSemester} onSave={saveSemesterRecord} onDone={() => { setSemesterDialogOpen(false); setEditingSemester(null); }} />
-            </DialogContent>
-          </Dialog>
+          <ResizablePanel 
+            open={semesterDialogOpen} 
+            onOpenChange={(open) => { setSemesterDialogOpen(open); if (!open) setEditingSemester(null); }}
+            darkMode={darkMode}
+            title={editingSemester ? "Semester bearbeiten" : "Semester anlegen"}
+            description={editingSemester ? "Passe den Namen und die Laufzeit dieses Semesters an." : "Erstelle einen neuen Zeitabschnitt für dein Studium."}
+            badgeText={editingSemester ? "Bearbeiten" : "Neu erfassen"}
+          >
+            <SemesterForm initialValue={editingSemester} onSave={saveSemesterRecord} onDone={() => { setSemesterDialogOpen(false); setEditingSemester(null); }} />
+          </ResizablePanel>
 
-          <EditSubjectSheet
+          <ResizablePanel
             open={!!editingSubject}
             onOpenChange={(open) => !open && setEditingSubject(null)}
             darkMode={darkMode}
-            subject={editingSubject}
+            title="Fach bearbeiten"
+            description="Bearbeite das ausgewählte Fach und die zugehörigen Einstellungen."
+            badgeText="Bearbeiten"
           >
             {editingSubject ? (
               <SubjectForm 
@@ -5949,8 +5956,19 @@ export default function StudyPlannerApp() {
                 semesters={semesters} 
               />
             ) : null}
-          </EditSubjectSheet>
-          <Dialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)}><DialogContent mobileSheet={isMobileViewport} className={cn("rounded-[1.6rem] sm:max-w-2xl sm:p-6", isMobileViewport ? "" : "sm:max-h-[calc(100dvh-2rem)] overflow-y-auto") }><DialogHeader><DialogTitle>Aufgabe bearbeiten</DialogTitle></DialogHeader>{editingTask ? <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} /> : null}</DialogContent></Dialog>
+          </ResizablePanel>
+          <ResizablePanel 
+            open={!!editingTask} 
+            onOpenChange={(open) => !open && setEditingTask(null)}
+            darkMode={darkMode}
+            title="Aufgabe bearbeiten"
+            description="Passe die Eigenschaften dieser Aufgabe an."
+            badgeText="Bearbeiten"
+          >
+            {editingTask ? (
+              <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+            ) : null}
+          </ResizablePanel>
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}

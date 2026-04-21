@@ -65,6 +65,57 @@ export default function DashboardQuickActions({
   const [manualDialogOpen, setManualDialogOpen] = useState(false);
   const [manualSeed, setManualSeed] = useState(null);
   const [timerOpen, setTimerOpen] = useState(false);
+
+  const [timerPanelWidth, setTimerPanelWidth] = useState(() => {
+    if (typeof window === "undefined") return 550;
+    const saved = localStorage.getItem("timerPanelWidth");
+    return saved ? parseInt(saved, 10) : 550;
+  });
+  const [isTimerResizing, setIsTimerResizing] = useState(false);
+
+  const startTimerDrag = (e) => {
+    e.preventDefault();
+    setIsTimerResizing(true);
+  };
+
+  const handleTimerDrag = React.useCallback(
+    (e) => {
+      if (!isTimerResizing) return;
+      const newWidth = Math.max(300, Math.min(window.innerWidth - e.clientX, window.innerWidth - 64));
+      setTimerPanelWidth(newWidth);
+    },
+    [isTimerResizing]
+  );
+
+  const stopTimerDrag = React.useCallback(() => {
+    if (isTimerResizing) {
+      setIsTimerResizing(false);
+      localStorage.setItem("timerPanelWidth", timerPanelWidth.toString());
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    }
+  }, [isTimerResizing, timerPanelWidth]);
+
+  useEffect(() => {
+    if (isTimerResizing) {
+      document.addEventListener("mousemove", handleTimerDrag);
+      document.addEventListener("mouseup", stopTimerDrag);
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "ew-resize";
+    } else {
+      document.removeEventListener("mousemove", handleTimerDrag);
+      document.removeEventListener("mouseup", stopTimerDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    }
+    return () => {
+      document.removeEventListener("mousemove", handleTimerDrag);
+      document.removeEventListener("mouseup", stopTimerDrag);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [isTimerResizing, handleTimerDrag, stopTimerDrag]);
+
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState("");
@@ -481,9 +532,16 @@ export default function DashboardQuickActions({
         <DialogContent
           position="right"
           showClose={false}
-          className={cn("border-l shadow-[var(--shadow-medium)]", sheetSurfaceClass)}
+          className={cn("border-l shadow-[var(--shadow-medium)] !max-w-none sm:!max-w-none transition-none", sheetSurfaceClass)}
+          style={{ width: `${timerPanelWidth}px` }}
         >
-          <Tabs value={timerMode} onValueChange={setTimerMode} className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div
+            className={cn(
+              "absolute bottom-0 left-0 top-0 z-50 w-1 cursor-ew-resize bg-transparent transition-colors hover:bg-black/10 sm:w-2 dark:hover:bg-white/10"
+            )}
+            onMouseDown={startTimerDrag}
+          />
+          <Tabs value={timerMode} onValueChange={setTimerMode} className="flex h-full min-h-0 flex-col overflow-hidden xl:pl-[2px]">
             <div className={cn("border-b px-4 pb-4 pt-5 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/75" : "border-slate-200 bg-white")}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">

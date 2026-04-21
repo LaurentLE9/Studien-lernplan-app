@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import ResizablePanel from "@/components/ResizablePanel";
 
 function startOfDay(value) {
   const date = new Date(value);
@@ -240,23 +241,22 @@ export default function ExamsPage({
           <h2 className="text-2xl font-bold tracking-tight sm:text-[2rem]">Klausuren</h2>
           <p className="mt-1 text-sm text-muted-foreground">Pruefungen, Status und naechste Termine im Blick behalten.</p>
         </div>
-        <Dialog open={examDialogOpen} onOpenChange={(open) => { setExamDialogOpen(open); if (!open) setEditingExam(null); }}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="h-11 rounded-[1rem] px-4" onClick={() => setEditingExam(null)}>
-              <Plus className="mr-2 h-4 w-4" />Klausur anlegen
-            </Button>
-          </DialogTrigger>
-          <DialogContent mobileSheet className="max-w-2xl rounded-[1.6rem]">
-            <DialogHeader>
-              <DialogTitle>{editingExam ? "Klausur bearbeiten" : "Klausur anlegen"}</DialogTitle>
-            </DialogHeader>
+          <Button variant="outline" className="h-11 rounded-[1rem] px-4" onClick={() => { setEditingExam(null); setExamDialogOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" />Klausur anlegen
+          </Button>
+          <ResizablePanel 
+            open={examDialogOpen} 
+            onOpenChange={(open) => { setExamDialogOpen(open); if (!open) setEditingExam(null); }}
+            darkMode={darkMode}
+            title={editingExam ? "Klausur bearbeiten" : "Klausur anlegen"}
+            description={editingExam ? "Passe die Daten der ausgewählten Klausur an." : "Erfasse einen neuen Klausurtermin und weise ihn einem Fach zu."}
+            badgeText={editingExam ? "Bearbeiten" : "Neu erfassen"}
+          >
             <ExamForm subjects={examSubjects} initialValue={editingExam} onSave={saveExam} onDone={() => { setExamDialogOpen(false); setEditingExam(null); }} />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <Card className={cn("rounded-[1.4rem] border shadow-[var(--shadow-soft)]", darkMode ? "bg-slate-900/80" : "bg-white") }>
-        <CardContent className="grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
+          </ResizablePanel>
+        </div>
+      <Card className={cn("rounded-[1.4rem] border shadow-sm", darkMode ? "bg-slate-900/80 text-slate-50" : "bg-white text-slate-900")}>
+        <CardContent className="flex flex-wrap items-center gap-4 p-4 lg:p-6">
           <div className="grid gap-2">
             <Label>Fach</Label>
             <Select value={examFilter.subjectId} onValueChange={(value) => setExamFilter((prev) => ({ ...prev, subjectId: value }))}>

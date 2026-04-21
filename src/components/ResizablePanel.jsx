@@ -11,19 +11,21 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-export default function EditSubjectSheet({
+export default function ResizablePanel({
   open,
   onOpenChange,
-  title = "Fach bearbeiten",
-  description = "Bearbeite das ausgewählte Fach und die zugehörigen Einstellungen.",
+  title,
+  description,
   darkMode,
-  subject,
-  children
+  badgeText,
+  color,
+  children,
+  defaultWidth = 600,
+  storageKey = "genericPanelWidth"
 }) {
   const [panelWidth, setPanelWidth] = useState(() => {
-    // Same default size as ManualStudySheet
-    const saved = localStorage.getItem("editSubjectSheetWidth");
-    return saved ? parseInt(saved, 10) : 600;
+    const saved = localStorage.getItem(storageKey);
+    return saved ? parseInt(saved, 10) : defaultWidth;
   });
 
   const panelWidthRef = React.useRef(panelWidth);
@@ -41,10 +43,10 @@ export default function EditSubjectSheet({
   const stopDrag = React.useCallback(() => {
     document.removeEventListener("mousemove", handleDrag);
     document.removeEventListener("mouseup", stopDrag);
-    localStorage.setItem("editSubjectSheetWidth", panelWidthRef.current);
+    localStorage.setItem(storageKey, panelWidthRef.current);
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
-  }, [handleDrag]);
+  }, [handleDrag, storageKey]);
 
   const startDrag = React.useCallback((e) => {
     e.preventDefault();
@@ -77,19 +79,21 @@ export default function EditSubjectSheet({
             <div className="flex items-start justify-between gap-4">
               <DialogHeader className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={cn("rounded-full px-3 py-1.5", darkMode ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
-                    Bearbeiten
-                  </Badge>
-                  {subject && subject.color ? (
-                    <span className="inline-flex max-w-full items-center rounded-full px-3 py-1.5 text-xs font-semibold text-slate-950" style={{ backgroundColor: subject.color }}>
-                      <span className="truncate">{subject.name}</span>
-                    </span>
+                  {badgeText ? (
+                    <Badge variant="outline" className={cn("rounded-full px-3 py-1.5", darkMode ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
+                      {badgeText}
+                    </Badge>
+                  ) : null}
+                  {color ? (
+                    <span className="inline-flex max-w-full items-center rounded-full h-3 w-6" style={{ backgroundColor: color }}></span>
                   ) : null}
                 </div>
                 <DialogTitle className="text-xl sm:text-2xl">{title}</DialogTitle>
-                <DialogDescription>
-                  {description}
-                </DialogDescription>
+                {description && (
+                  <DialogDescription>
+                    {description}
+                  </DialogDescription>
+                )}
               </DialogHeader>
 
               <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => onOpenChange(false)}>
