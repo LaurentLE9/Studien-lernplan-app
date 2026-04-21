@@ -42,6 +42,15 @@ export default function LearningPlanPage({
     .filter((session) => selectedSubjectIds.has(session.subjectId))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 8);
+  const formatPlannedDate = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Ohne Termin";
+    return date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
 
   return (
     <Tabs value={activeLearningPlanTab} onValueChange={setActiveLearningPlanTab} className="w-full">
@@ -125,37 +134,6 @@ export default function LearningPlanPage({
             </CardContent>
           </Card>
 
-          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-            <CardHeader>
-              <CardTitle>Lernzeiten</CardTitle>
-              <CardDescription>Zuletzt erfasste Einheiten und Timer-Sitzungen für die ausgewählten Fächer.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid max-h-[420px] gap-3 overflow-y-auto pr-2">
-              {selectedSubjectCount === 0 ? (
-                <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
-              ) : recentStudySessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Lernzeit für die ausgewählten Fächer erfasst.</p>
-              ) : recentStudySessions.map((session) => {
-                const subject = data.subjects.find((entry) => entry.id === session.subjectId);
-                return (
-                  <div key={session.id} className="rounded-2xl border p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: subject?.color || "#94a3b8" }} />
-                          <p className="font-medium">{subject?.name || "Fach"}</p>
-                        </div>
-                        <p className="mt-1 font-semibold">{session.source === "pomodoro" ? "Timer" : session.source === "stopwatch" ? "Stoppuhr" : "Lerneinheit"}</p>
-                        <p className="text-sm text-muted-foreground">{new Date(session.createdAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}</p>
-                      </div>
-                      <Badge variant="outline">{Math.max(1, Math.round(Number(session.durationMinutes || 0)))} Min.</Badge>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
           <div className="grid gap-6 xl:grid-cols-3">
             <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
               <CardHeader>
@@ -187,6 +165,30 @@ export default function LearningPlanPage({
                     </div>
                   </div>
                 ))}
+                {selectedSubjectCount > 0 && learningPlanModel.dueSoonTopics.length > 0 ? (
+                  <>
+                    <div className="pt-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Naechste Wiederholungen</p>
+                    </div>
+                    {learningPlanModel.dueSoonTopics.map((topic) => (
+                      <div key={`upcoming-${topic.id}`} className={cn("rounded-2xl border p-4", topic.nextDueAt !== null ? deadlineCardTone(topic.nextDueAt, "offen") : "")}>
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: topic.subject?.color || "#94a3b8" }} />
+                              <p className="font-medium">{topic.subject?.name || "Fach"}</p>
+                            </div>
+                            <p className="mt-1 font-semibold">{topic.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {topic.nextDueAt !== null ? `${deadlineLabel(topic.nextDueAt, "offen")} - ${formatPlannedDate(topic.nextDueAt)}` : "Ohne Termin"}
+                            </p>
+                          </div>
+                          <Badge variant="outline">Geplant</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -253,6 +255,37 @@ export default function LearningPlanPage({
               </CardContent>
             </Card>
           </div>
+
+          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+            <CardHeader>
+              <CardTitle>Lernzeiten</CardTitle>
+              <CardDescription>Zuletzt erfasste Einheiten und Timer-Sitzungen für die ausgewählten Fächer.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid max-h-[420px] gap-3 overflow-y-auto pr-2">
+              {selectedSubjectCount === 0 ? (
+                <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
+              ) : recentStudySessions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Noch keine Lernzeit für die ausgewählten Fächer erfasst.</p>
+              ) : recentStudySessions.map((session) => {
+                const subject = data.subjects.find((entry) => entry.id === session.subjectId);
+                return (
+                  <div key={session.id} className="rounded-2xl border p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: subject?.color || "#94a3b8" }} />
+                          <p className="font-medium">{subject?.name || "Fach"}</p>
+                        </div>
+                        <p className="mt-1 font-semibold">{session.source === "pomodoro" ? "Timer" : session.source === "stopwatch" ? "Stoppuhr" : "Lerneinheit"}</p>
+                        <p className="text-sm text-muted-foreground">{new Date(session.createdAt).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}</p>
+                      </div>
+                      <Badge variant="outline">{Math.max(1, Math.round(Number(session.durationMinutes || 0)))} Min.</Badge>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
 
           <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
             <CardHeader>

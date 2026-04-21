@@ -72,8 +72,6 @@ import {
   createTopicRecord,
   updateTopicRecord,
   deleteTopicRecord,
-  markTopicAsLearnedNew,
-  markTopicAsReviewed,
   calculateNextReviewAt,
   MAX_REVIEW_GAP_DURING_SEMESTER,
   loadExams,
@@ -4141,40 +4139,79 @@ export default function StudyPlannerApp() {
     }
   }
 
-  async function markTopicAsNewLearned(topic) {
-    const subject = subjectsById[topic.subjectId];
-    if (!subject) return;
+  function buildTopicStudyProgress(topic, subject, studiedAt = new Date()) {
+    if (!topic || !subject || topic.completed) return null;
+
+    const studiedAtDate = new Date(studiedAt || Date.now());
+    if (Number.isNaN(studiedAtDate.getTime())) return null;
+
+    const currentStep = Math.max(0, Number(topic.reviewStep || 0));
+    const lastStudiedAt = topic.lastStudiedAt ? new Date(topic.lastStudiedAt) : null;
+    const isSameStudyDay = lastStudiedAt && !Number.isNaN(lastStudiedAt.getTime())
+      ? startOfDay(lastStudiedAt).getTime() === startOfDay(studiedAtDate).getTime()
+      : false;
+    const isNewTopic = topic.status === "new";
+    const nextStep = isNewTopic ? 0 : isSameStudyDay ? currentStep : currentStep + 1;
+    const nextReviewAt = isSameStudyDay && topic.nextReviewAt
+      ? topic.nextReviewAt
+      : calculateNextReviewAt(nextStep, studiedAtDate, MAX_REVIEW_GAP_DURING_SEMESTER);
+    const nextNewTopicDueAt = isNewTopic
+      ? new Date(studiedAtDate.getTime() + Math.max(1, Number(subject.newTopicEveryDays || 3)) * 86400000).toISOString()
+      : null;
+
+    return {
+      isNewTopic,
+      topicPatch: {
+        status: "review",
+        reviewStep: nextStep,
+        lastStudiedAt: studiedAtDate.toISOString(),
+        nextReviewAt,
+        isPausedToday: false,
+        completed: false,
+      },
+      nextNewTopicDueAt,
+    };
+  }
+
+  async function syncTopicStudyProgress(topic, options = {}) {
+    const subject = subjectsById[topic?.subjectId];
+    if (!topic || !subject) return;
+
+    const progress = buildTopicStudyProgress(topic, subject, options.studiedAt);
+    if (!progress) return;
 
     const userId = session?.user?.id;
     if (!userId) {
-      const nowIso = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        topics: prev.topics.map((entry) => entry.id === topic.id ? {
-          ...entry,
-          status: "review",
-          reviewStep: 0,
-          lastStudiedAt: nowIso,
-          nextReviewAt: calculateNextReviewAt(0, new Date(), MAX_REVIEW_GAP_DURING_SEMESTER),
-          isPausedToday: false,
-        } : entry),
-        subjects: prev.subjects.map((entry) => entry.id === subject.id ? {
-          ...entry,
-          nextNewTopicDueAt: new Date(Date.now() + Math.max(1, Number(entry.newTopicEveryDays || 3)) * 86400000).toISOString(),
-        } : entry),
+        topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, ...progress.topicPatch } : entry),
+        subjects: progress.nextNewTopicDueAt
+          ? prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: progress.nextNewTopicDueAt } : entry)
+          : prev.subjects,
       }));
       return;
     }
 
-    try {
-      const result = await markTopicAsLearnedNew(userId, topic, subject, {
-        maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
-      });
-      upsertTopicInState(result.updatedTopic);
+    const [updatedTopic] = await Promise.all([
+      updateTopicRecord(userId, topic.id, progress.topicPatch),
+      progress.nextNewTopicDueAt
+        ? updateSubjectRecord(userId, subject.id, { nextNewTopicDueAt: progress.nextNewTopicDueAt })
+        : Promise.resolve(null),
+    ]);
+
+    upsertTopicInState(updatedTopic);
+
+    if (progress.nextNewTopicDueAt) {
       setData((prev) => ({
         ...prev,
-        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: result.nextNewTopicDueAt } : entry),
+        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: progress.nextNewTopicDueAt } : entry),
       }));
+    }
+  }
+
+  async function markTopicAsNewLearned(topic) {
+    try {
+      await syncTopicStudyProgress(topic);
       setCloudSyncError(null);
     } catch (err) {
       console.error("Mark new topic learned error:", err);
@@ -4183,29 +4220,8 @@ export default function StudyPlannerApp() {
   }
 
   async function markTopicAsReviewDone(topic) {
-    const userId = session?.user?.id;
-
-    if (!userId) {
-      const nextStep = Math.max(0, Number(topic.reviewStep || 0)) + 1;
-      setData((prev) => ({
-        ...prev,
-        topics: prev.topics.map((entry) => entry.id === topic.id ? {
-          ...entry,
-          status: "review",
-          reviewStep: nextStep,
-          lastStudiedAt: new Date().toISOString(),
-          nextReviewAt: calculateNextReviewAt(nextStep, new Date(), MAX_REVIEW_GAP_DURING_SEMESTER),
-          isPausedToday: false,
-        } : entry),
-      }));
-      return;
-    }
-
     try {
-      const updated = await markTopicAsReviewed(userId, topic, {
-        maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
-      });
-      upsertTopicInState(updated);
+      await syncTopicStudyProgress(topic);
       setCloudSyncError(null);
     } catch (err) {
       console.error("Mark review topic error:", err);
@@ -4753,6 +4769,8 @@ export default function StudyPlannerApp() {
 
   async function saveStudySession(sessionEntry) {
     const userId = session?.user?.id;
+    const recordedAt = sessionEntry.createdAt || new Date().toISOString();
+    const linkedTopic = sessionEntry.topicId ? data.topics.find((topic) => topic.id === sessionEntry.topicId) : null;
     
     // Update local state
     setData((prev) => ({
@@ -4763,6 +4781,17 @@ export default function StudyPlannerApp() {
     }));
     setEditingSession(null);
 
+    let reviewSyncError = null;
+    if (linkedTopic) {
+      try {
+        await syncTopicStudyProgress(linkedTopic, { studiedAt: recordedAt });
+      } catch (error) {
+        reviewSyncError = error;
+        console.error("Study session review sync failed:", error);
+        setCloudSyncError(error?.message || "Wiederholung konnte nicht aktualisiert werden");
+      }
+    }
+
     // Also save to database if we have a userId
     if (userId && sessionEntry.subjectId && sessionEntry.durationMinutes > 0) {
       try {
@@ -4772,14 +4801,20 @@ export default function StudyPlannerApp() {
           durationMinutes: sessionEntry.durationMinutes,
           source: sessionEntry.source || 'manual',
           notes: sessionEntry.note || '',
-          recordedAt: sessionEntry.createdAt || new Date().toISOString(),
+          recordedAt,
         });
         
         // Reload study time entries
         const rows = await loadStudyTimeEntries(userId, {});
         setStudyTimeEntries(rows);
+        if (!reviewSyncError) {
+          setCloudSyncError(null);
+        }
       } catch (error) {
         console.error("Save study time entry to database failed:", error);
+        if (!reviewSyncError) {
+          setCloudSyncError(error?.message || "Lernzeit konnte nicht gespeichert werden");
+        }
       }
     }
   }
