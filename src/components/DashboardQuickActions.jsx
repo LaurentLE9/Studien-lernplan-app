@@ -932,9 +932,13 @@ export default function DashboardQuickActions({
         onOpenChange={setManualDialogOpen}
         subjects={subjects || []}
         topics={topics || []}
+        tasks={tasks || []}
         darkMode={darkMode}
         selectedSubjectId={manualSubjectId}
-        onSelectedSubjectChange={setManualSubjectId}
+        onSelectedSubjectChange={(subjectId) => {
+          setManualSubjectId(subjectId);
+          setManualTopicId("");
+        }}
         selectedTopicId={manualTopicId}
         onSelectedTopicChange={setManualTopicId}
         onSaveEntry={handleManualSaveEntry}

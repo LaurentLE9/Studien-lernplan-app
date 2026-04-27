@@ -6022,11 +6022,12 @@ export default function StudyPlannerApp() {
             onOpenChange={(open) => !open && setEditingSession(null)}
             subjects={data.subjects || []}
             topics={data.topics || []}
+            tasks={data.tasks || []}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || ""}
-            onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value } : prev)}
-            selectedTopicId={editingSession?.topicId || ""}
-            onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, topicId: value || undefined } : prev)}
+            onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value, taskId: undefined, topicId: undefined } : prev)}
+            selectedTopicId={editingSession?.taskId || ""}
+            onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, taskId: value || undefined, topicId: undefined } : prev)}
             onSaveEntry={saveStudySession}
             initialValue={editingSession ? buildSessionSeedFromEntry(editingSession) : null}
             title="Lerneinheit bearbeiten"

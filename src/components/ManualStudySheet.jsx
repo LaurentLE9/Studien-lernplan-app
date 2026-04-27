@@ -103,6 +103,7 @@ export default function ManualStudySheet({
   onOpenChange,
   subjects,
   topics,
+  tasks = [],
   darkMode,
   selectedSubjectId,
   onSelectedSubjectChange,
@@ -175,10 +176,18 @@ export default function ManualStudySheet({
     setBreakMinutes(String(liveBreakMinutes));
   }, [open, breakMinutesTouched, liveBreakMinutes]);
 
-  const filteredTopics = useMemo(
-    () => (topics || []).filter((topic) => topic.subjectId === selectedSubjectId),
-    [topics, selectedSubjectId]
+  const openTasksForSubject = useMemo(
+    () => (tasks || []).filter(
+      (task) => task.subjectId === selectedSubjectId && task.status !== "erledigt" && !task.isCompleted && !task.archived
+    ),
+    [tasks, selectedSubjectId]
   );
+
+  useEffect(() => {
+    if (!selectedTopicId) return;
+    if (openTasksForSubject.some((task) => task.id === selectedTopicId)) return;
+    onSelectedTopicChange("");
+  }, [openTasksForSubject, onSelectedTopicChange, selectedTopicId]);
 
   function shiftDate(days) {
     const date = new Date(entryDate);
@@ -204,10 +213,10 @@ export default function ManualStudySheet({
       await Promise.resolve(onSaveEntry({
         id: initialValue?.id || crypto.randomUUID(),
         subjectId: selectedSubjectId,
-        topicId: selectedTopicId || undefined,
+        taskId: selectedTopicId || undefined,
         durationMinutes,
         createdAt: new Date(`${entryDate}T${endTime}:00`).toISOString(),
-        source: initialValue?.source || "manual-entry",
+        source: initialValue?.source === "manual-entry" ? "manual" : initialValue?.source || "manual",
         note: [activity, note].filter(Boolean).join(" - ") || "Lerneinheit manuell angelegt",
       }));
       onOpenChange(false);
@@ -372,16 +381,16 @@ export default function ManualStudySheet({
               <div className="app-field-panel p-4">
                 <Label>Aufgabe (optional)</Label>
                 <div className="mt-3 flex items-center gap-2">
-                  {selectedSubjectId && filteredTopics.length > 0 ? (
+                  {selectedSubjectId && openTasksForSubject.length > 0 ? (
                     <>
                       <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
                         <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
                           <SelectValue placeholder="Aufgabe auswaehlen" />
                         </SelectTrigger>
                         <SelectContent>
-                          {filteredTopics.map((topic) => (
-                            <SelectItem key={topic.id} value={topic.id}>
-                              {topic.title}
+                          {openTasksForSubject.map((task) => (
+                            <SelectItem key={task.id} value={task.id}>
+                              {task.title}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -394,7 +403,7 @@ export default function ManualStudySheet({
                     </>
                   ) : (
                     <div className="flex min-h-[44px] w-full items-center rounded-[1rem] bg-muted/70 px-3 text-sm text-muted-foreground">
-                      {selectedSubjectId ? "Keine Aufgaben fuer dieses Fach vorhanden." : "Waehle zuerst ein Fach aus."}
+                      {selectedSubjectId ? "Keine offenen Aufgaben fuer dieses Fach vorhanden." : "Waehle zuerst ein Fach aus."}
                     </div>
                   )}
                 </div>
