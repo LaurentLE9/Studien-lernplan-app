@@ -233,29 +233,51 @@ export default function ManualStudySheet({
     weekday: "short",
   }).replace(",", " -");
   const accentSubject = subjects.find((subject) => subject.id === selectedSubjectId) || null;
+  const sheetSurfaceClass = darkMode
+    ? "border-slate-800 bg-[#0f172a] text-slate-50"
+    : "border-slate-200 bg-white text-slate-900";
+  const sectionSurfaceClass = darkMode
+    ? "border-slate-800 bg-slate-950/60"
+    : "border-slate-200 bg-slate-50/90";
+  const fieldSurfaceClass = darkMode
+    ? "border-slate-800/80 bg-slate-900/80"
+    : "border-slate-200 bg-white";
+  const mutedTextClass = darkMode ? "text-slate-400" : "text-slate-600";
+  const inputClass = cn(
+    "mt-3 border-0 bg-transparent px-0 font-semibold shadow-none focus-visible:ring-0",
+    darkMode ? "text-slate-50 placeholder:text-slate-500" : "text-slate-900"
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         position="right"
         showClose={false}
-        className={cn("border-l !max-w-none sm:!max-w-none transition-none", darkMode ? "border-slate-800 bg-[#0f172a] text-slate-50" : "border-slate-200 bg-white text-slate-900")}
+        className={cn("border-l shadow-[var(--shadow-medium)] !max-w-none sm:!max-w-none transition-none", sheetSurfaceClass)}
         style={{ width: `${panelWidth}px` }}
       >
         <div
           className={cn(
-            "absolute left-0 top-0 bottom-0 w-1 sm:w-2 cursor-ew-resize hover:bg-black/10 dark:hover:bg-white/10 transition-colors z-50",
+            "absolute bottom-0 left-0 top-0 z-50 w-1 cursor-ew-resize bg-transparent transition-colors hover:bg-black/10 sm:w-2 dark:hover:bg-white/10",
             darkMode ? "bg-transparent" : "bg-transparent"
           )}
           onMouseDown={startDrag}
         />
         <div className="flex h-full min-h-0 flex-col pl-[2px]">
-          <div className={cn("border-b px-4 pb-4 pt-5 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/72" : "border-slate-200 bg-white")}>
+          <div className={cn("border-b px-4 pb-4 pt-5 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/75" : "border-slate-200 bg-white")}>
             <div className="flex items-start justify-between gap-4">
-              <DialogHeader className="space-y-2">
+              <DialogHeader className="min-w-0 space-y-2">
+                <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Lerneinheit</p>
+                <DialogTitle className="text-xl font-semibold sm:text-2xl">{title}</DialogTitle>
+                <DialogDescription>
+                  Erfasse eine manuelle Lerneinheit mit Zeitfenster, Pause, Fach und optionaler Aufgabe.
+                </DialogDescription>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={cn("rounded-full px-3 py-1.5", darkMode ? "border-slate-700 bg-slate-900 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
+                  <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
                     {initialValue?.id ? "Bearbeiten" : "Neu erfassen"}
+                  </Badge>
+                  <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
+                    {durationMinutes > 0 ? formatMinutes(durationMinutes) : "Dauer offen"}
                   </Badge>
                   {accentSubject ? (
                     <span className="inline-flex max-w-full items-center rounded-full px-3 py-1.5 text-xs font-semibold text-slate-950" style={{ backgroundColor: accentSubject.color }}>
@@ -263,10 +285,6 @@ export default function ManualStudySheet({
                     </span>
                   ) : null}
                 </div>
-                <DialogTitle className="text-xl sm:text-2xl">{title}</DialogTitle>
-                <DialogDescription>
-                  Erfasse eine manuelle Lerneinheit mit Zeitfenster, Pause, Fach und optionaler Aufgabe.
-                </DialogDescription>
               </DialogHeader>
 
               <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => onOpenChange(false)}>
@@ -275,13 +293,24 @@ export default function ManualStudySheet({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-5 sm:px-6">
-            <div className="grid gap-5">
-              <div className="grid gap-3 sm:grid-cols-[1.2fr_.8fr]">
-                <div className="app-field-panel p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-4 sm:px-6">
+            <div className="grid gap-5 py-5">
+              <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold">Zeitraum</p>
+                    <p className={cn("mt-1 text-sm", mutedTextClass)}>Datum, Start, Ende und Pause bestimmen die Netto-Lernzeit.</p>
+                  </div>
+                  <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
+                    {durationMinutes > 0 ? formatMinutes(durationMinutes) : "0 Min."}
+                  </Badge>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-[1.2fr_.8fr]">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="relative flex-1">
-                      <div className="flex items-center gap-2 text-sm font-semibold">
+                      <div className={cn("flex items-center gap-2 text-sm font-semibold", mutedTextClass)}>
                         <CalendarDays className="h-4 w-4" />
                         Datum
                       </div>
@@ -309,26 +338,26 @@ export default function ManualStudySheet({
                   </div>
                 </div>
 
-                <div className="app-field-panel p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                  <div className={cn("flex items-center gap-2 text-sm font-semibold", mutedTextClass)}>
                     <Clock3 className="h-4 w-4" />
                     Netto-Lernzeit
                   </div>
                   <p className="mt-2 text-2xl font-semibold tracking-tight">{durationMinutes > 0 ? formatMinutes(durationMinutes) : "-"}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Berechnet aus Start, Ende und Pause.</p>
+                    <p className={cn("mt-1 text-sm", mutedTextClass)}>Berechnet aus Start, Ende und Pause.</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="app-field-panel p-4">
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
                   <Label>Start</Label>
-                  <TimeInput24 value={startTime} onChange={setStartTime} className="mt-3 border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0" />
+                    <TimeInput24 value={startTime} onChange={setStartTime} className={cn(inputClass, "text-2xl")} />
                 </div>
-                <div className="app-field-panel p-4">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
                   <Label>Ende</Label>
-                  <TimeInput24 value={endTime} onChange={setEndTime} className="mt-3 border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0" />
+                    <TimeInput24 value={endTime} onChange={setEndTime} className={cn(inputClass, "text-2xl")} />
                 </div>
-                <div className="app-field-panel p-4">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
                   <Label>Pause (Min.)</Label>
                   <Input
                     type="number"
@@ -338,90 +367,108 @@ export default function ManualStudySheet({
                       setBreakMinutesTouched(true);
                       setBreakMinutes(event.target.value);
                     }}
-                    className="mt-3 border-0 bg-transparent px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+                      className={cn(inputClass, "text-2xl")}
                   />
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="app-field-panel p-4">
-                  <Label>Fach</Label>
-                  <div className="mt-3 flex items-center gap-2">
-                    <Select value={selectedSubjectId || undefined} onValueChange={onSelectedSubjectChange}>
-                      <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
-                        <SelectValue placeholder="Fach waehlen" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {subjects.map((subject) => (
-                          <SelectItem key={subject.id} value={subject.id}>
-                            {subject.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedSubjectId ? (
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedSubjectChange("")}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    ) : null}
                   </div>
                 </div>
-
-                <div className="app-field-panel p-4">
-                  <Label>Aktivitaet</Label>
-                  <Input
-                    value={activity}
-                    onChange={(event) => setActivity(event.target.value)}
-                    placeholder="z. B. Wiederholung"
-                    className="mt-3 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus-visible:ring-0"
-                  />
-                </div>
               </div>
 
-              <div className="app-field-panel p-4">
-                <Label>Aufgabe (optional)</Label>
-                <div className="mt-3 flex items-center gap-2">
-                  {selectedSubjectId && openTasksForSubject.length > 0 ? (
-                    <>
-                      <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
+              <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
+                <div>
+                  <p className={cn("text-xs font-semibold uppercase tracking-[0.18em]", mutedTextClass)}>Zuordnung</p>
+                  <h4 className="mt-1 text-base font-semibold">Fach und Aufgabe</h4>
+                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Waehle ein Fach und optional eine offene Aufgabe fuer die Zeiterfassung.</p>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                    <Label>Fach</Label>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Select value={selectedSubjectId || undefined} onValueChange={onSelectedSubjectChange}>
                         <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
-                          <SelectValue placeholder="Aufgabe auswaehlen" />
+                          <SelectValue placeholder="Fach waehlen" />
                         </SelectTrigger>
                         <SelectContent>
-                          {openTasksForSubject.map((task) => (
-                            <SelectItem key={task.id} value={task.id}>
-                              {task.title}
+                          {subjects.map((subject) => (
+                            <SelectItem key={subject.id} value={subject.id}>
+                              {subject.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                      {selectedTopicId ? (
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedTopicChange("")}>
+                      {selectedSubjectId ? (
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedSubjectChange("")}>
                           <X className="h-4 w-4" />
                         </Button>
                       ) : null}
-                    </>
-                  ) : (
-                    <div className="flex min-h-[44px] w-full items-center rounded-[1rem] bg-muted/70 px-3 text-sm text-muted-foreground">
-                      {selectedSubjectId ? "Keine offenen Aufgaben fuer dieses Fach vorhanden." : "Waehle zuerst ein Fach aus."}
                     </div>
-                  )}
+                  </div>
+
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                    <Label>Aufgabe (optional)</Label>
+                    <div className="mt-3 flex items-center gap-2">
+                      {selectedSubjectId && openTasksForSubject.length > 0 ? (
+                        <>
+                          <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
+                            <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
+                              <SelectValue placeholder="Aufgabe auswaehlen" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {openTasksForSubject.map((task) => (
+                                <SelectItem key={task.id} value={task.id}>
+                                  {task.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedTopicId ? (
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedTopicChange("")}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className={cn("flex min-h-[44px] w-full items-center rounded-[1rem] border px-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
+                          {selectedSubjectId ? "Keine offenen Aufgaben fuer dieses Fach vorhanden." : "Waehle zuerst ein Fach aus."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="app-field-panel p-4">
-                <Label>Notiz</Label>
-                <Textarea
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Kurze Notiz zur Lerneinheit"
-                  className="mt-3 min-h-[132px] resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-                />
+              <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
+                <div>
+                  <p className={cn("text-xs font-semibold uppercase tracking-[0.18em]", mutedTextClass)}>Details</p>
+                  <h4 className="mt-1 text-base font-semibold">Aktivitaet und Notiz</h4>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                    <Label>Aktivitaet</Label>
+                    <Input
+                      value={activity}
+                      onChange={(event) => setActivity(event.target.value)}
+                      placeholder="z. B. Wiederholung"
+                      className={cn(inputClass, "text-base")}
+                    />
+                  </div>
+
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                    <Label>Notiz</Label>
+                    <Textarea
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                      placeholder="Kurze Notiz zur Lerneinheit"
+                      className={cn(inputClass, "mt-3 min-h-[132px] resize-none text-base")}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className={cn("border-t px-4 py-4 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/72" : "border-slate-200 bg-white")}>
+          <div className={cn("border-t px-4 py-4 sm:px-6", darkMode ? "border-slate-800 bg-slate-950/75" : "border-slate-200 bg-white")}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className={cn("flex items-center gap-2 text-sm", !selectedSubjectId || durationMinutes <= 0 ? "text-destructive" : "text-muted-foreground")}>
                 <PencilLine className="h-4 w-4" />
