@@ -53,6 +53,7 @@ export default function DashboardQuickActions({
   onSaveSession,
   darkMode,
   userId,
+  timerStartRequest,
 }) {
   const storedTimer = useMemo(() => {
     try {
@@ -130,6 +131,7 @@ export default function DashboardQuickActions({
   const [tickNowMs, setTickNowMs] = useState(Date.now());
   const [timerBusy, setTimerBusy] = useState(false);
   const intervalRef = useRef(null);
+  const handledTimerStartRequestRef = useRef(null);
 
   const actionButtonBaseClass =
     "h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5";
@@ -198,6 +200,49 @@ export default function DashboardQuickActions({
       }
     };
   }, [activeTimer]);
+
+  useEffect(() => {
+    if (!timerStartRequest?.id || handledTimerStartRequestRef.current === timerStartRequest.id) return;
+
+    handledTimerStartRequestRef.current = timerStartRequest.id;
+
+    const subjectId = timerStartRequest.subjectId;
+    const taskId = timerStartRequest.taskId;
+
+    if (!userId || !subjectId || !taskId || activeTimer) return;
+
+    let cancelled = false;
+
+    const startRequestedTimer = async () => {
+      setTimerSubjectId(subjectId);
+      setTimerTaskId(taskId);
+      setTimerTaskSelectMode(false);
+      setTimerOpen(false);
+
+      try {
+        setTimerBusy(true);
+        const created = await startTimerSession(userId, subjectId, {
+          mode: timerMode,
+          presetMinutes: timerPreset,
+          taskId,
+        });
+        if (!cancelled && created) {
+          setActiveTimer(created);
+          setTickNowMs(Date.now());
+        }
+      } catch (error) {
+        console.error("Start requested timer failed:", error);
+      } finally {
+        if (!cancelled) setTimerBusy(false);
+      }
+    };
+
+    startRequestedTimer();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [timerStartRequest, userId, activeTimer, timerMode, timerPreset]);
 
   useEffect(() => {
     if (!userId) {

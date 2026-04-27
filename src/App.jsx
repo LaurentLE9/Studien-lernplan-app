@@ -3306,6 +3306,7 @@ export default function StudyPlannerApp() {
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
+  const [timerStartRequest, setTimerStartRequest] = useState(null);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 767px)");
@@ -4847,6 +4848,15 @@ export default function StudyPlannerApp() {
     saveTask({ ...task, status: task.status === "erledigt" ? "offen" : "erledigt" });
   }
 
+  function handleDeadlineTimerStart(task) {
+    if (!task?.id || !task?.subjectId) return;
+    setTimerStartRequest({
+      id: `${task.id}-${Date.now()}`,
+      subjectId: task.subjectId,
+      taskId: task.id,
+    });
+  }
+
   function handleExportData() {
     const jsonString = exportDataToJSON(data);
     const blob = new Blob([jsonString], { type: "application/json" });
@@ -5206,7 +5216,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} />
+              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Aufgabe
@@ -5289,7 +5299,7 @@ export default function StudyPlannerApp() {
                                             <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
                                             <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleDeadlineTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer fuer ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     ) : (
