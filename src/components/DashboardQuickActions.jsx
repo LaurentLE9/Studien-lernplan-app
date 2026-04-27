@@ -150,7 +150,9 @@ export default function DashboardQuickActions({
     : "border-slate-200 bg-white";
   const mutedTextClass = darkMode ? "text-slate-400" : "text-slate-600";
   const isTimerBackedManualEntry = (source) => source === "stopwatch" || source === "pomodoro";
-  const tasksForTimerSubject = (tasks || []).filter((task) => task.subjectId === timerSubjectId && !task.isCompleted && !task.archived);
+  const tasksForTimerSubject = (tasks || []).filter(
+    (task) => task.subjectId === timerSubjectId && task.status !== "erledigt" && !task.isCompleted && !task.archived
+  );
 
   useEffect(() => {
     if (!timerSubjectId && subjects[0]?.id) setTimerSubjectId(subjects[0].id);
