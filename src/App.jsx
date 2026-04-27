@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   BarChart3,
@@ -2664,6 +2663,8 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
 
 function SettingsBackupPage({
   darkMode,
+  appearance,
+  onAppearanceChange,
   handleExportData,
   handleImportData,
   importError,
@@ -2749,6 +2750,26 @@ function SettingsBackupPage({
         </Card>
 
         <div className="grid gap-6">
+          <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+            <CardHeader>
+              <CardTitle>Erscheinungsbild</CardTitle>
+              <CardDescription>Tagmodus, Nachtmodus oder Systemeinstellung verwenden</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className={cn("inline-flex items-center gap-1 rounded-full border px-1 py-1", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white")}>
+                <button type="button" onClick={() => onAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
+                  <Sun className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => onAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
+                  <Moon className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => onAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
+                  <Monitor className="h-4 w-4" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
             <CardHeader>
               <CardTitle>Deine Daten</CardTitle>
@@ -3326,6 +3347,7 @@ export default function StudyPlannerApp() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [studyTimeEntries, setStudyTimeEntries] = useState([]);
   const [isLoadingTimeEntries, setIsLoadingTimeEntries] = useState(false);
+  const [showScrollTopButton, setShowScrollTopButton] = useState(false);
   const deadlineWidgetSettings = useMemo(
     () => normalizeDeadlineWidgetSettings(data.settings?.deadlineWidget),
     [data.settings?.deadlineWidget]
@@ -3675,6 +3697,16 @@ export default function StudyPlannerApp() {
     document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
     document.body.classList.toggle("dark", darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    const updateScrollTopButton = () => {
+      setShowScrollTopButton(window.scrollY > 240);
+    };
+
+    updateScrollTopButton();
+    window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+    return () => window.removeEventListener("scroll", updateScrollTopButton);
+  }, []);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -4989,25 +5021,6 @@ export default function StudyPlannerApp() {
     }
   };
 
-  const themeDock = typeof document !== "undefined"
-    ? createPortal(
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center">
-          <div className={cn("pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-300 bg-white/95") }>
-            <button type="button" onClick={() => handleAppearanceChange("light")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "light" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Hellmodus aktivieren">
-              <Sun className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => handleAppearanceChange("dark")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "dark" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Dunkelmodus aktivieren">
-              <Moon className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => handleAppearanceChange("system")} className={cn("inline-flex h-9 w-9 items-center justify-center rounded-full transition", data.settings.appearance === "system" ? (darkMode ? "bg-slate-700 text-slate-50" : "bg-slate-900 text-white") : (darkMode ? "text-slate-300 hover:bg-slate-800" : "text-slate-700 hover:bg-slate-100"))} aria-label="Systemmodus aktivieren">
-              <Monitor className="h-4 w-4" />
-            </button>
-          </div>
-        </div>,
-        document.body
-      )
-    : null;
-
   return (
     <div className={cn("min-h-screen w-full overflow-x-hidden transition-colors", darkMode ? "dark bg-slate-950 text-slate-50" : "bg-slate-50 text-slate-900")}>
       <div className={cn("flex min-h-screen w-full overflow-x-hidden", sidebarCollapsed ? "lg:grid lg:grid-cols-[88px_minmax(0,1fr)]" : "lg:grid lg:grid-cols-[260px_minmax(0,1fr)]")}>
@@ -5937,6 +5950,8 @@ export default function StudyPlannerApp() {
           {page === "settings-backup" ? (
             <SettingsBackupPage
               darkMode={darkMode}
+              appearance={data.settings.appearance}
+              onAppearanceChange={handleAppearanceChange}
               handleExportData={handleExportData}
               handleImportData={handleImportData}
               importError={importError}
@@ -6030,23 +6045,24 @@ export default function StudyPlannerApp() {
             submitLabel="Aenderungen speichern"
             submitLabel="Änderungen speichern"
           />
-                  <button
-            type="button"
-            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className={cn(
-              "fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full border px-4 py-3 text-sm font-semibold shadow-lg transition hover:-translate-y-0.5",
-              darkMode
-                ? "border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
-                : "border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
-            )}
-          >
-            <ChevronUp className="h-4 w-4" />
-            Nach oben
-          </button>
+          {showScrollTopButton ? (
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className={cn(
+                "fixed bottom-6 right-6 z-50 inline-flex items-center gap-2 rounded-full border px-4 py-3 text-sm font-semibold shadow-lg transition hover:-translate-y-0.5",
+                darkMode
+                  ? "border-slate-700 bg-slate-900 text-white hover:bg-slate-800"
+                  : "border-slate-300 bg-white text-slate-900 hover:bg-slate-50"
+              )}
+            >
+              <ChevronUp className="h-4 w-4" />
+              Nach oben
+            </button>
+          ) : null}
           </main>
         </div>
       </div>
-      {themeDock}
     </div>
   );
 }
