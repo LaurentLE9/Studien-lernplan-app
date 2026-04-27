@@ -2716,18 +2716,6 @@ function SettingsBackupPage({
               </div>
             </div>
 
-            <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50") }>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Dashboard-Bearbeitung</p>
-                  <p className="text-xs text-muted-foreground">Startet den Bearbeitungsmodus und öffnet danach direkt die Dashboard-Ansicht.</p>
-                </div>
-                <Button variant="outline" className="rounded-xl" onClick={onStartDashboardEdit}>
-                  <Pencil className="mr-2 h-4 w-4" />Dashboard bearbeiten
-                </Button>
-              </div>
-            </div>
-
             <div className="mt-4 space-y-2">
               <Label className="text-base font-semibold">🔐 Sicherung deiner Daten</Label>
               <p className="text-sm text-gray-600 dark:text-gray-400">Exportiere alle deine Fächer, Aufgaben und Lernzeiten als JSON, um ein Backup zu erstellen. Du kannst es später wiederherstellen.</p>
