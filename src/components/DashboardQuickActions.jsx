@@ -480,7 +480,6 @@ export default function DashboardQuickActions({
           id: crypto.randomUUID(),
           subjectId: activeTimer.subjectId,
           taskId: selectedTask?.id || undefined,
-          topicId: selectedTask?.id || undefined,
           durationMinutes,
           createdAt: new Date().toISOString(),
           source: activeTimer.mode || "stopwatch",

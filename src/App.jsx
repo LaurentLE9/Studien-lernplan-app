@@ -72,6 +72,8 @@ import {
   updateTopicRecord,
   deleteTopicRecord,
   calculateNextReviewAt,
+  buildSubjectStudyProgress,
+  updateSubjectStudyProgress,
   MAX_REVIEW_GAP_DURING_SEMESTER,
   loadExams,
   createExamRecord,
@@ -572,6 +574,11 @@ function makeInitialSubjects() {
     newTopicEveryDays: 3,
     nextNewTopicDueAt: null,
     paused: false,
+    lastStudiedAt: null,
+    nextReviewAt: null,
+    reviewStep: 0,
+    lastStudiedMinutes: 0,
+    studyCount: 0,
   }));
 }
 
@@ -3455,6 +3462,11 @@ export default function StudyPlannerApp() {
       newTopicEveryDays: Math.max(1, Number(row.new_topic_every_days || 3)),
       nextNewTopicDueAt: row.next_new_topic_due_at || null,
       paused: Boolean(row.paused),
+      lastStudiedAt: row.last_studied_at || null,
+      nextReviewAt: row.next_review_at || null,
+      reviewStep: Math.max(0, Number(row.review_step || 0)),
+      lastStudiedMinutes: Math.max(0, Number(row.last_studied_minutes || 0)),
+      studyCount: Math.max(0, Number(row.study_count || 0)),
       isArchived: Boolean(row.is_archived),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -3960,6 +3972,8 @@ export default function StudyPlannerApp() {
     const todayStart = startOfDay(now);
     const tomorrowStart = new Date(todayStart);
     tomorrowStart.setDate(todayStart.getDate() + 1);
+    const upcomingEnd = new Date(todayStart);
+    upcomingEnd.setDate(todayStart.getDate() + 7);
 
     const toTs = (value) => {
       if (!value) return null;
@@ -3978,6 +3992,48 @@ export default function StudyPlannerApp() {
 
     const selectedSubjectIds = new Set(selectedSubjects.map((subject) => subject.id));
     const subjectMap = Object.fromEntries(data.subjects.map((subject) => [subject.id, subject]));
+    const statusRank = { overdue: 0, due: 1, learned: 2, upcoming: 3, continue: 4, postponed: 5, archived: 6 };
+
+    const subjectRows = selectedSubjects.map((subject) => {
+      const lastStudiedTs = toTs(subject.lastStudiedAt);
+      const nextReviewTs = toTs(subject.nextReviewAt);
+      const learnedToday = lastStudiedTs !== null && lastStudiedTs >= todayStart.getTime() && lastStudiedTs < tomorrowStart.getTime();
+      const paused = Boolean(subject.paused);
+      const subjectStatus = paused
+        ? "postponed"
+        : learnedToday
+          ? "learned"
+          : nextReviewTs !== null && nextReviewTs < todayStart.getTime()
+            ? "overdue"
+            : nextReviewTs !== null && nextReviewTs < tomorrowStart.getTime()
+              ? "due"
+              : nextReviewTs !== null && nextReviewTs <= upcomingEnd.getTime()
+                ? "upcoming"
+                : "continue";
+
+      return {
+        ...subject,
+        lastStudiedTs,
+        nextReviewTs,
+        learnedToday,
+        subjectStatus,
+        nextDueAt: nextReviewTs,
+      };
+    });
+
+    const sortSubjects = (rows, sortBy) => [...rows].sort((a, b) => {
+      if (sortBy === "subject") {
+        const subjectDiff = (a.name || "").localeCompare(b.name || "", "de");
+        if (subjectDiff !== 0) return subjectDiff;
+      }
+      if (sortBy === "status") {
+        const statusDiff = (statusRank[a.subjectStatus] ?? 99) - (statusRank[b.subjectStatus] ?? 99);
+        if (statusDiff !== 0) return statusDiff;
+      }
+      const dueDiff = (a.nextDueAt ?? Number.MAX_SAFE_INTEGER) - (b.nextDueAt ?? Number.MAX_SAFE_INTEGER);
+      if (dueDiff !== 0) return dueDiff;
+      return (a.name || "").localeCompare(b.name || "", "de");
+    });
 
     const topicRows = (data.topics || [])
       .map((topic) => {
@@ -4004,14 +4060,14 @@ export default function StudyPlannerApp() {
       .filter((topic) => selectedSubjectIds.has(topic.subjectId));
 
     const sortTopics = (rows, sortBy) => {
-      const statusRank = { review: 0, new: 1, postponed: 2, archived: 3 };
+      const topicStatusRank = { review: 0, new: 1, postponed: 2, archived: 3 };
       return [...rows].sort((a, b) => {
         if (sortBy === "subject") {
           const subjectDiff = (a.subject?.name || "").localeCompare(b.subject?.name || "", "de");
           if (subjectDiff !== 0) return subjectDiff;
         }
         if (sortBy === "status") {
-          const statusDiff = (statusRank[a.queueStatus] ?? 99) - (statusRank[b.queueStatus] ?? 99);
+          const statusDiff = (topicStatusRank[a.queueStatus] ?? 99) - (topicStatusRank[b.queueStatus] ?? 99);
           if (statusDiff !== 0) return statusDiff;
         }
         if (sortBy === "title") {
@@ -4026,6 +4082,19 @@ export default function StudyPlannerApp() {
 
     const visibleTopics = topicRows.filter((topic) => topic.queueStatus !== "archived");
     const archivedTopics = topicRows.filter((topic) => topic.queueStatus === "archived");
+
+    const filteredSubjectRows = subjectRows.filter((subject) => {
+      if (learningPlanFilter.subjectId !== "all" && subject.id !== learningPlanFilter.subjectId) return false;
+      if (learningPlanFilter.status === "all") return true;
+      if (learningPlanFilter.status === "today") return subject.subjectStatus === "learned" || subject.subjectStatus === "due" || subject.subjectStatus === "overdue";
+      if (learningPlanFilter.status === "due") return subject.subjectStatus === "due" || subject.subjectStatus === "overdue";
+      if (learningPlanFilter.status === "learned") return subject.subjectStatus === "learned";
+      if (learningPlanFilter.status === "overdue") return subject.subjectStatus === "overdue";
+      if (learningPlanFilter.status === "upcoming") return subject.subjectStatus === "upcoming";
+      if (learningPlanFilter.status === "continue") return subject.subjectStatus === "continue";
+      if (learningPlanFilter.status === "postponed") return subject.subjectStatus === "postponed";
+      return true;
+    });
 
     const filteredVisibleTopics = visibleTopics.filter((topic) => {
       if (learningPlanFilter.subjectId !== "all" && topic.subjectId !== learningPlanFilter.subjectId) return false;
@@ -4064,19 +4133,26 @@ export default function StudyPlannerApp() {
 
     const selectedOverview = selectedSubjects
       .map((subject) => {
-        const subjectRows = topicRows.filter((topic) => topic.subjectId === subject.id && topic.queueStatus !== "archived");
+        const subjectPlan = subjectRows.find((entry) => entry.id === subject.id);
+        const topicCount = topicRows.filter((topic) => topic.subjectId === subject.id && topic.queueStatus !== "archived").length;
         return {
           subject,
-          openTopics: subjectRows.filter((topic) => topic.queueStatus !== "postponed").length,
-          dueReviewsCount: subjectRows.filter((topic) => topic.queueStatus === "review" && topic.nextDueAt !== null && topic.nextDueAt <= tomorrowStart.getTime()).length,
-          newTopicsCount: subjectRows.filter((topic) => topic.queueStatus === "new").length,
-          postponedCount: subjectRows.filter((topic) => topic.queueStatus === "postponed").length,
+          openTopics: topicCount,
+          dueReviewsCount: subjectPlan?.subjectStatus === "due" || subjectPlan?.subjectStatus === "overdue" ? 1 : 0,
+          newTopicsCount: subjectPlan?.subjectStatus === "continue" ? 1 : 0,
+          postponedCount: subjectPlan?.subjectStatus === "postponed" ? 1 : 0,
         };
       })
       .sort((a, b) => (a.subject.name || "").localeCompare(b.subject.name || "", "de"));
 
     return {
       selectedSubjects,
+      learnedTodaySubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "learned"), learningPlanFilter.sort),
+      dueTodaySubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "due"), learningPlanFilter.sort),
+      overdueSubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "overdue"), learningPlanFilter.sort),
+      upcomingSubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "upcoming"), learningPlanFilter.sort),
+      continueSubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "continue"), learningPlanFilter.sort),
+      postponedSubjects: sortSubjects(filteredSubjectRows.filter((subject) => subject.subjectStatus === "postponed"), learningPlanFilter.sort),
       reviewTopics,
       newTopics,
       postponedTopics,
@@ -4792,48 +4868,71 @@ export default function StudyPlannerApp() {
     const userId = session?.user?.id;
     const recordedAt = sessionEntry.createdAt || new Date().toISOString();
     const linkedTopic = sessionEntry.topicId ? data.topics.find((topic) => topic.id === sessionEntry.topicId) : null;
+    const subject = sessionEntry.subjectId ? data.subjects.find((entry) => entry.id === sessionEntry.subjectId) : null;
+    const subjectProgress = subject
+      ? buildSubjectStudyProgress(subject, {
+        studiedAt: recordedAt,
+        durationMinutes: sessionEntry.durationMinutes,
+        maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
+      })
+      : null;
+    const normalizedSessionEntry = {
+      ...sessionEntry,
+      topicId: linkedTopic?.id || undefined,
+    };
     
     // Update local state
     setData((prev) => ({
       ...prev,
-      studySessions: prev.studySessions.some((s) => s.id === sessionEntry.id)
-        ? prev.studySessions.map((s) => (s.id === sessionEntry.id ? sessionEntry : s))
-        : [sessionEntry, ...prev.studySessions],
+      studySessions: prev.studySessions.some((s) => s.id === normalizedSessionEntry.id)
+        ? prev.studySessions.map((s) => (s.id === normalizedSessionEntry.id ? normalizedSessionEntry : s))
+        : [normalizedSessionEntry, ...prev.studySessions],
+      subjects: subjectProgress
+        ? prev.subjects.map((entry) => (entry.id === normalizedSessionEntry.subjectId ? { ...entry, ...subjectProgress } : entry))
+        : prev.subjects,
     }));
     setEditingSession(null);
 
-    let reviewSyncError = null;
+    let planSyncError = null;
     if (linkedTopic) {
       try {
         await syncTopicStudyProgress(linkedTopic, { studiedAt: recordedAt });
       } catch (error) {
-        reviewSyncError = error;
+        planSyncError = error;
         console.error("Study session review sync failed:", error);
         setCloudSyncError(error?.message || "Wiederholung konnte nicht aktualisiert werden");
       }
     }
 
     // Also save to database if we have a userId
-    if (userId && sessionEntry.subjectId && sessionEntry.durationMinutes > 0) {
+    if (userId && normalizedSessionEntry.subjectId && normalizedSessionEntry.durationMinutes > 0) {
       try {
         await createStudyTimeEntry(userId, {
-          subjectId: sessionEntry.subjectId,
-          topicId: sessionEntry.topicId || null,
-          durationMinutes: sessionEntry.durationMinutes,
-          source: sessionEntry.source || 'manual',
-          notes: sessionEntry.note || '',
+          subjectId: normalizedSessionEntry.subjectId,
+          topicId: normalizedSessionEntry.topicId || null,
+          durationMinutes: normalizedSessionEntry.durationMinutes,
+          source: normalizedSessionEntry.source || 'manual',
+          notes: normalizedSessionEntry.note || '',
           recordedAt,
         });
+
+        if (subject) {
+          await updateSubjectStudyProgress(userId, subject, {
+            studiedAt: recordedAt,
+            durationMinutes: normalizedSessionEntry.durationMinutes,
+            maxReviewGapDuringSemester: MAX_REVIEW_GAP_DURING_SEMESTER,
+          });
+        }
         
         // Reload study time entries
         const rows = await loadStudyTimeEntries(userId, {});
         setStudyTimeEntries(rows);
-        if (!reviewSyncError) {
+        if (!planSyncError) {
           setCloudSyncError(null);
         }
       } catch (error) {
         console.error("Save study time entry to database failed:", error);
-        if (!reviewSyncError) {
+        if (!planSyncError) {
           setCloudSyncError(error?.message || "Lernzeit konnte nicht gespeichert werden");
         }
       }

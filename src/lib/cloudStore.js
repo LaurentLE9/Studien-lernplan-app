@@ -12,6 +12,7 @@ const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
 export const REVIEW_INTERVAL_DAYS = [1, 3, 7];
+export const SUBJECT_REVIEW_INTERVAL_DAYS = [1, 2, 4, 7];
 export const MAX_REVIEW_GAP_DURING_SEMESTER = 7;
 
 function toIsoDateTimeOrNull(value) {
@@ -33,6 +34,49 @@ export function calculateNextReviewAt(reviewStep = 0, now = new Date(), maxGapDu
   const interval = REVIEW_INTERVAL_DAYS[Math.min(normalizedStep, REVIEW_INTERVAL_DAYS.length - 1)] || REVIEW_INTERVAL_DAYS[REVIEW_INTERVAL_DAYS.length - 1];
   const boundedInterval = Math.min(interval, Math.max(1, Number(maxGapDuringSemester || MAX_REVIEW_GAP_DURING_SEMESTER)));
   return addDays(now, boundedInterval).toISOString();
+}
+
+export function calculateNextSubjectReviewAt(reviewStep = 0, now = new Date(), maxGapDuringSemester = MAX_REVIEW_GAP_DURING_SEMESTER) {
+  const normalizedStep = Math.max(0, Number(reviewStep || 0));
+  const interval = SUBJECT_REVIEW_INTERVAL_DAYS[Math.min(normalizedStep, SUBJECT_REVIEW_INTERVAL_DAYS.length - 1)] || SUBJECT_REVIEW_INTERVAL_DAYS[SUBJECT_REVIEW_INTERVAL_DAYS.length - 1];
+  const boundedInterval = Math.min(interval, Math.max(1, Number(maxGapDuringSemester || MAX_REVIEW_GAP_DURING_SEMESTER)));
+  return addDays(now, boundedInterval).toISOString();
+}
+
+function startOfLocalDay(value) {
+  const date = new Date(value || Date.now());
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function isSameLocalDay(a, b) {
+  const first = new Date(a);
+  const second = new Date(b);
+  if (Number.isNaN(first.getTime()) || Number.isNaN(second.getTime())) return false;
+  return startOfLocalDay(first).getTime() === startOfLocalDay(second).getTime();
+}
+
+export function buildSubjectStudyProgress(subject, options = {}) {
+  if (!subject) return null;
+
+  const studiedAtDate = new Date(options.studiedAt || Date.now());
+  if (Number.isNaN(studiedAtDate.getTime())) return null;
+
+  const currentStep = Math.max(0, Number(subject.reviewStep || 0));
+  const lastStudiedAt = subject.lastStudiedAt || null;
+  const studyCount = Math.max(0, Number(subject.studyCount || 0));
+  const alreadyStudiedToday = lastStudiedAt ? isSameLocalDay(lastStudiedAt, studiedAtDate) : false;
+  const hasPriorStudy = Boolean(lastStudiedAt) || studyCount > 0;
+  const nextStep = hasPriorStudy && !alreadyStudiedToday ? currentStep + 1 : currentStep;
+  const durationMinutes = Math.max(1, Math.round(Number(options.durationMinutes || 0)));
+
+  return {
+    lastStudiedAt: studiedAtDate.toISOString(),
+    nextReviewAt: calculateNextSubjectReviewAt(nextStep, studiedAtDate, options.maxReviewGapDuringSemester || MAX_REVIEW_GAP_DURING_SEMESTER),
+    reviewStep: nextStep,
+    lastStudiedMinutes: durationMinutes,
+    studyCount: studyCount + 1,
+  };
 }
 
 function logSyncDebug(event, payload) {
@@ -710,9 +754,11 @@ export async function deleteSemester(userId, semesterId) {
 /**
  * Subjects CRUD (soft-delete via is_archived)
  */
+const SUBJECT_SELECT = "id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,last_studied_at,next_review_at,review_step,last_studied_minutes,study_count,created_at,updated_at";
+
 export async function loadSubjects(userId) {
   const rows = await supabaseRequest(
-    `/subjects?user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at&order=created_at.asc`,
+    `/subjects?user_id=eq.${userId}&select=${SUBJECT_SELECT}&order=created_at.asc`,
     {
       method: "GET",
       headers: { apikey: SUPABASE_ANON_KEY },
@@ -723,7 +769,7 @@ export async function loadSubjects(userId) {
 
 export async function createSubjectRecord(userId, subject) {
   const rows = await supabaseRequest(
-    "/subjects?select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at",
+    `/subjects?select=${SUBJECT_SELECT}`,
     {
       method: "POST",
       headers: {
@@ -744,6 +790,11 @@ export async function createSubjectRecord(userId, subject) {
         new_topic_every_days: Math.max(1, Number(subject.newTopicEveryDays || 3)),
         next_new_topic_due_at: toIsoDateTimeOrNull(subject.nextNewTopicDueAt),
         paused: Boolean(subject.paused),
+        last_studied_at: toIsoDateTimeOrNull(subject.lastStudiedAt),
+        next_review_at: toIsoDateTimeOrNull(subject.nextReviewAt),
+        review_step: Math.max(0, Number(subject.reviewStep || 0)),
+        last_studied_minutes: Math.max(0, Math.round(Number(subject.lastStudiedMinutes || 0))),
+        study_count: Math.max(0, Math.round(Number(subject.studyCount || 0))),
         is_archived: false,
       }),
     }
@@ -767,9 +818,14 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
   if ("newTopicEveryDays" in patch) body.new_topic_every_days = Math.max(1, Number(patch.newTopicEveryDays || 3));
   if ("nextNewTopicDueAt" in patch) body.next_new_topic_due_at = toIsoDateTimeOrNull(patch.nextNewTopicDueAt);
   if ("paused" in patch) body.paused = Boolean(patch.paused);
+  if ("lastStudiedAt" in patch) body.last_studied_at = toIsoDateTimeOrNull(patch.lastStudiedAt);
+  if ("nextReviewAt" in patch) body.next_review_at = toIsoDateTimeOrNull(patch.nextReviewAt);
+  if ("reviewStep" in patch) body.review_step = Math.max(0, Number(patch.reviewStep || 0));
+  if ("lastStudiedMinutes" in patch) body.last_studied_minutes = Math.max(0, Math.round(Number(patch.lastStudiedMinutes || 0)));
+  if ("studyCount" in patch) body.study_count = Math.max(0, Math.round(Number(patch.studyCount || 0)));
 
   const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at`,
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
     {
       method: "PATCH",
       headers: {
@@ -784,7 +840,7 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
 
 export async function archiveSubjectRecord(userId, subjectId) {
   const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at`,
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
     {
       method: "PATCH",
       headers: {
@@ -799,7 +855,7 @@ export async function archiveSubjectRecord(userId, subjectId) {
 
 export async function unarchiveSubjectRecord(userId, subjectId) {
   const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,created_at,updated_at`,
+    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
     {
       method: "PATCH",
       headers: {
@@ -820,6 +876,12 @@ export async function deleteSubjectRecord(userId, subjectId) {
       headers: { apikey: SUPABASE_ANON_KEY },
     }
   );
+}
+
+export async function updateSubjectStudyProgress(userId, subject, options = {}) {
+  const patch = buildSubjectStudyProgress(subject, options);
+  if (!patch) return null;
+  return updateSubjectRecord(userId, subject.id, patch);
 }
 
 const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,last_studied_at,next_review_at,review_step,completed,is_paused_today,created_at,updated_at";

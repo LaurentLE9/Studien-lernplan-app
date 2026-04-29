@@ -22,26 +22,24 @@ export default function LearningPlanPage({
   setLearningPlanArchiveCollapsed,
   toggleLearningPlanFlag,
   toggleSubjectPaused,
-  markTopicAsReviewDone,
-  markTopicAsNewLearned,
-  skipTopicToTomorrow,
-  pauseTopicForToday,
-  resumeTopicFromPostponed,
-  archiveTopic,
   restoreArchivedTopic,
   getSurfaceClass,
   deadlineLabel,
   deadlineCardTone,
 }) {
   const selectedSubjectCount = learningPlanModel.selectedSubjects.length;
-  const nowQueue = [...learningPlanModel.reviewTopics, ...learningPlanModel.newTopics]
-    .sort((a, b) => (a.nextDueAt ?? Number.MAX_SAFE_INTEGER) - (b.nextDueAt ?? Number.MAX_SAFE_INTEGER));
   const selectedSubjectIds = new Set(learningPlanModel.selectedSubjects.map((subject) => subject.id));
+  const nowQueue = [
+    ...learningPlanModel.overdueSubjects,
+    ...learningPlanModel.dueTodaySubjects,
+    ...learningPlanModel.continueSubjects,
+  ].sort((a, b) => (a.nextDueAt ?? Number.MAX_SAFE_INTEGER) - (b.nextDueAt ?? Number.MAX_SAFE_INTEGER));
   const recentStudySessions = [...(data.studySessions || [])]
     .filter((session) => session.source !== "seed")
     .filter((session) => selectedSubjectIds.has(session.subjectId))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 8);
+
   const formatPlannedDate = (value) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "Ohne Termin";
@@ -52,11 +50,54 @@ export default function LearningPlanPage({
     });
   };
 
+  const formatLastStudied = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Noch nicht gelernt";
+    return date.toLocaleString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const statusLabel = {
+    learned: "Heute gelernt",
+    due: "Heute faellig",
+    overdue: "Ueberfaellig",
+    upcoming: "Demnaechst",
+    continue: "Weiterlernen",
+    postponed: "Pausiert",
+  };
+
+  const renderSubjectCard = (subject) => (
+    <div key={subject.id} className={cn("rounded-2xl border p-4", subject.nextDueAt !== null ? deadlineCardTone(subject.nextDueAt, "offen") : "")}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color || "#94a3b8" }} />
+            <p className="font-medium">{subject.name || "Fach"}</p>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">Zuletzt gelernt: {formatLastStudied(subject.lastStudiedAt)}</p>
+          <p className="text-sm text-muted-foreground">
+            Naechste Wiederholung: {subject.nextReviewAt ? `${deadlineLabel(subject.nextReviewAt, "offen")} - ${formatPlannedDate(subject.nextReviewAt)}` : "nach der naechsten Lerneinheit"}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">{statusLabel[subject.subjectStatus] || "Fach"}</Badge>
+          {subject.studyCount ? <Badge variant="outline">{subject.studyCount} Einheiten</Badge> : null}
+          {subject.lastStudiedMinutes ? <Badge variant="outline">{subject.lastStudiedMinutes} Min.</Badge> : null}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Tabs value={activeLearningPlanTab} onValueChange={setActiveLearningPlanTab} className="w-full">
       <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-slate-200 dark:bg-[#2a3554]">
         <TabsTrigger value="plan">Lernplan</TabsTrigger>
-        <TabsTrigger value="subjects">Fächer auswählen</TabsTrigger>
+        <TabsTrigger value="subjects">Faecher auswaehlen</TabsTrigger>
       </TabsList>
 
       <TabsContent value="plan" className="mt-6">
@@ -66,9 +107,9 @@ export default function LearningPlanPage({
               <div className="grid gap-2">
                 <Label>Fach</Label>
                 <Select value={learningPlanFilter.subjectId} onValueChange={(value) => setLearningPlanFilter((prev) => ({ ...prev, subjectId: value }))}>
-                  <SelectTrigger><SelectValue placeholder="Fach wählen" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Fach waehlen" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle ausgewählten Fächer</SelectItem>
+                    <SelectItem value="all">Alle ausgewaehlten Faecher</SelectItem>
                     {learningPlanModel.selectedSubjects.map((subject) => (
                       <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>
                     ))}
@@ -81,11 +122,13 @@ export default function LearningPlanPage({
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Alle</SelectItem>
-                    <SelectItem value="due">Nur fällige</SelectItem>
-                    <SelectItem value="today">Nur heute</SelectItem>
-                    <SelectItem value="review">Nur Wiederholungen</SelectItem>
-                    <SelectItem value="new">Nur neue Themen</SelectItem>
-                    <SelectItem value="postponed">Zurückgestellt</SelectItem>
+                    <SelectItem value="today">Heute relevant</SelectItem>
+                    <SelectItem value="learned">Heute gelernt</SelectItem>
+                    <SelectItem value="due">Faellig</SelectItem>
+                    <SelectItem value="overdue">Ueberfaellig</SelectItem>
+                    <SelectItem value="upcoming">Demnaechst</SelectItem>
+                    <SelectItem value="continue">Weiterlernen</SelectItem>
+                    <SelectItem value="postponed">Pausiert</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -94,16 +137,15 @@ export default function LearningPlanPage({
                 <Select value={learningPlanFilter.sort} onValueChange={(value) => setLearningPlanFilter((prev) => ({ ...prev, sort: value }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="due">Fälligkeit</SelectItem>
+                    <SelectItem value="due">Faelligkeit</SelectItem>
                     <SelectItem value="subject">Fach</SelectItem>
-                    <SelectItem value="title">Titel</SelectItem>
                     <SelectItem value="status">Status</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Ausgewählte Fächer</Label>
-                <div className={cn("rounded-xl border px-3 py-2 text-sm", darkMode ? "border-slate-700 bg-slate-800/50 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700") }>
+                <Label>Ausgewaehlte Faecher</Label>
+                <div className={cn("rounded-xl border px-3 py-2 text-sm", darkMode ? "border-slate-700 bg-slate-800/50 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
                   {selectedSubjectCount} von {data.subjects.length}
                 </div>
               </div>
@@ -113,145 +155,87 @@ export default function LearningPlanPage({
           <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
             <CardHeader>
               <CardTitle>Jetzt lernen</CardTitle>
-              <CardDescription>Priorisierte Themen aus Wiederholungen und neuen Einheiten.</CardDescription>
+              <CardDescription>Priorisierte Faecher aus ueberfaelligen Wiederholungen, heutigen Wiederholungen und kontinuierlichem Weiterlernen.</CardDescription>
             </CardHeader>
             <CardContent className="grid max-h-[420px] gap-3 overflow-y-auto pr-2">
               {selectedSubjectCount === 0 ? (
-                <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
+                <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
               ) : nowQueue.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Aktuell nichts in der Lern-Warteschlange.</p>
-              ) : nowQueue.map((topic) => (
-                <div key={topic.id} className={cn("rounded-xl border p-3", topic.nextDueAt !== null ? deadlineCardTone(topic.nextDueAt, "offen") : "")}>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="font-medium">{topic.subject?.name || "Fach"} - {topic.title}</p>
-                      <p className="text-xs text-muted-foreground">{topic.nextDueAt !== null ? deadlineLabel(topic.nextDueAt, "offen") : "Ohne Termin"}</p>
-                    </div>
-                    <Badge variant="outline">{topic.queueStatus === "new" ? "Neu" : "Wiederholung"}</Badge>
-                  </div>
-                </div>
-              ))}
+              ) : nowQueue.map(renderSubjectCard)}
             </CardContent>
           </Card>
 
           <div className="grid gap-6 xl:grid-cols-3">
             <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
               <CardHeader>
-                <CardTitle>Wiederholen</CardTitle>
-                <CardDescription>Fällige und überfällige Wiederholungen der ausgewählten Fächer.</CardDescription>
+                <CardTitle>Heute gelernt</CardTitle>
+                <CardDescription>Faecher, fuer die heute eine Lerneinheit gespeichert wurde.</CardDescription>
               </CardHeader>
-              <CardContent className="grid max-h-[780px] gap-4 overflow-y-auto pr-2">
+              <CardContent className="grid max-h-[520px] gap-4 overflow-y-auto pr-2">
                 {selectedSubjectCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
-                ) : learningPlanModel.reviewTopics.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Keine Wiederholungen fällig.</p>
-                ) : learningPlanModel.reviewTopics.map((topic) => (
-                  <div key={topic.id} className={cn("rounded-2xl border p-4", topic.nextDueAt !== null ? deadlineCardTone(topic.nextDueAt, "offen") : "")}>
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: topic.subject?.color || "#94a3b8" }} />
-                          <p className="font-medium">{topic.subject?.name || "Fach"}</p>
-                        </div>
-                        <p className="mt-1 font-semibold">{topic.title}</p>
-                        <p className="text-sm text-muted-foreground">{topic.nextDueAt !== null ? deadlineLabel(topic.nextDueAt, "offen") : "Ohne Termin"}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" className="rounded-xl" onClick={() => markTopicAsReviewDone(topic)}>Wiederholt</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => skipTopicToTomorrow(topic)}>Überspringen</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => archiveTopic(topic)}>Archivieren</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {selectedSubjectCount > 0 && learningPlanModel.dueSoonTopics.length > 0 ? (
-                  <>
-                    <div className="pt-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Naechste Wiederholungen</p>
-                    </div>
-                    {learningPlanModel.dueSoonTopics.map((topic) => (
-                      <div key={`upcoming-${topic.id}`} className={cn("rounded-2xl border p-4", topic.nextDueAt !== null ? deadlineCardTone(topic.nextDueAt, "offen") : "")}>
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: topic.subject?.color || "#94a3b8" }} />
-                              <p className="font-medium">{topic.subject?.name || "Fach"}</p>
-                            </div>
-                            <p className="mt-1 font-semibold">{topic.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {topic.nextDueAt !== null ? `${deadlineLabel(topic.nextDueAt, "offen")} - ${formatPlannedDate(topic.nextDueAt)}` : "Ohne Termin"}
-                            </p>
-                          </div>
-                          <Badge variant="outline">Geplant</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </>
-                ) : null}
+                  <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
+                ) : learningPlanModel.learnedTodaySubjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Heute wurde noch kein ausgewaehltes Fach gelernt.</p>
+                ) : learningPlanModel.learnedTodaySubjects.map(renderSubjectCard)}
               </CardContent>
             </Card>
 
             <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
               <CardHeader>
-                <CardTitle>Neu lernen</CardTitle>
-                <CardDescription>Freigeschaltete neue Themen der ausgewählten Fächer.</CardDescription>
+                <CardTitle>Faellig</CardTitle>
+                <CardDescription>Heute faellige und ueberfaellige Wiederholungen der ausgewaehlten Faecher.</CardDescription>
               </CardHeader>
-              <CardContent className="grid max-h-[780px] gap-4 overflow-y-auto pr-2">
+              <CardContent className="grid max-h-[520px] gap-4 overflow-y-auto pr-2">
                 {selectedSubjectCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
-                ) : learningPlanModel.newTopics.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Heute keine neuen Themen freigeschaltet.</p>
-                ) : learningPlanModel.newTopics.map((topic) => (
-                  <div key={topic.id} className="rounded-2xl border p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: topic.subject?.color || "#94a3b8" }} />
-                          <p className="font-medium">{topic.subject?.name || "Fach"}</p>
-                        </div>
-                        <p className="mt-1 font-semibold">{topic.title}</p>
-                        <p className="text-sm text-muted-foreground">{topic.nextDueAt !== null ? deadlineLabel(topic.nextDueAt, "offen") : "Heute freigeschaltet"}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" className="rounded-xl" onClick={() => markTopicAsNewLearned(topic)}>Neu gelernt</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => pauseTopicForToday(topic)}>Heute nicht</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => archiveTopic(topic)}>Archivieren</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
+                ) : learningPlanModel.overdueSubjects.length + learningPlanModel.dueTodaySubjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Wiederholungen faellig.</p>
+                ) : [...learningPlanModel.overdueSubjects, ...learningPlanModel.dueTodaySubjects].map(renderSubjectCard)}
               </CardContent>
             </Card>
 
             <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
               <CardHeader>
-                <CardTitle>Zurückgestellt</CardTitle>
-                <CardDescription>Temporär pausierte Themen und heute nicht bearbeitete Einträge.</CardDescription>
+                <CardTitle>Weiterlernen</CardTitle>
+                <CardDescription>Faecher ohne akute Wiederholung, damit das Semester gleichmaessig vorangeht.</CardDescription>
               </CardHeader>
-              <CardContent className="grid max-h-[780px] gap-4 overflow-y-auto pr-2">
+              <CardContent className="grid max-h-[520px] gap-4 overflow-y-auto pr-2">
                 {selectedSubjectCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
-                ) : learningPlanModel.postponedTopics.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Keine zurückgestellten Themen.</p>
-                ) : learningPlanModel.postponedTopics.map((topic) => (
-                  <div key={topic.id} className="rounded-2xl border p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: topic.subject?.color || "#94a3b8" }} />
-                          <p className="font-medium">{topic.subject?.name || "Fach"}</p>
-                        </div>
-                        <p className="mt-1 font-semibold">{topic.title}</p>
-                          <p className="text-sm text-muted-foreground">Zurückgestellt</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" className="rounded-xl" onClick={() => resumeTopicFromPostponed(topic)}>Wieder aufnehmen</Button>
-                        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => archiveTopic(topic)}>Archivieren</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
+                ) : learningPlanModel.continueSubjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine Faecher fuer kontinuierliches Weiterlernen offen.</p>
+                ) : learningPlanModel.continueSubjects.map(renderSubjectCard)}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+              <CardHeader>
+                <CardTitle>Demnaechst</CardTitle>
+                <CardDescription>Geplante Wiederholungen in den naechsten Tagen.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid max-h-[420px] gap-4 overflow-y-auto pr-2">
+                {selectedSubjectCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
+                ) : learningPlanModel.upcomingSubjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine geplanten Wiederholungen in den naechsten Tagen.</p>
+                ) : learningPlanModel.upcomingSubjects.map(renderSubjectCard)}
+              </CardContent>
+            </Card>
+
+            <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+              <CardHeader>
+                <CardTitle>Pausiert</CardTitle>
+                <CardDescription>Faecher, die im Lernplan temporaer pausiert sind.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid max-h-[420px] gap-4 overflow-y-auto pr-2">
+                {selectedSubjectCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
+                ) : learningPlanModel.postponedSubjects.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Keine pausierten Faecher.</p>
+                ) : learningPlanModel.postponedSubjects.map(renderSubjectCard)}
               </CardContent>
             </Card>
           </div>
@@ -259,13 +243,13 @@ export default function LearningPlanPage({
           <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
             <CardHeader>
               <CardTitle>Lernzeiten</CardTitle>
-              <CardDescription>Zuletzt erfasste Einheiten und Timer-Sitzungen für die ausgewählten Fächer.</CardDescription>
+              <CardDescription>Zuletzt erfasste Einheiten und Timer-Sitzungen fuer die ausgewaehlten Faecher.</CardDescription>
             </CardHeader>
             <CardContent className="grid max-h-[420px] gap-3 overflow-y-auto pr-2">
               {selectedSubjectCount === 0 ? (
-                <p className="text-sm text-muted-foreground">Wähle zuerst Fächer aus.</p>
+                <p className="text-sm text-muted-foreground">Waehle zuerst Faecher aus.</p>
               ) : recentStudySessions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Lernzeit für die ausgewählten Fächer erfasst.</p>
+                <p className="text-sm text-muted-foreground">Noch keine Lernzeit fuer die ausgewaehlten Faecher erfasst.</p>
               ) : recentStudySessions.map((session) => {
                 const subject = data.subjects.find((entry) => entry.id === session.subjectId);
                 return (
@@ -329,16 +313,16 @@ export default function LearningPlanPage({
           <CardHeader className="sticky top-0 z-10 border-b backdrop-blur supports-[backdrop-filter]:bg-inherit">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Fächer auswählen</CardTitle>
-                <CardDescription>Nur ausgewählte Fächer erscheinen im Lernplan.</CardDescription>
+                <CardTitle>Faecher auswaehlen</CardTitle>
+                <CardDescription>Nur ausgewaehlte Faecher erscheinen im Lernplan.</CardDescription>
               </div>
-              <Badge variant="outline">{selectedSubjectCount} ausgewählt</Badge>
+              <Badge variant="outline">{selectedSubjectCount} ausgewaehlt</Badge>
             </div>
           </CardHeader>
           <CardContent className="max-h-[calc(100vh-17rem)] overflow-y-auto pr-2 pt-4">
             <div className="grid gap-6">
               {groupedSubjects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Fächer vorhanden.</p>
+                <p className="text-sm text-muted-foreground">Noch keine Faecher vorhanden.</p>
               ) : groupedSubjects.map((group) => (
                 <div key={group.id} className="grid gap-4">
                   <div className="flex items-center gap-2">
@@ -375,9 +359,9 @@ export default function LearningPlanPage({
 
                             <div className="mt-4 grid gap-2 text-sm">
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Im Lernplan</span><span>{subject.includeInLearningPlan !== false ? "ja" : "nein"}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Wiederholungen</span><span>{overview.dueReviewsCount}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Neue Themen</span><span>{overview.newTopicsCount}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Zurückgestellt</span><span>{overview.postponedCount}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Faellige Wiederholung</span><span>{overview.dueReviewsCount}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Weiterlernen</span><span>{overview.newTopicsCount}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Pausiert</span><span>{overview.postponedCount}</span></div>
                             </div>
                           </CardContent>
                         </Card>
