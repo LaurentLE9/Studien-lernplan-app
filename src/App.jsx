@@ -72,9 +72,20 @@ import {
   updateTopicRecord,
   deleteTopicRecord,
   calculateNextReviewAt,
+  buildTopicReviewProgress,
   buildSubjectStudyProgress,
   updateSubjectStudyProgress,
   MAX_REVIEW_GAP_DURING_SEMESTER,
+  ACTIVITY_TYPE_LABELS,
+  CONFIDENCE_LABELS,
+  TOPIC_STATUS_LABELS,
+  getActivityTypeLabel,
+  getConfidenceLabel,
+  getTopicStatusLabel,
+  isValidDateValue,
+  normalizeActivityType,
+  normalizeConfidence,
+  normalizeTopicStatus,
   loadExams,
   createExamRecord,
   updateExamRecord,
@@ -399,7 +410,10 @@ function buildSessionSeedFromEntry(entry) {
     startTime: toTimeInputValue(start),
     endTime: toTimeInputValue(end),
     breakMinutes: "0",
-    activity: "",
+    activityType: entry.activityType || "exercises_practiced",
+    confidence: entry.confidence || "unsure",
+    taskId: entry.taskId || "",
+    topicId: entry.topicId || "",
     note: entry.note || "",
     source: entry.source || "manual-entry",
   };
@@ -2875,7 +2889,7 @@ function SemesterForm({ onSave, initialValue, onDone }) {
   );
 }
 
-function TaskForm({ subjects, onSave, initialValue, onDone }) {
+function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
   const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
@@ -2907,6 +2921,7 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
     setForm((prev) => ({
       ...prev,
       subjectId,
+      linkedTopicId: "",
       title: shouldAutofill ? selectedSubject.name : prev.title,
     }));
     if (shouldAutofill) {
@@ -2937,6 +2952,12 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
     }
   }
 
+  const availableTopics = topics.filter((topic) => {
+    if (topic.subjectId !== form.subjectId) return false;
+    const status = normalizeTopicStatus(topic.status);
+    return status !== "archived" && !topic.completed && !topic.archivedAt;
+  });
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
@@ -2945,6 +2966,7 @@ function TaskForm({ subjects, onSave, initialValue, onDone }) {
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
+      <div className="grid gap-2"><Label>Verknuepftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswaehlen" : "Zuerst Fach waehlen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
@@ -3322,6 +3344,7 @@ export default function StudyPlannerApp() {
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
+  const [taskCompletionPrompt, setTaskCompletionPrompt] = useState(null);
   const [timerStartRequest, setTimerStartRequest] = useState(null);
 
   useEffect(() => {
@@ -3498,12 +3521,17 @@ export default function StudyPlannerApp() {
         subjectId: row.subject_id,
         title: row.title,
         orderIndex: Math.max(0, Number(row.order_index || 0)),
-        status: row.status || "new",
+        status: normalizeTopicStatus(row.status || "new"),
+        cheatsheetText: row.cheatsheet_text || "",
+        cheatsheetUrl: row.cheatsheet_url || "",
+        confidence: normalizeConfidence(row.confidence || "unsure"),
         lastStudiedAt: row.last_studied_at || null,
         nextReviewAt: row.next_review_at || null,
+        reviewCount: Math.max(0, Number(row.review_count || 0)),
         reviewStep: Math.max(0, Number(row.review_step || 0)),
         completed: Boolean(row.completed),
         isPausedToday: Boolean(row.is_paused_today),
+        archivedAt: row.archived_at || null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
@@ -4169,12 +4197,17 @@ export default function StudyPlannerApp() {
       subjectId: topicRow.subject_id || topicRow.subjectId,
       title: topicRow.title,
       orderIndex: Math.max(0, Number(topicRow.order_index ?? topicRow.orderIndex ?? 0)),
-      status: topicRow.status || "new",
+      status: normalizeTopicStatus(topicRow.status || "new"),
+      cheatsheetText: topicRow.cheatsheet_text ?? topicRow.cheatsheetText ?? "",
+      cheatsheetUrl: topicRow.cheatsheet_url ?? topicRow.cheatsheetUrl ?? "",
+      confidence: normalizeConfidence(topicRow.confidence || "unsure"),
       lastStudiedAt: topicRow.last_studied_at ?? topicRow.lastStudiedAt ?? null,
       nextReviewAt: topicRow.next_review_at ?? topicRow.nextReviewAt ?? null,
+      reviewCount: Math.max(0, Number(topicRow.review_count ?? topicRow.reviewCount ?? 0)),
       reviewStep: Math.max(0, Number(topicRow.review_step ?? topicRow.reviewStep ?? 0)),
       completed: Boolean(topicRow.completed),
       isPausedToday: Boolean(topicRow.is_paused_today ?? topicRow.isPausedToday),
+      archivedAt: topicRow.archived_at ?? topicRow.archivedAt ?? null,
       createdAt: topicRow.created_at ?? topicRow.createdAt,
       updatedAt: topicRow.updated_at ?? topicRow.updatedAt,
     };
@@ -4187,128 +4220,106 @@ export default function StudyPlannerApp() {
     }));
   };
 
-  async function createTopicForSubject(subjectId) {
-    const title = String(newTopicDraftBySubject[subjectId] || "").trim();
+  async function createLearningTopic(topicDraft) {
+    const subjectId = topicDraft?.subjectId;
+    const title = String(topicDraft?.title || "").trim();
     if (!title) return;
+    if (!subjectId) return;
 
     const existingTopics = data.topics.filter((topic) => topic.subjectId === subjectId);
     const nextOrderIndex = existingTopics.length ? Math.max(...existingTopics.map((topic) => Number(topic.orderIndex || 0))) + 1 : 0;
     const userId = session?.user?.id;
+    const nowIso = new Date().toISOString();
+    const localTopic = {
+      id: topicDraft.id || crypto.randomUUID(),
+      subjectId,
+      title,
+      orderIndex: nextOrderIndex,
+      status: normalizeTopicStatus(topicDraft.status || "new"),
+      cheatsheetText: topicDraft.cheatsheetText || "",
+      cheatsheetUrl: topicDraft.cheatsheetUrl || "",
+      confidence: normalizeConfidence(topicDraft.confidence || "unsure"),
+      lastStudiedAt: null,
+      nextReviewAt: null,
+      reviewCount: 0,
+      reviewStep: 0,
+      completed: false,
+      isPausedToday: false,
+      archivedAt: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
 
     if (!userId) {
       setData((prev) => ({
         ...prev,
-        topics: [
-          ...prev.topics,
-          {
-            id: crypto.randomUUID(),
-            subjectId,
-            title,
-            orderIndex: nextOrderIndex,
-            status: "new",
-            lastStudiedAt: null,
-            nextReviewAt: null,
-            reviewStep: 0,
-            completed: false,
-            isPausedToday: false,
-            createdAt: new Date().toISOString(),
-          },
-        ],
+        topics: [...prev.topics, localTopic],
       }));
       setNewTopicDraftBySubject((prev) => ({ ...prev, [subjectId]: "" }));
-      return;
+      return localTopic;
     }
 
     try {
-      const created = await createTopicRecord(userId, {
-        id: crypto.randomUUID(),
-        subjectId,
-        title,
-        orderIndex: nextOrderIndex,
-        status: "new",
-      });
+      const created = await createTopicRecord(userId, localTopic);
       upsertTopicInState(created);
       setNewTopicDraftBySubject((prev) => ({ ...prev, [subjectId]: "" }));
       setCloudSyncError(null);
+      return {
+        ...localTopic,
+        id: created?.id || localTopic.id,
+        createdAt: created?.created_at || localTopic.createdAt,
+        updatedAt: created?.updated_at || localTopic.updatedAt,
+      };
     } catch (err) {
       console.error("Create topic error:", err);
       setCloudSyncError(err?.message || "Thema konnte nicht angelegt werden");
+      throw err;
     }
   }
 
-  function buildTopicStudyProgress(topic, subject, studiedAt = new Date()) {
-    if (!topic || !subject || topic.completed) return null;
-
-    const studiedAtDate = new Date(studiedAt || Date.now());
-    if (Number.isNaN(studiedAtDate.getTime())) return null;
-
-    const currentStep = Math.max(0, Number(topic.reviewStep || 0));
-    const lastStudiedAt = topic.lastStudiedAt ? new Date(topic.lastStudiedAt) : null;
-    const isSameStudyDay = lastStudiedAt && !Number.isNaN(lastStudiedAt.getTime())
-      ? startOfDay(lastStudiedAt).getTime() === startOfDay(studiedAtDate).getTime()
-      : false;
-    const isNewTopic = topic.status === "new";
-    const nextStep = isNewTopic ? 0 : isSameStudyDay ? currentStep : currentStep + 1;
-    const nextReviewAt = isSameStudyDay && topic.nextReviewAt
-      ? topic.nextReviewAt
-      : calculateNextReviewAt(nextStep, studiedAtDate, MAX_REVIEW_GAP_DURING_SEMESTER);
-    const nextNewTopicDueAt = isNewTopic
-      ? new Date(studiedAtDate.getTime() + Math.max(1, Number(subject.newTopicEveryDays || 3)) * 86400000).toISOString()
-      : null;
-
-    return {
-      isNewTopic,
-      topicPatch: {
-        status: "review",
-        reviewStep: nextStep,
-        lastStudiedAt: studiedAtDate.toISOString(),
-        nextReviewAt,
-        isPausedToday: false,
-        completed: false,
-      },
-      nextNewTopicDueAt,
-    };
+  function getSubjectReviewClampDates(subjectId) {
+    if (!subjectId) return [];
+    const taskDates = (data.tasks || [])
+      .filter((task) => task.subjectId === subjectId && task.status !== "erledigt" && !task.isCompleted && !task.archived)
+      .flatMap((task) => [task.dueDate, task.acceptanceDate])
+      .filter(isValidDateValue);
+    const examDates = (data.exams || [])
+      .filter((exam) => exam.subjectId === subjectId && exam.status !== "written" && !exam.isArchived)
+      .map((exam) => exam.examDate)
+      .filter(isValidDateValue);
+    return [...taskDates, ...examDates];
   }
 
   async function syncTopicStudyProgress(topic, options = {}) {
     const subject = subjectsById[topic?.subjectId];
-    if (!topic || !subject) return;
+    const topicStatus = normalizeTopicStatus(topic?.status);
+    if (!topic || !subject || topic.completed || topicStatus === "archived" || topic.archivedAt) {
+      return { reviewUpdated: false };
+    }
 
-    const progress = buildTopicStudyProgress(topic, subject, options.studiedAt);
-    if (!progress) return;
+    const progress = buildTopicReviewProgress(topic, {
+      ...options,
+      deadlineDates: getSubjectReviewClampDates(topic.subjectId),
+    });
+    if (!progress?.reviewUpdated) return progress || { reviewUpdated: false };
 
     const userId = session?.user?.id;
     if (!userId) {
       setData((prev) => ({
         ...prev,
         topics: prev.topics.map((entry) => entry.id === topic.id ? { ...entry, ...progress.topicPatch } : entry),
-        subjects: progress.nextNewTopicDueAt
-          ? prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: progress.nextNewTopicDueAt } : entry)
-          : prev.subjects,
       }));
-      return;
+      return progress;
     }
 
-    const [updatedTopic] = await Promise.all([
-      updateTopicRecord(userId, topic.id, progress.topicPatch),
-      progress.nextNewTopicDueAt
-        ? updateSubjectRecord(userId, subject.id, { nextNewTopicDueAt: progress.nextNewTopicDueAt })
-        : Promise.resolve(null),
-    ]);
-
+    const updatedTopic = await updateTopicRecord(userId, topic.id, progress.topicPatch);
     upsertTopicInState(updatedTopic);
-
-    if (progress.nextNewTopicDueAt) {
-      setData((prev) => ({
-        ...prev,
-        subjects: prev.subjects.map((entry) => entry.id === subject.id ? { ...entry, nextNewTopicDueAt: progress.nextNewTopicDueAt } : entry),
-      }));
-    }
+    return progress;
   }
 
   async function markTopicAsNewLearned(topic) {
     try {
-      await syncTopicStudyProgress(topic);
+      await syncTopicStudyProgress(topic, { activityType: "exercises_practiced", confidence: topic?.confidence || "unsure" });
       setCloudSyncError(null);
     } catch (err) {
       console.error("Mark new topic learned error:", err);
@@ -4318,7 +4329,7 @@ export default function StudyPlannerApp() {
 
   async function markTopicAsReviewDone(topic) {
     try {
-      await syncTopicStudyProgress(topic);
+      await syncTopicStudyProgress(topic, { activityType: "review_done", confidence: topic?.confidence || "unsure" });
       setCloudSyncError(null);
     } catch (err) {
       console.error("Mark review topic error:", err);
@@ -4864,10 +4875,51 @@ export default function StudyPlannerApp() {
     setData((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
   }
 
+  function openStudySessionSheet(seed = {}) {
+    const now = new Date();
+    setEditingSession({
+      id: seed.id || crypto.randomUUID(),
+      subjectId: seed.subjectId || "",
+      taskId: seed.taskId || undefined,
+      topicId: seed.topicId || undefined,
+      activityType: normalizeActivityType(seed.activityType || "exercises_practiced", "exercises_practiced"),
+      confidence: normalizeConfidence(seed.confidence || "unsure"),
+      durationMinutes: Math.max(1, Number(seed.durationMinutes || 45)),
+      createdAt: seed.createdAt || now.toISOString(),
+      source: seed.source || "manual",
+      note: seed.note || "",
+    });
+  }
+
+  function openTopicStudySession(topic, activityType = "exercises_practiced") {
+    if (!topic?.subjectId) return;
+    openStudySessionSheet({
+      subjectId: topic.subjectId,
+      topicId: topic.id,
+      activityType,
+      note: topic.title || "",
+    });
+  }
+
   async function saveStudySession(sessionEntry) {
     const userId = session?.user?.id;
     const recordedAt = sessionEntry.createdAt || new Date().toISOString();
     const linkedTopic = sessionEntry.topicId ? data.topics.find((topic) => topic.id === sessionEntry.topicId) : null;
+    const linkedTopicStatus = normalizeTopicStatus(linkedTopic?.status);
+    const reviewableTopic = linkedTopic && !linkedTopic.completed && !linkedTopic.archivedAt && linkedTopicStatus !== "archived"
+      ? linkedTopic
+      : null;
+    const activityType = normalizeActivityType(sessionEntry.activityType || sessionEntry.activity_type || sessionEntry.activity || "theory_read");
+    const confidence = normalizeConfidence(sessionEntry.confidence || "unsure");
+    const reviewPreview = reviewableTopic
+      ? buildTopicReviewProgress(reviewableTopic, {
+        activityType,
+        confidence,
+        alsoPracticed: Boolean(sessionEntry.alsoPracticed),
+        studiedAt: recordedAt,
+        deadlineDates: getSubjectReviewClampDates(reviewableTopic.subjectId),
+      })
+      : { reviewUpdated: false };
     const subject = sessionEntry.subjectId ? data.subjects.find((entry) => entry.id === sessionEntry.subjectId) : null;
     const subjectProgress = subject
       ? buildSubjectStudyProgress(subject, {
@@ -4878,7 +4930,11 @@ export default function StudyPlannerApp() {
       : null;
     const normalizedSessionEntry = {
       ...sessionEntry,
-      topicId: linkedTopic?.id || undefined,
+      taskId: sessionEntry.taskId || undefined,
+      topicId: sessionEntry.topicId || undefined,
+      activityType,
+      confidence,
+      reviewUpdated: Boolean(reviewPreview?.reviewUpdated),
     };
     
     // Update local state
@@ -4894,9 +4950,14 @@ export default function StudyPlannerApp() {
     setEditingSession(null);
 
     let planSyncError = null;
-    if (linkedTopic) {
+    if (reviewableTopic) {
       try {
-        await syncTopicStudyProgress(linkedTopic, { studiedAt: recordedAt });
+        await syncTopicStudyProgress(reviewableTopic, {
+          activityType,
+          confidence,
+          alsoPracticed: Boolean(sessionEntry.alsoPracticed),
+          studiedAt: recordedAt,
+        });
       } catch (error) {
         planSyncError = error;
         console.error("Study session review sync failed:", error);
@@ -4909,10 +4970,14 @@ export default function StudyPlannerApp() {
       try {
         await createStudyTimeEntry(userId, {
           subjectId: normalizedSessionEntry.subjectId,
-          topicId: normalizedSessionEntry.topicId || null,
+          topicId: reviewableTopic?.id || null,
+          taskId: normalizedSessionEntry.taskId || null,
           durationMinutes: normalizedSessionEntry.durationMinutes,
           source: normalizedSessionEntry.source || 'manual',
           notes: normalizedSessionEntry.note || '',
+          activityType,
+          confidence,
+          reviewUpdated: Boolean(reviewPreview?.reviewUpdated),
           recordedAt,
         });
 
@@ -4963,8 +5028,43 @@ export default function StudyPlannerApp() {
     setLastDeletedSession(null);
   }
 
+  function getActiveLinkedTopicForTask(task) {
+    if (!task?.linkedTopicId) return null;
+    const topic = data.topics.find((entry) => entry.id === task.linkedTopicId) || null;
+    if (!topic) return null;
+    const status = normalizeTopicStatus(topic.status);
+    if (status === "archived" || topic.completed || topic.archivedAt) return null;
+    return topic;
+  }
+
+  function completeTaskOnly(task) {
+    saveTask({ ...task, status: "erledigt" });
+    setTaskCompletionPrompt(null);
+  }
+
+  function completeTaskWithStudyEntry(task, topic) {
+    saveTask({ ...task, status: "erledigt" });
+    setTaskCompletionPrompt(null);
+    openStudySessionSheet({
+      subjectId: task.subjectId,
+      taskId: task.id,
+      topicId: topic.id,
+      activityType: "exercises_practiced",
+      note: task.title || "",
+    });
+  }
+
   function toggleTaskDone(task) {
-    saveTask({ ...task, status: task.status === "erledigt" ? "offen" : "erledigt" });
+    if (task.status === "erledigt") {
+      saveTask({ ...task, status: "offen" });
+      return;
+    }
+    const linkedTopic = getActiveLinkedTopicForTask(task);
+    if (linkedTopic) {
+      setTaskCompletionPrompt({ task, topic: linkedTopic });
+      return;
+    }
+    saveTask({ ...task, status: "erledigt" });
   }
 
   function handleDeadlineTimerStart(task) {
@@ -5316,7 +5416,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
+              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Aufgabe
@@ -5329,7 +5429,7 @@ export default function StudyPlannerApp() {
                 description="Erstelle eine neue Aufgabe, weise sie einem Fach zu und setze ein Fälligkeitsdatum."
                 badgeText="Neu erfassen"
               >
-                <TaskForm subjects={data.subjects} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                <TaskForm subjects={data.subjects} topics={data.topics} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
               </ResizablePanel>
 
               
@@ -5498,6 +5598,9 @@ export default function StudyPlannerApp() {
               resumeTopicFromPostponed={resumeTopicFromPostponed}
               archiveTopic={archiveTopic}
               restoreArchivedTopic={restoreArchivedTopic}
+              onStartTopicPractice={(topic) => openTopicStudySession(topic, "exercises_practiced")}
+              onMarkTopicReviewed={(topic) => openTopicStudySession(topic, "review_done")}
+              onCreateTopic={createLearningTopic}
               getSurfaceClass={getSurfaceClass}
               deadlineLabel={deadlineLabel}
               deadlineCardTone={deadlineCardTone}
@@ -6113,7 +6216,30 @@ export default function StudyPlannerApp() {
             badgeText="Bearbeiten"
           >
             {editingTask ? (
-              <TaskForm subjects={data.subjects} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+              <TaskForm subjects={data.subjects} topics={data.topics} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+            ) : null}
+          </ResizablePanel>
+          <ResizablePanel
+            open={!!taskCompletionPrompt}
+            onOpenChange={(open) => !open && setTaskCompletionPrompt(null)}
+            darkMode={darkMode}
+            title="Aufgabe erledigen"
+            description="Diese Aufgabe ist mit einem Lernthema verknuepft."
+            badgeText="To-do"
+          >
+            {taskCompletionPrompt ? (
+              <div className="grid gap-4">
+                <div className="rounded-2xl border p-4">
+                  <p className="text-sm text-muted-foreground">Als Uebung fuer verknuepftes Lernthema zaehlen?</p>
+                  <p className="mt-2 font-semibold">{taskCompletionPrompt.task.title}</p>
+                  <p className="text-sm text-muted-foreground">{taskCompletionPrompt.topic.title}</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Button variant="outline" className="rounded-xl" onClick={() => completeTaskOnly(taskCompletionPrompt.task)}>Nur Aufgabe erledigen</Button>
+                  <Button className="rounded-xl" onClick={() => completeTaskWithStudyEntry(taskCompletionPrompt.task, taskCompletionPrompt.topic)}>Als Uebung erfassen</Button>
+                  <Button variant="ghost" className="rounded-xl" onClick={() => setTaskCompletionPrompt(null)}>Abbrechen</Button>
+                </div>
+              </div>
             ) : null}
           </ResizablePanel>
           <ManualStudySheet
@@ -6125,13 +6251,15 @@ export default function StudyPlannerApp() {
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value, taskId: undefined, topicId: undefined } : prev)}
-            selectedTopicId={editingSession?.taskId || ""}
-            onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, taskId: value || undefined, topicId: undefined } : prev)}
+            selectedTaskId={editingSession?.taskId || ""}
+            onSelectedTaskChange={(value) => setEditingSession((prev) => prev ? { ...prev, taskId: value || undefined } : prev)}
+            selectedTopicId={editingSession?.topicId || ""}
+            onSelectedTopicChange={(value) => setEditingSession((prev) => prev ? { ...prev, topicId: value || undefined } : prev)}
+            onCreateTopic={createLearningTopic}
             onSaveEntry={saveStudySession}
             initialValue={editingSession ? buildSessionSeedFromEntry(editingSession) : null}
             title="Lerneinheit bearbeiten"
             submitLabel="Aenderungen speichern"
-            submitLabel="Änderungen speichern"
           />
           {showScrollTopButton ? (
             <button

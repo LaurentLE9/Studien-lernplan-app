@@ -14,11 +14,173 @@ const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase
 export const REVIEW_INTERVAL_DAYS = [1, 3, 7];
 export const SUBJECT_REVIEW_INTERVAL_DAYS = [1, 2, 4, 7];
 export const MAX_REVIEW_GAP_DURING_SEMESTER = 7;
+export const MAX_TOPIC_REVIEW_GAP_DAYS = 21;
+
+export const ACTIVITY_TYPES = [
+  "cheatsheet_created",
+  "theory_read",
+  "exercises_practiced",
+  "review_done",
+  "exam_exercise_practiced",
+];
+
+export const ACTIVITY_TYPE_LABELS = {
+  cheatsheet_created: "Cheatsheet erstellt",
+  theory_read: "Theorie gelesen",
+  exercises_practiced: "Aufgaben ge\u00fcbt",
+  review_done: "Wiederholung gemacht",
+  exam_exercise_practiced: "Klausuraufgabe ge\u00fcbt",
+};
+
+export const CONFIDENCE_LEVELS = [
+  "not_understood",
+  "unsure",
+  "okay",
+  "confident",
+  "very_confident",
+];
+
+export const CONFIDENCE_LABELS = {
+  not_understood: "nicht verstanden",
+  unsure: "unsicher",
+  okay: "okay",
+  confident: "sicher",
+  very_confident: "sehr sicher",
+};
+
+export const TOPIC_STATUSES = ["new", "active", "secure", "paused", "archived"];
+
+export const TOPIC_STATUS_LABELS = {
+  new: "neu",
+  active: "aktiv",
+  secure: "sicher",
+  paused: "pausiert",
+  archived: "archiviert",
+};
+
+export const CONFIDENCE_REVIEW_INTERVAL_DAYS = {
+  not_understood: 1,
+  unsure: 2,
+  okay: 4,
+  confident: 7,
+  very_confident: 14,
+};
+
+const REVIEW_UPDATING_ACTIVITY_TYPES = new Set([
+  "exercises_practiced",
+  "review_done",
+  "exam_exercise_practiced",
+]);
+
+function normalizeLookupKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s-]+/g, " ");
+}
+
+export function normalizeActivityType(value, fallback = "theory_read") {
+  const key = normalizeLookupKey(value);
+  const mapping = {
+    cheatsheet_created: "cheatsheet_created",
+    "cheatsheet created": "cheatsheet_created",
+    "cheatsheet erstellt": "cheatsheet_created",
+    theory_read: "theory_read",
+    "theory read": "theory_read",
+    "theorie gelesen": "theory_read",
+    exercises_practiced: "exercises_practiced",
+    "exercises practiced": "exercises_practiced",
+    "aufgaben ge\u00fcbt": "exercises_practiced",
+    "aufgaben geuebt": "exercises_practiced",
+    "wiederholung": "review_done",
+    review_done: "review_done",
+    "review done": "review_done",
+    "wiederholung gemacht": "review_done",
+    exam_exercise_practiced: "exam_exercise_practiced",
+    "exam exercise practiced": "exam_exercise_practiced",
+    "klausuraufgabe ge\u00fcbt": "exam_exercise_practiced",
+    "klausuraufgabe geuebt": "exam_exercise_practiced",
+  };
+  return mapping[key] || (ACTIVITY_TYPES.includes(fallback) ? fallback : "theory_read");
+}
+
+export function normalizeConfidence(value, fallback = "unsure") {
+  const key = normalizeLookupKey(value);
+  const mapping = {
+    not_understood: "not_understood",
+    "not understood": "not_understood",
+    "nicht verstanden": "not_understood",
+    unsure: "unsure",
+    unsicher: "unsure",
+    okay: "okay",
+    ok: "okay",
+    confident: "confident",
+    sicher: "confident",
+    very_confident: "very_confident",
+    "very confident": "very_confident",
+    "sehr sicher": "very_confident",
+  };
+  return mapping[key] || (CONFIDENCE_LEVELS.includes(fallback) ? fallback : "unsure");
+}
+
+export function normalizeTopicStatus(value, fallback = "new") {
+  const key = normalizeLookupKey(value);
+  const mapping = {
+    new: "new",
+    neu: "new",
+    learning: "active",
+    lernen: "active",
+    active: "active",
+    aktiv: "active",
+    review: "active",
+    wiederholung: "active",
+    secure: "secure",
+    sicher: "secure",
+    paused: "paused",
+    pausiert: "paused",
+    postponed: "paused",
+    archived: "archived",
+    archiviert: "archived",
+    completed: "archived",
+    erledigt: "archived",
+  };
+  return mapping[key] || (TOPIC_STATUSES.includes(fallback) ? fallback : "new");
+}
+
+export function getActivityTypeLabel(value) {
+  return ACTIVITY_TYPE_LABELS[normalizeActivityType(value)] || ACTIVITY_TYPE_LABELS.theory_read;
+}
+
+export function getConfidenceLabel(value) {
+  return CONFIDENCE_LABELS[normalizeConfidence(value)] || CONFIDENCE_LABELS.unsure;
+}
+
+export function getTopicStatusLabel(value) {
+  return TOPIC_STATUS_LABELS[normalizeTopicStatus(value)] || TOPIC_STATUS_LABELS.new;
+}
+
+export function isValidDateValue(value) {
+  if (value === null || value === undefined || value === "" || value === 0) return false;
+  if (typeof value === "string" && !value.trim()) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}
+
+export function formatLearningDate(value, fallbackText = "noch nicht geplant", options = {}) {
+  if (!isValidDateValue(value)) return fallbackText;
+  const date = new Date(value);
+  const formatterOptions = options.includeTime
+    ? { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }
+    : { day: "2-digit", month: "2-digit", year: "2-digit" };
+  return date.toLocaleString("de-DE", {
+    ...formatterOptions,
+    hour12: false,
+  });
+}
 
 function toIsoDateTimeOrNull(value) {
-  if (!value) return null;
+  if (!isValidDateValue(value)) return null;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
 }
 
@@ -41,6 +203,84 @@ export function calculateNextSubjectReviewAt(reviewStep = 0, now = new Date(), m
   const interval = SUBJECT_REVIEW_INTERVAL_DAYS[Math.min(normalizedStep, SUBJECT_REVIEW_INTERVAL_DAYS.length - 1)] || SUBJECT_REVIEW_INTERVAL_DAYS[SUBJECT_REVIEW_INTERVAL_DAYS.length - 1];
   const boundedInterval = Math.min(interval, Math.max(1, Number(maxGapDuringSemester || MAX_REVIEW_GAP_DURING_SEMESTER)));
   return addDays(now, boundedInterval).toISOString();
+}
+
+export function shouldUpdateTopicReview(activityType, options = {}) {
+  const normalizedActivityType = normalizeActivityType(activityType);
+  if (REVIEW_UPDATING_ACTIVITY_TYPES.has(normalizedActivityType)) return true;
+  return normalizedActivityType === "cheatsheet_created" && Boolean(options.alsoPracticed);
+}
+
+export function calculateNextTopicReviewAt(confidence, studiedAt = new Date(), options = {}) {
+  const studiedAtDate = isValidDateValue(studiedAt) ? new Date(studiedAt) : new Date();
+  const normalizedConfidence = normalizeConfidence(confidence);
+  const intervalDays = CONFIDENCE_REVIEW_INTERVAL_DAYS[normalizedConfidence] || CONFIDENCE_REVIEW_INTERVAL_DAYS.unsure;
+  const boundedIntervalDays = Math.min(intervalDays, Math.max(1, Number(options.maxReviewGapDays || MAX_TOPIC_REVIEW_GAP_DAYS)));
+  const candidate = addDays(studiedAtDate, boundedIntervalDays);
+
+  const deadlineDates = Array.isArray(options.deadlineDates) ? options.deadlineDates : [];
+  const earliestDeadline = deadlineDates
+    .filter(isValidDateValue)
+    .map((value) => startOfLocalDay(value))
+    .filter((date) => date.getTime() >= startOfLocalDay(studiedAtDate).getTime())
+    .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+
+  if (!earliestDeadline) return candidate.toISOString();
+
+  const latestReviewDay = startOfLocalDay(earliestDeadline);
+  latestReviewDay.setDate(latestReviewDay.getDate() - 1);
+
+  if (latestReviewDay.getTime() < startOfLocalDay(studiedAtDate).getTime()) {
+    return studiedAtDate.toISOString();
+  }
+
+  return candidate.getTime() > latestReviewDay.getTime()
+    ? latestReviewDay.toISOString()
+    : candidate.toISOString();
+}
+
+export function buildTopicReviewProgress(topic, options = {}) {
+  if (!topic) return null;
+
+  const activityType = normalizeActivityType(options.activityType || options.activity_type);
+  const confidence = normalizeConfidence(options.confidence);
+  const reviewUpdated = shouldUpdateTopicReview(activityType, {
+    alsoPracticed: Boolean(options.alsoPracticed || options.also_practiced),
+  });
+
+  if (!reviewUpdated) {
+    return {
+      reviewUpdated: false,
+      activityType,
+      confidence,
+      topicPatch: {},
+    };
+  }
+
+  const studiedAtDate = isValidDateValue(options.studiedAt) ? new Date(options.studiedAt) : new Date();
+  const currentReviewCount = Math.max(0, Number(topic.reviewCount ?? topic.review_count ?? 0));
+  const currentReviewStep = Math.max(0, Number(topic.reviewStep ?? topic.review_step ?? 0));
+  const nextReviewAt = calculateNextTopicReviewAt(confidence, studiedAtDate, {
+    deadlineDates: options.deadlineDates,
+    maxReviewGapDays: options.maxReviewGapDays || MAX_TOPIC_REVIEW_GAP_DAYS,
+  });
+  const nextStatus = confidence === "confident" || confidence === "very_confident" ? "secure" : "active";
+
+  return {
+    reviewUpdated: true,
+    activityType,
+    confidence,
+    topicPatch: {
+      status: nextStatus,
+      confidence,
+      reviewCount: currentReviewCount + 1,
+      reviewStep: currentReviewStep + 1,
+      lastStudiedAt: studiedAtDate.toISOString(),
+      nextReviewAt,
+      isPausedToday: false,
+      completed: false,
+    },
+  };
 }
 
 function startOfLocalDay(value) {
@@ -884,7 +1124,7 @@ export async function updateSubjectStudyProgress(userId, subject, options = {}) 
   return updateSubjectRecord(userId, subject.id, patch);
 }
 
-const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,last_studied_at,next_review_at,review_step,completed,is_paused_today,created_at,updated_at";
+const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
 
 export async function loadTopics(userId) {
   try {
@@ -918,12 +1158,17 @@ export async function createTopicRecord(userId, topic) {
         subject_id: topic.subjectId,
         title: topic.title,
         order_index: Math.max(0, Number(topic.orderIndex || 0)),
-        status: topic.status || "new",
+        status: normalizeTopicStatus(topic.status || "new"),
+        cheatsheet_text: topic.cheatsheetText || "",
+        cheatsheet_url: topic.cheatsheetUrl || null,
+        confidence: normalizeConfidence(topic.confidence),
         last_studied_at: toIsoDateTimeOrNull(topic.lastStudiedAt),
         next_review_at: toIsoDateTimeOrNull(topic.nextReviewAt),
+        review_count: Math.max(0, Number(topic.reviewCount || 0)),
         review_step: Math.max(0, Number(topic.reviewStep || 0)),
         completed: Boolean(topic.completed),
         is_paused_today: Boolean(topic.isPausedToday),
+        archived_at: toIsoDateTimeOrNull(topic.archivedAt),
       }),
     }
   );
@@ -936,12 +1181,17 @@ export async function updateTopicRecord(userId, topicId, patch) {
   if (Object.prototype.hasOwnProperty.call(patch, "subjectId")) payload.subject_id = patch.subjectId;
   if (Object.prototype.hasOwnProperty.call(patch, "title")) payload.title = patch.title;
   if (Object.prototype.hasOwnProperty.call(patch, "orderIndex")) payload.order_index = Math.max(0, Number(patch.orderIndex || 0));
-  if (Object.prototype.hasOwnProperty.call(patch, "status")) payload.status = patch.status;
+  if (Object.prototype.hasOwnProperty.call(patch, "status")) payload.status = normalizeTopicStatus(patch.status);
+  if (Object.prototype.hasOwnProperty.call(patch, "cheatsheetText")) payload.cheatsheet_text = patch.cheatsheetText || "";
+  if (Object.prototype.hasOwnProperty.call(patch, "cheatsheetUrl")) payload.cheatsheet_url = patch.cheatsheetUrl || null;
+  if (Object.prototype.hasOwnProperty.call(patch, "confidence")) payload.confidence = normalizeConfidence(patch.confidence);
   if (Object.prototype.hasOwnProperty.call(patch, "lastStudiedAt")) payload.last_studied_at = toIsoDateTimeOrNull(patch.lastStudiedAt);
   if (Object.prototype.hasOwnProperty.call(patch, "nextReviewAt")) payload.next_review_at = toIsoDateTimeOrNull(patch.nextReviewAt);
+  if (Object.prototype.hasOwnProperty.call(patch, "reviewCount")) payload.review_count = Math.max(0, Number(patch.reviewCount || 0));
   if (Object.prototype.hasOwnProperty.call(patch, "reviewStep")) payload.review_step = Math.max(0, Number(patch.reviewStep || 0));
   if (Object.prototype.hasOwnProperty.call(patch, "completed")) payload.completed = Boolean(patch.completed);
   if (Object.prototype.hasOwnProperty.call(patch, "isPausedToday")) payload.is_paused_today = Boolean(patch.isPausedToday);
+  if (Object.prototype.hasOwnProperty.call(patch, "archivedAt")) payload.archived_at = toIsoDateTimeOrNull(patch.archivedAt);
 
   const rows = await supabaseRequest(
     `/topics?id=eq.${topicId}&user_id=eq.${userId}&select=${TOPIC_SELECT}`,
@@ -1070,7 +1320,7 @@ export async function markTopicAsLearnedNew(userId, topic, subject, options = {}
 
   const [updatedTopic] = await Promise.all([
     updateTopicRecord(userId, topic.id, {
-      status: "review",
+      status: "active",
       reviewStep: 0,
       lastStudiedAt: now.toISOString(),
       nextReviewAt,
@@ -1093,7 +1343,7 @@ export async function markTopicAsReviewed(userId, topic, options = {}) {
   const nextReviewAt = calculateNextReviewAt(nextStep, now, options.maxReviewGapDuringSemester || MAX_REVIEW_GAP_DURING_SEMESTER);
 
   const updatedTopic = await updateTopicRecord(userId, topic.id, {
-    status: "review",
+    status: "active",
     reviewStep: nextStep,
     lastStudiedAt: now.toISOString(),
     nextReviewAt,
@@ -1273,7 +1523,7 @@ export async function cancelTimerSession(userId, sessionId) {
  * Study Time Entries CRUD
  * Flexible time tracking linked to subjects and optional topics
  */
-const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,duration_minutes,source,notes,recorded_at,created_at,updated_at";
+const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,task_id,duration_minutes,source,notes,activity_type,confidence,review_updated,recorded_at,created_at,updated_at";
 
 function mapStudyTimeEntry(row) {
   if (!row) return null;
@@ -1282,9 +1532,13 @@ function mapStudyTimeEntry(row) {
     userId: row.user_id,
     subjectId: row.subject_id,
     topicId: row.topic_id || null,
+    taskId: row.task_id || null,
     durationMinutes: Number(row.duration_minutes || 0),
     source: row.source || "manual",
     notes: row.notes || "",
+    activityType: normalizeActivityType(row.activity_type),
+    confidence: row.confidence ? normalizeConfidence(row.confidence) : null,
+    reviewUpdated: Boolean(row.review_updated),
     recordedAt: row.recorded_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1299,6 +1553,9 @@ export async function loadStudyTimeEntries(userId, options = {}) {
   }
   if (options.topicId) {
     query += `&topic_id=eq.${options.topicId}`;
+  }
+  if (options.taskId) {
+    query += `&task_id=eq.${encodeURIComponent(options.taskId)}`;
   }
 
   query += "&order=recorded_at.desc";
@@ -1336,9 +1593,13 @@ export async function createStudyTimeEntry(userId, entry) {
         user_id: userId,
         subject_id: entry.subjectId,
         topic_id: entry.topicId || null,
+        task_id: entry.taskId || null,
         duration_minutes: Math.max(1, Math.round(Number(entry.durationMinutes))),
         source: entry.source || "manual",
         notes: entry.notes || "",
+        activity_type: normalizeActivityType(entry.activityType || entry.activity_type),
+        confidence: entry.confidence ? normalizeConfidence(entry.confidence) : null,
+        review_updated: Boolean(entry.reviewUpdated || entry.review_updated),
         recorded_at: entry.recordedAt || new Date().toISOString(),
       }),
     }
@@ -1356,8 +1617,23 @@ export async function updateStudyTimeEntry(userId, entryId, patch) {
   if ("notes" in patch) {
     payload.notes = patch.notes || "";
   }
+  if ("taskId" in patch) {
+    payload.task_id = patch.taskId || null;
+  }
+  if ("topicId" in patch) {
+    payload.topic_id = patch.topicId || null;
+  }
   if ("source" in patch) {
     payload.source = patch.source || "manual";
+  }
+  if ("activityType" in patch) {
+    payload.activity_type = normalizeActivityType(patch.activityType);
+  }
+  if ("confidence" in patch) {
+    payload.confidence = patch.confidence ? normalizeConfidence(patch.confidence) : null;
+  }
+  if ("reviewUpdated" in patch) {
+    payload.review_updated = Boolean(patch.reviewUpdated);
   }
   if ("recordedAt" in patch) {
     payload.recorded_at = toIsoDateTimeOrNull(patch.recordedAt);

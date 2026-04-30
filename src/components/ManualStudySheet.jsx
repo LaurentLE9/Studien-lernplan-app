@@ -22,6 +22,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import {
+  ACTIVITY_TYPES,
+  ACTIVITY_TYPE_LABELS,
+  CONFIDENCE_LEVELS,
+  CONFIDENCE_LABELS,
+  normalizeActivityType,
+  normalizeConfidence,
+  normalizeTopicStatus,
+  shouldUpdateTopicReview,
+} from "@/lib/cloudStore";
 
 function formatDateInput(value) {
   const date = new Date(value);
@@ -107,8 +117,11 @@ export default function ManualStudySheet({
   darkMode,
   selectedSubjectId,
   onSelectedSubjectChange,
+  selectedTaskId,
+  onSelectedTaskChange,
   selectedTopicId,
   onSelectedTopicChange,
+  onCreateTopic,
   onSaveEntry,
   initialValue,
   liveBreakMinutes,
@@ -120,9 +133,15 @@ export default function ManualStudySheet({
   const [endTime, setEndTime] = useState(new Date().toTimeString().slice(0, 5));
   const [breakMinutes, setBreakMinutes] = useState("0");
   const [breakMinutesTouched, setBreakMinutesTouched] = useState(false);
-  const [activity, setActivity] = useState("");
+  const [activityType, setActivityType] = useState("exercises_practiced");
+  const [confidence, setConfidence] = useState("unsure");
+  const [alsoPracticed, setAlsoPracticed] = useState(false);
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [newTopicTitle, setNewTopicTitle] = useState("");
+  const [newTopicCheatsheet, setNewTopicCheatsheet] = useState("");
+  const [newTopicUrl, setNewTopicUrl] = useState("");
+  const [isCreatingTopic, setIsCreatingTopic] = useState(false);
 
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem("manualStudySheetWidth");
@@ -166,8 +185,13 @@ export default function ManualStudySheet({
     setEndTime(seed.endTime || toTimeInputValue(now));
     setBreakMinutes(seed.breakMinutes ?? "0");
     setBreakMinutesTouched(false);
-    setActivity(seed.activity || "");
+    setActivityType(normalizeActivityType(seed.activityType || seed.activity || "exercises_practiced", "exercises_practiced"));
+    setConfidence(normalizeConfidence(seed.confidence || "unsure"));
+    setAlsoPracticed(Boolean(seed.alsoPracticed));
     setNote(seed.note || "");
+    setNewTopicTitle("");
+    setNewTopicCheatsheet("");
+    setNewTopicUrl("");
   }, [open, initialValue]);
 
   useEffect(() => {
@@ -183,11 +207,26 @@ export default function ManualStudySheet({
     [tasks, selectedSubjectId]
   );
 
+  const openTopicsForSubject = useMemo(
+    () => (topics || []).filter((topic) => {
+      if (topic.subjectId !== selectedSubjectId) return false;
+      const status = normalizeTopicStatus(topic.status);
+      return status !== "archived" && !topic.completed && !topic.archivedAt;
+    }),
+    [topics, selectedSubjectId]
+  );
+
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    if (openTasksForSubject.some((task) => task.id === selectedTaskId)) return;
+    onSelectedTaskChange?.("");
+  }, [openTasksForSubject, onSelectedTaskChange, selectedTaskId]);
+
   useEffect(() => {
     if (!selectedTopicId) return;
-    if (openTasksForSubject.some((task) => task.id === selectedTopicId)) return;
-    onSelectedTopicChange("");
-  }, [openTasksForSubject, onSelectedTopicChange, selectedTopicId]);
+    if (openTopicsForSubject.some((topic) => topic.id === selectedTopicId)) return;
+    onSelectedTopicChange?.("");
+  }, [openTopicsForSubject, onSelectedTopicChange, selectedTopicId]);
 
   function shiftDate(days) {
     const date = new Date(entryDate);
@@ -210,18 +249,52 @@ export default function ManualStudySheet({
 
     try {
       setIsSaving(true);
+      const normalizedActivityType = normalizeActivityType(activityType, "exercises_practiced");
+      const normalizedConfidence = normalizeConfidence(confidence);
+      const reviewUpdated = selectedTopicId
+        ? shouldUpdateTopicReview(normalizedActivityType, { alsoPracticed })
+        : false;
       await Promise.resolve(onSaveEntry({
         id: initialValue?.id || crypto.randomUUID(),
         subjectId: selectedSubjectId,
-        taskId: selectedTopicId || undefined,
+        taskId: selectedTaskId || undefined,
+        topicId: selectedTopicId || undefined,
         durationMinutes,
         createdAt: new Date(`${entryDate}T${endTime}:00`).toISOString(),
         source: initialValue?.source === "manual-entry" ? "manual" : initialValue?.source || "manual",
-        note: [activity, note].filter(Boolean).join(" - ") || "Lerneinheit manuell angelegt",
+        activityType: normalizedActivityType,
+        confidence: normalizedConfidence,
+        alsoPracticed,
+        reviewUpdated,
+        note: [ACTIVITY_TYPE_LABELS[normalizedActivityType], note].filter(Boolean).join(" - ") || "Lerneinheit manuell angelegt",
       }));
       onOpenChange(false);
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function createTopicFromSheet() {
+    const title = newTopicTitle.trim();
+    if (!title || !selectedSubjectId || !onCreateTopic) return;
+
+    try {
+      setIsCreatingTopic(true);
+      const created = await Promise.resolve(onCreateTopic({
+        subjectId: selectedSubjectId,
+        title,
+        cheatsheetText: newTopicCheatsheet,
+        cheatsheetUrl: newTopicUrl,
+        status: "new",
+      }));
+      if (created?.id) {
+        onSelectedTopicChange?.(created.id);
+        setNewTopicTitle("");
+        setNewTopicCheatsheet("");
+        setNewTopicUrl("");
+      }
+    } finally {
+      setIsCreatingTopic(false);
     }
   }
 
@@ -270,7 +343,7 @@ export default function ManualStudySheet({
                 <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Lerneinheit</p>
                 <DialogTitle className="text-xl font-semibold sm:text-2xl">{title}</DialogTitle>
                 <DialogDescription>
-                  Erfasse eine manuelle Lerneinheit mit Zeitfenster, Pause, Fach und optionaler Aufgabe.
+                  Erfasse eine Lerneinheit mit Fach, optionaler Aufgabe, Lernthema und Aktivitaet.
                 </DialogDescription>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
@@ -376,8 +449,8 @@ export default function ManualStudySheet({
               <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
                 <div>
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.18em]", mutedTextClass)}>Zuordnung</p>
-                  <h4 className="mt-1 text-base font-semibold">Fach und Aufgabe</h4>
-                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Waehle ein Fach und optional eine offene Aufgabe fuer die Zeiterfassung.</p>
+                  <h4 className="mt-1 text-base font-semibold">Fach, Aufgabe und Lernthema</h4>
+                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Aufgaben bleiben To-dos; Lernthemen sind wiederholbare Wissenseinheiten.</p>
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -397,7 +470,17 @@ export default function ManualStudySheet({
                         </SelectContent>
                       </Select>
                       {selectedSubjectId ? (
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedSubjectChange("")}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-full"
+                          onClick={() => {
+                            onSelectedSubjectChange("");
+                            onSelectedTaskChange?.("");
+                            onSelectedTopicChange?.("");
+                          }}
+                        >
                           <X className="h-4 w-4" />
                         </Button>
                       ) : null}
@@ -409,7 +492,7 @@ export default function ManualStudySheet({
                     <div className="mt-3 flex items-center gap-2">
                       {selectedSubjectId && openTasksForSubject.length > 0 ? (
                         <>
-                          <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange(value || "")}>
+                          <Select value={selectedTaskId || ""} onValueChange={(value) => onSelectedTaskChange?.(value || "")}>
                             <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
                               <SelectValue placeholder="Aufgabe auswaehlen" />
                             </SelectTrigger>
@@ -421,8 +504,8 @@ export default function ManualStudySheet({
                               ))}
                             </SelectContent>
                           </Select>
-                          {selectedTopicId ? (
-                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedTopicChange("")}>
+                          {selectedTaskId ? (
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedTaskChange?.("")}>
                               <X className="h-4 w-4" />
                             </Button>
                           ) : null}
@@ -435,24 +518,124 @@ export default function ManualStudySheet({
                     </div>
                   </div>
                 </div>
+
+                <div className="mt-3 grid gap-3">
+                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                    <Label>Lernthema (optional)</Label>
+                    <div className="mt-3 flex items-center gap-2">
+                      {selectedSubjectId && openTopicsForSubject.length > 0 ? (
+                        <>
+                          <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange?.(value || "")}>
+                            <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
+                              <SelectValue placeholder="Lernthema auswaehlen" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {openTopicsForSubject.map((topic) => (
+                                <SelectItem key={topic.id} value={topic.id}>
+                                  {topic.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedTopicId ? (
+                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => onSelectedTopicChange?.("")}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          ) : null}
+                        </>
+                      ) : (
+                        <div className={cn("flex min-h-[44px] w-full items-center rounded-[1rem] border px-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
+                          {selectedSubjectId ? "Fuer dieses Fach gibt es noch keine Lernthemen." : "Waehle zuerst ein Fach aus."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedSubjectId && onCreateTopic ? (
+                    <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                      <Label>Neues Lernthema direkt anlegen</Label>
+                      <div className="mt-3 grid gap-3">
+                        <Input
+                          value={newTopicTitle}
+                          onChange={(event) => setNewTopicTitle(event.target.value)}
+                          placeholder="Titel des Lernthemas"
+                          className={darkMode ? "border-slate-700 bg-slate-900 text-slate-50 placeholder:text-slate-500" : ""}
+                        />
+                        <Textarea
+                          value={newTopicCheatsheet}
+                          onChange={(event) => setNewTopicCheatsheet(event.target.value)}
+                          placeholder="Cheatsheet / Notiz"
+                          className={cn("min-h-[88px] resize-none", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 placeholder:text-slate-500" : "")}
+                        />
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <Input
+                            value={newTopicUrl}
+                            onChange={(event) => setNewTopicUrl(event.target.value)}
+                            placeholder="Cheatsheet-Link (optional)"
+                            className={darkMode ? "border-slate-700 bg-slate-900 text-slate-50 placeholder:text-slate-500" : ""}
+                          />
+                          <Button type="button" variant="secondary" className="rounded-[1rem]" onClick={createTopicFromSheet} disabled={!newTopicTitle.trim() || isCreatingTopic}>
+                            {isCreatingTopic ? "Wird angelegt..." : "Lernthema anlegen"}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
               <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
                 <div>
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.18em]", mutedTextClass)}>Details</p>
-                  <h4 className="mt-1 text-base font-semibold">Aktivitaet und Notiz</h4>
+                  <h4 className="mt-1 text-base font-semibold">Aktivitaet, Sicherheit und Notiz</h4>
                 </div>
 
                 <div className="mt-4 grid gap-3">
-                  <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
-                    <Label>Aktivitaet</Label>
-                    <Input
-                      value={activity}
-                      onChange={(event) => setActivity(event.target.value)}
-                      placeholder="z. B. Wiederholung"
-                      className={cn(inputClass, "text-base")}
-                    />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                      <Label>Aktivitaet</Label>
+                      <Select value={activityType} onValueChange={(value) => setActivityType(normalizeActivityType(value, "exercises_practiced"))}>
+                        <SelectTrigger className="mt-3 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ACTIVITY_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {ACTIVITY_TYPE_LABELS[type]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
+                      <Label>Sicherheit</Label>
+                      <Select value={confidence} onValueChange={(value) => setConfidence(normalizeConfidence(value))}>
+                        <SelectTrigger className="mt-3 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CONFIDENCE_LEVELS.map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {CONFIDENCE_LABELS[level]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
+
+                  {activityType === "cheatsheet_created" ? (
+                    <label className={cn("flex items-center justify-between gap-3 rounded-[1rem] border p-4 text-sm", fieldSurfaceClass)}>
+                      <span>Auch geuebt und als Wiederholung zaehlen</span>
+                      <input
+                        type="checkbox"
+                        checked={alsoPracticed}
+                        onChange={(event) => setAlsoPracticed(event.target.checked)}
+                        className="h-4 w-4"
+                      />
+                    </label>
+                  ) : null}
 
                   <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
                     <Label>Notiz</Label>

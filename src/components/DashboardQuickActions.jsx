@@ -51,6 +51,7 @@ export default function DashboardQuickActions({
   tasks,
   topics,
   onSaveSession,
+  onCreateTopic,
   darkMode,
   userId,
   timerStartRequest,
@@ -120,6 +121,7 @@ export default function DashboardQuickActions({
   const [timerTaskSelectMode, setTimerTaskSelectMode] = useState(false);
   const [expireDialogOpen, setExpireDialogOpen] = useState(false);
   const [manualSubjectId, setManualSubjectId] = useState("");
+  const [manualTaskId, setManualTaskId] = useState("");
   const [manualTopicId, setManualTopicId] = useState("");
   const [timerSubjectId, setTimerSubjectId] = useState(storedTimer.timerSubjectId || subjects[0]?.id || "");
   const [timerTaskId, setTimerTaskId] = useState(storedTimer.timerTaskId || "");
@@ -316,7 +318,8 @@ export default function DashboardQuickActions({
 
   function openManualWithSeed(subjectId, seed = null) {
     setManualSubjectId(subjectId || "");
-    setManualTopicId(seed?.taskId || "");
+    setManualTaskId(seed?.taskId || "");
+    setManualTopicId(seed?.topicId || "");
     setManualSeed(seed);
     setManualDialogOpen(true);
   }
@@ -473,23 +476,26 @@ export default function DashboardQuickActions({
       setTimerBusy(true);
       const elapsedSeconds = getElapsedSeconds(activeTimer, Date.now());
       const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
+      const now = new Date();
+      const start = new Date(now.getTime() - durationMinutes * 60000);
       const taskLabel = selectedTask?.title || null;
 
       if (elapsedSeconds > 0 && activeTimer.subjectId) {
-        onSaveSession({
+        openManualWithSeed(activeTimer.subjectId, {
           id: crypto.randomUUID(),
-          subjectId: activeTimer.subjectId,
+          date: formatDateInput(now),
+          startTime: toTimeInputValue(start),
+          endTime: toTimeInputValue(now),
+          breakMinutes: String(getCurrentPauseMinutes(activeTimer, Date.now())),
           taskId: selectedTask?.id || undefined,
-          durationMinutes,
-          createdAt: new Date().toISOString(),
+          activityType: "exercises_practiced",
           source: activeTimer.mode || "stopwatch",
           note: activeTimer.mode === "pomodoro"
             ? `${taskLabel ? `Aufgabe: ${taskLabel} - ` : ""}Pomodoro ${activeTimer.presetMinutes || timerPreset} Minuten`
             : taskLabel || "Stoppuhr-Sitzung",
         });
       }
-
-      await stopAndResetTimerSession("finish", activeTimer);
+      setExpireDialogOpen(false);
     } catch (error) {
       console.error("Finish timer with save failed:", error);
     } finally {
@@ -553,6 +559,9 @@ export default function DashboardQuickActions({
           <Button
             type="button"
             onClick={() => {
+              setManualSubjectId("");
+              setManualTaskId("");
+              setManualTopicId("");
               setManualSeed(null);
               setManualDialogOpen(true);
               setTimerOpen(false);
@@ -936,10 +945,14 @@ export default function DashboardQuickActions({
         selectedSubjectId={manualSubjectId}
         onSelectedSubjectChange={(subjectId) => {
           setManualSubjectId(subjectId);
+          setManualTaskId("");
           setManualTopicId("");
         }}
+        selectedTaskId={manualTaskId}
+        onSelectedTaskChange={setManualTaskId}
         selectedTopicId={manualTopicId}
         onSelectedTopicChange={setManualTopicId}
+        onCreateTopic={onCreateTopic}
         onSaveEntry={handleManualSaveEntry}
         initialValue={manualSeed}
         liveBreakMinutes={livePauseMinutes}
