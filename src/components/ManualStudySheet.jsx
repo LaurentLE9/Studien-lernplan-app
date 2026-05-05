@@ -343,7 +343,7 @@ export default function ManualStudySheet({
                 <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Lerneinheit</p>
                 <DialogTitle className="text-xl font-semibold sm:text-2xl">{title}</DialogTitle>
                 <DialogDescription>
-                  Erfasse eine Lerneinheit mit Fach, optionaler Aufgabe, Lernthema und Aktivitaet.
+                  Erfasse eine Lerneinheit mit Fach, optionaler Aufgabe, Lernthema und Aktivität.
                 </DialogDescription>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
@@ -459,7 +459,7 @@ export default function ManualStudySheet({
                     <div className="mt-3 flex items-center gap-2">
                       <Select value={selectedSubjectId || undefined} onValueChange={onSelectedSubjectChange}>
                         <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
-                          <SelectValue placeholder="Fach waehlen" />
+                          <SelectValue placeholder="Fach wählen" />
                         </SelectTrigger>
                         <SelectContent>
                           {subjects.map((subject) => (
@@ -494,7 +494,7 @@ export default function ManualStudySheet({
                         <>
                           <Select value={selectedTaskId || ""} onValueChange={(value) => onSelectedTaskChange?.(value || "")}>
                             <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
-                              <SelectValue placeholder="Aufgabe auswaehlen" />
+                              <SelectValue placeholder="Aufgabe auswählen" />
                             </SelectTrigger>
                             <SelectContent>
                               {openTasksForSubject.map((task) => (
@@ -512,7 +512,7 @@ export default function ManualStudySheet({
                         </>
                       ) : (
                         <div className={cn("flex min-h-[44px] w-full items-center rounded-[1rem] border px-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                          {selectedSubjectId ? "Keine offenen Aufgaben fuer dieses Fach vorhanden." : "Waehle zuerst ein Fach aus."}
+                          {selectedSubjectId ? "Keine offenen Aufgaben für dieses Fach vorhanden." : "Wähle zuerst ein Fach aus."}
                         </div>
                       )}
                     </div>
@@ -527,7 +527,7 @@ export default function ManualStudySheet({
                         <>
                           <Select value={selectedTopicId || ""} onValueChange={(value) => onSelectedTopicChange?.(value || "")}>
                             <SelectTrigger className="border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
-                              <SelectValue placeholder="Lernthema auswaehlen" />
+                              <SelectValue placeholder="Lernthema auswählen" />
                             </SelectTrigger>
                             <SelectContent>
                               {openTopicsForSubject.map((topic) => (
@@ -545,7 +545,7 @@ export default function ManualStudySheet({
                         </>
                       ) : (
                         <div className={cn("flex min-h-[44px] w-full items-center rounded-[1rem] border px-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                          {selectedSubjectId ? "Fuer dieses Fach gibt es noch keine Lernthemen." : "Waehle zuerst ein Fach aus."}
+                          {selectedSubjectId ? "Für dieses Fach gibt es noch keine Lernthemen." : "Wähle zuerst ein Fach aus."}
                         </div>
                       )}
                     </div>
@@ -587,13 +587,13 @@ export default function ManualStudySheet({
               <div className={cn("rounded-[1.3rem] border p-4", sectionSurfaceClass)}>
                 <div>
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.18em]", mutedTextClass)}>Details</p>
-                  <h4 className="mt-1 text-base font-semibold">Aktivitaet, Sicherheit und Notiz</h4>
+                  <h4 className="mt-1 text-base font-semibold">Aktivität, Sicherheit und Notiz</h4>
                 </div>
 
                 <div className="mt-4 grid gap-3">
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className={cn("rounded-[1rem] border p-4", fieldSurfaceClass)}>
-                      <Label>Aktivitaet</Label>
+                      <Label>Aktivität</Label>
                       <Select value={activityType} onValueChange={(value) => setActivityType(normalizeActivityType(value, "exercises_practiced"))}>
                         <SelectTrigger className="mt-3 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus:ring-0 focus:ring-offset-0">
                           <SelectValue />
@@ -627,7 +627,7 @@ export default function ManualStudySheet({
 
                   {activityType === "cheatsheet_created" ? (
                     <label className={cn("flex items-center justify-between gap-3 rounded-[1rem] border p-4 text-sm", fieldSurfaceClass)}>
-                      <span>Auch geuebt und als Wiederholung zaehlen</span>
+                      <span>Auch geübt und als Wiederholung zählen</span>
                       <input
                         type="checkbox"
                         checked={alsoPracticed}
@@ -656,10 +656,10 @@ export default function ManualStudySheet({
               <div className={cn("flex items-center gap-2 text-sm", !selectedSubjectId || durationMinutes <= 0 ? "text-destructive" : "text-muted-foreground")}>
                 <PencilLine className="h-4 w-4" />
                 {!selectedSubjectId 
-                  ? "Bitte Fach waehlen." 
+                  ? "Bitte Fach wählen."
                   : durationMinutes > 0 
                     ? `${formatMinutes(durationMinutes)} werden gespeichert.` 
-                    : "Bitte gueltige Dauer eingeben."}
+                    : "Bitte gültige Dauer eingeben."}
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row">

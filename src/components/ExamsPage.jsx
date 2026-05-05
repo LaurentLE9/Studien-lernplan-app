@@ -239,7 +239,7 @@ export default function ExamsPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight sm:text-[2rem]">Klausuren</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Pruefungen, Status und naechste Termine im Blick behalten.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Prüfungen, Status und nächste Termine im Blick behalten.</p>
         </div>
           <Button variant="outline" className="h-11 rounded-[1rem] px-4" onClick={() => { setEditingExam(null); setExamDialogOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />Klausur anlegen

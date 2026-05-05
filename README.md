@@ -1,10 +1,10 @@
 # Studien-lernplan-app
 
-React/Vite App fuer Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro) und Statistikansichten.
+React/Vite App für Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro) und Statistikansichten.
 
 ## Start
 
-1. Abhaengigkeiten installieren:
+1. Abhängigkeiten installieren:
 
 	npm install
 
@@ -76,12 +76,12 @@ React/Vite App fuer Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro
 ## Wichtige Persistenz-Hinweise (Vercel)
 
 - Daten liegen persistent in Supabase (Tabelle `user_plans`) und nicht im Deployment-Artefakt.
-- Jeder Datensatz ist ueber `user_id` an den eingeloggten User gebunden.
-- Neue Deployments auf Vercel loeschen keine Nutzerdaten, solange die ENV-Werte korrekt gesetzt sind.
+- Jeder Datensatz ist über `user_id` an den eingeloggten User gebunden.
+- Neue Deployments auf Vercel löschen keine Nutzerdaten, solange die ENV-Werte korrekt gesetzt sind.
 
 ## Debugging / Diagnose
 
 - Setze optional `VITE_DEBUG_SYNC=true` (Standard aktiv), um Sync-Logs in der Browser-Konsole zu sehen.
-- Relevante Log-Praefixe:
-	- `[cloud-sync]` fuer Requests/Antworten gegen Supabase
-	- `[app-sync]` fuer Login-Laden/Speichern im Frontend
+- Relevante Log-Präfixe:
+	- `[cloud-sync]` für Requests/Antworten gegen Supabase
+	- `[app-sync]` für Login-Laden/Speichern im Frontend

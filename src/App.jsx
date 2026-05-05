@@ -1617,7 +1617,7 @@ function LegacyDashboardQuickActions({ subjects, tasks, topics, onSaveSession, d
   const livePauseMinutes = activeTimer ? getCurrentPauseMinutes(activeTimer, tickNowMs) : undefined;
   const timerModeLabel = timerMode === "pomodoro" ? "Pomodoro" : "Stoppuhr";
   const activeTimerDetail = selectedTask?.title
-    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit laeuft ohne Aufgabe");
+    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit läuft ohne Aufgabe");
 
   return (
     <>
@@ -2010,13 +2010,13 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
   function applyCustomPomodoroMinutes() {
     const rawValue = String(customPomodoroMinutes || "").trim();
     if (!/^\d+$/.test(rawValue)) {
-      setCustomPomodoroError("Bitte eine ganze Zahl groesser als 0 eingeben.");
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
       return;
     }
 
     const parsedMinutes = Number(rawValue);
     if (!Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
-      setCustomPomodoroError("Bitte eine ganze Zahl groesser als 0 eingeben.");
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
       return;
     }
 
@@ -2221,7 +2221,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
   const livePauseMinutes = activeTimer ? getCurrentPauseMinutes(activeTimer, tickNowMs) : undefined;
   const timerModeLabel = timerMode === "pomodoro" ? "Pomodoro" : "Stoppuhr";
   const activeTimerDetail = selectedTask?.title
-    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit laeuft ohne Aufgabe");
+    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit läuft ohne Aufgabe");
 
   return (
     <>
@@ -2250,7 +2250,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
               <div className={cn("absolute left-0 top-full z-50 mt-3 w-[min(320px,calc(100vw-1rem))] rounded-[1.3rem] border p-3 shadow-2xl sm:left-auto sm:right-0", floatingClass)}>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold">Fach auswaehlen</p>
+                    <p className="text-sm font-semibold">Fach auswählen</p>
                     <p className={cn("text-xs", mutedTextClass)}>Direkt eine manuelle Lerneinheit anlegen.</p>
                   </div>
                   <Button size="icon" variant="ghost" className="h-9 w-9 rounded-full" onClick={() => setManualPickerOpen(false)}>
@@ -2304,13 +2304,13 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                 <div className="min-w-0">
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Timer</p>
                   <h3 className="mt-1 text-xl font-semibold">Lernsitzung starten</h3>
-                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Stoppuhr oder Pomodoro vorbereiten und dann Fach sowie Aufgabe waehlen.</p>
+                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Stoppuhr oder Pomodoro vorbereiten und dann Fach sowie Aufgabe wählen.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setTimerOpen(false)}
                   className={cn("inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition", darkMode ? "border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-slate-100" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900")}
-                  aria-label="Timer schliessen"
+                  aria-label="Timer schließen"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2354,7 +2354,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-base font-semibold">Stoppuhr</p>
-                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Die Zeit laeuft offen weiter, bis du pausierst oder speicherst.</p>
+                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Die Zeit läuft offen weiter, bis du pausierst oder speicherst.</p>
                       </div>
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                         Offen
@@ -2368,7 +2368,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-base font-semibold">Pomodoro-Dauer</p>
-                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Waehle ein Preset oder setze eine eigene Dauer in Minuten.</p>
+                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Wähle ein Preset oder setze eine eigene Dauer in Minuten.</p>
                       </div>
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                         {timerPreset} Min.
@@ -2430,7 +2430,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                             )}
                           />
                           <Button type="button" variant="secondary" className={cn("h-11 rounded-[1rem] px-4", darkMode ? "bg-slate-100 text-slate-950 hover:bg-white" : "")} onClick={applyCustomPomodoroMinutes}>
-                            Uebernehmen
+                            Übernehmen
                           </Button>
                         </div>
                         {customPomodoroError ? <p className="text-xs text-red-500">{customPomodoroError}</p> : null}
@@ -2446,7 +2446,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                         {timerTaskSelectMode ? "Schritt 2 von 2" : "Schritt 1 von 2"}
                       </p>
                       <h4 className="mt-1 text-base font-semibold">
-                        {timerTaskSelectMode ? "Aufgabe auswaehlen" : "Fach auswaehlen"}
+                        {timerTaskSelectMode ? "Aufgabe auswählen" : "Fach auswählen"}
                       </h4>
                     </div>
                     {timerTaskSelectMode ? (
@@ -2456,11 +2456,11 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                         className={cn("inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-medium transition", darkMode ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        Zurueck
+                        Zurück
                       </button>
                     ) : (
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
-                        {subjects.length} Faecher
+                        {subjects.length} Fächer
                       </Badge>
                     )}
                   </div>
@@ -2485,7 +2485,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className={cn("truncate font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>{subject.name}</p>
-                              <p className={cn("mt-1 text-xs", mutedTextClass)}>Verfuegbare Aufgaben fuer dieses Fach anzeigen.</p>
+                              <p className={cn("mt-1 text-xs", mutedTextClass)}>Verfügbare Aufgaben für dieses Fach anzeigen.</p>
                             </div>
                             {isSelected ? (
                               <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
@@ -2501,7 +2501,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                       <>
                         <div className={cn("rounded-[1rem] border px-4 py-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                           <span className="font-semibold">{subjects.find((subject) => subject.id === timerSubjectId)?.name || "Fach"}</span>
-                          <span className={cn("ml-2", mutedTextClass)}>Aufgabe auswaehlen oder direkt ohne Aufgabe starten.</span>
+                          <span className={cn("ml-2", mutedTextClass)}>Aufgabe auswählen oder direkt ohne Aufgabe starten.</span>
                         </div>
 
                         {timerTaskChoices.length === 0 ? (
@@ -2512,7 +2512,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
                           <>
                             {showingFallbackTasks ? (
                               <div className={cn("rounded-[1rem] border px-4 py-3 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                                Fuer dieses Fach gibt es noch keine Aufgaben. Deshalb werden alle Aufgaben angezeigt.
+                                Für dieses Fach gibt es noch keine Aufgaben. Deshalb werden alle Aufgaben angezeigt.
                               </div>
                             ) : null}
                             {timerTaskChoices.map((task) => {
@@ -2553,8 +2553,8 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className={cn("min-w-0 text-sm", mutedTextClass)}>
                   {timerTaskSelectMode
-                    ? "Waehle eine Aufgabe fuer den Timer oder starte direkt ohne Aufgabe."
-                    : "Waehle zuerst ein Fach. Die Aufgabenliste folgt im zweiten Schritt."}
+                    ? "Wähle eine Aufgabe für den Timer oder starte direkt ohne Aufgabe."
+                    : "Wähle zuerst ein Fach. Die Aufgabenliste folgt im zweiten Schritt."}
                 </p>
                 {timerTaskSelectMode ? (
                   <Button
@@ -2601,7 +2601,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                   <span className={cn("rounded-full px-3 py-1.5", isPaused ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/20 text-emerald-300")}>
-                    {isPaused ? "Pausiert" : "Laeuft"}
+                    {isPaused ? "Pausiert" : "Läuft"}
                   </span>
                   <span className={cn("rounded-full px-3 py-1.5", darkMode ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-700")}>
                     {activeTimer?.mode === "pomodoro" ? `${activeTimer.presetMinutes || timerPreset} Min. Pomodoro` : "Stoppuhr"}
@@ -2655,7 +2655,7 @@ function DashboardQuickActions({ subjects, tasks, topics, onSaveSession, darkMod
             <p className={darkMode ? "text-slate-100" : "text-slate-900"}>Aktuelle Dauer: <span className="font-mono font-semibold">{timerDisplay}</span></p>
           </div>
           <div className="flex gap-2 justify-end pt-4 border-t" style={{ borderColor: darkMode ? "#334155" : "#e2e8f0" }}>
-            <Button variant="outline" onClick={() => setExpireDialogOpen(false)} className="rounded-xl">Zurueck</Button>
+            <Button variant="outline" onClick={() => setExpireDialogOpen(false)} className="rounded-xl">Zurück</Button>
             <Button variant="destructive" onClick={handleExpireDiscard} className="rounded-xl" disabled={timerBusy}>Verwerfen</Button>
             <Button onClick={handleExpireSave} className="rounded-xl bg-blue-600 hover:bg-blue-500" disabled={timerBusy}>Speichern</Button>
           </div>
@@ -2966,7 +2966,7 @@ function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
-      <div className="grid gap-2"><Label>Verknuepftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswaehlen" : "Zuerst Fach waehlen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
+      <div className="grid gap-2"><Label>Verknüpftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswählen" : "Zuerst Fach wählen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
@@ -2997,7 +2997,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
       nextErrors.title = "Bitte gib einen Titel ein.";
     }
     if (!currentForm.subjectId) {
-      nextErrors.subjectId = "Bitte waehle ein Fach aus.";
+      nextErrors.subjectId = "Bitte wähle ein Fach aus.";
     }
     setErrors(nextErrors);
     return !nextErrors.title && !nextErrors.subjectId;
@@ -3116,7 +3116,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
               <Label>Fach</Label>
               <Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}>
                 <SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}>
-                  <SelectValue placeholder="Fach auswaehlen" />
+                  <SelectValue placeholder="Fach auswählen" />
                 </SelectTrigger>
                 <SelectContent>
                   {subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}
@@ -3127,7 +3127,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Prioritaet</Label>
+                <Label>Priorität</Label>
                 <Select value={form.priority} onValueChange={(value) => setForm((prev) => ({ ...prev, priority: value }))}>
                   <SelectTrigger>
                     <SelectValue />
@@ -3162,7 +3162,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nicht wiederholen</SelectItem>
-                  <SelectItem value="weekly">Woechentlich</SelectItem>
+                  <SelectItem value="weekly">Wöchentlich</SelectItem>
                   <SelectItem value="monthly">Monatlich</SelectItem>
                 </SelectContent>
               </Select>
@@ -3181,7 +3181,7 @@ function TaskDialogForm({ subjects, onSave, initialValue, onDone }) {
             <div className={toggleFieldClass}>
               <div className="grid gap-1">
                 <span className="text-sm font-medium">Dringend markieren</span>
-                <span className="text-xs text-muted-foreground">In Listen auffaelliger hervorheben.</span>
+                <span className="text-xs text-muted-foreground">In Listen auffälliger hervorheben.</span>
               </div>
               <Switch checked={form.urgent} onCheckedChange={(checked) => setForm((prev) => ({ ...prev, urgent: checked }))} className="pointer-events-auto" />
             </div>
@@ -5499,7 +5499,7 @@ export default function StudyPlannerApp() {
                                             <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
                                             <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleDeadlineTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer fuer ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleDeadlineTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     ) : (
@@ -6224,19 +6224,19 @@ export default function StudyPlannerApp() {
             onOpenChange={(open) => !open && setTaskCompletionPrompt(null)}
             darkMode={darkMode}
             title="Aufgabe erledigen"
-            description="Diese Aufgabe ist mit einem Lernthema verknuepft."
+            description="Diese Aufgabe ist mit einem Lernthema verknüpft."
             badgeText="To-do"
           >
             {taskCompletionPrompt ? (
               <div className="grid gap-4">
                 <div className="rounded-2xl border p-4">
-                  <p className="text-sm text-muted-foreground">Als Uebung fuer verknuepftes Lernthema zaehlen?</p>
+                  <p className="text-sm text-muted-foreground">Als Übung für verknüpftes Lernthema zählen?</p>
                   <p className="mt-2 font-semibold">{taskCompletionPrompt.task.title}</p>
                   <p className="text-sm text-muted-foreground">{taskCompletionPrompt.topic.title}</p>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <Button variant="outline" className="rounded-xl" onClick={() => completeTaskOnly(taskCompletionPrompt.task)}>Nur Aufgabe erledigen</Button>
-                  <Button className="rounded-xl" onClick={() => completeTaskWithStudyEntry(taskCompletionPrompt.task, taskCompletionPrompt.topic)}>Als Uebung erfassen</Button>
+                  <Button className="rounded-xl" onClick={() => completeTaskWithStudyEntry(taskCompletionPrompt.task, taskCompletionPrompt.topic)}>Als Übung erfassen</Button>
                   <Button variant="ghost" className="rounded-xl" onClick={() => setTaskCompletionPrompt(null)}>Abbrechen</Button>
                 </div>
               </div>
@@ -6259,7 +6259,7 @@ export default function StudyPlannerApp() {
             onSaveEntry={saveStudySession}
             initialValue={editingSession ? buildSessionSeedFromEntry(editingSession) : null}
             title="Lerneinheit bearbeiten"
-            submitLabel="Aenderungen speichern"
+            submitLabel="Änderungen speichern"
           />
           {showScrollTopButton ? (
             <button

@@ -27,9 +27,9 @@ export const ACTIVITY_TYPES = [
 export const ACTIVITY_TYPE_LABELS = {
   cheatsheet_created: "Cheatsheet erstellt",
   theory_read: "Theorie gelesen",
-  exercises_practiced: "Aufgaben ge\u00fcbt",
+  exercises_practiced: "Aufgaben geübt",
   review_done: "Wiederholung gemacht",
-  exam_exercise_practiced: "Klausuraufgabe ge\u00fcbt",
+  exam_exercise_practiced: "Klausuraufgabe geübt",
 };
 
 export const CONFIDENCE_LEVELS = [
@@ -90,7 +90,7 @@ export function normalizeActivityType(value, fallback = "theory_read") {
     "theorie gelesen": "theory_read",
     exercises_practiced: "exercises_practiced",
     "exercises practiced": "exercises_practiced",
-    "aufgaben ge\u00fcbt": "exercises_practiced",
+    "aufgaben geübt": "exercises_practiced",
     "aufgaben geuebt": "exercises_practiced",
     "wiederholung": "review_done",
     review_done: "review_done",
@@ -98,7 +98,7 @@ export function normalizeActivityType(value, fallback = "theory_read") {
     "wiederholung gemacht": "review_done",
     exam_exercise_practiced: "exam_exercise_practiced",
     "exam exercise practiced": "exam_exercise_practiced",
-    "klausuraufgabe ge\u00fcbt": "exam_exercise_practiced",
+    "klausuraufgabe geübt": "exam_exercise_practiced",
     "klausuraufgabe geuebt": "exam_exercise_practiced",
   };
   return mapping[key] || (ACTIVITY_TYPES.includes(fallback) ? fallback : "theory_read");

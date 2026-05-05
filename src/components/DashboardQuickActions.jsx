@@ -334,13 +334,13 @@ export default function DashboardQuickActions({
   function applyCustomPomodoroMinutes() {
     const rawValue = String(customPomodoroMinutes || "").trim();
     if (!/^\d+$/.test(rawValue)) {
-      setCustomPomodoroError("Bitte eine ganze Zahl groesser als 0 eingeben.");
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
       return;
     }
 
     const parsedMinutes = Number(rawValue);
     if (!Number.isFinite(parsedMinutes) || parsedMinutes <= 0) {
-      setCustomPomodoroError("Bitte eine ganze Zahl groesser als 0 eingeben.");
+      setCustomPomodoroError("Bitte eine ganze Zahl größer als 0 eingeben.");
       return;
     }
 
@@ -544,7 +544,7 @@ export default function DashboardQuickActions({
   const livePauseMinutes = activeTimer ? getCurrentPauseMinutes(activeTimer, tickNowMs) : undefined;
   const timerModeLabel = timerMode === "pomodoro" ? "Pomodoro" : "Stoppuhr";
   const activeTimerDetail = selectedTask?.title
-    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit laeuft ohne Aufgabe");
+    || (activeTimer?.mode === "pomodoro" ? "Pomodoro ohne Aufgabe" : "Zeit läuft ohne Aufgabe");
 
   return (
     <>
@@ -602,9 +602,9 @@ export default function DashboardQuickActions({
                 <div className="min-w-0">
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Timer</p>
                   <h3 className="mt-1 text-xl font-semibold">Lernsitzung starten</h3>
-                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Stoppuhr oder Pomodoro vorbereiten und anschliessend Fach und Aufgabe waehlen.</p>
+                  <p className={cn("mt-1 text-sm", mutedTextClass)}>Stoppuhr oder Pomodoro vorbereiten und anschließend Fach und Aufgabe wählen.</p>
                 </div>
-                <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => setTimerOpen(false)} aria-label="Timer schliessen">
+                <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => setTimerOpen(false)} aria-label="Timer schließen">
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -647,7 +647,7 @@ export default function DashboardQuickActions({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-base font-semibold">Stoppuhr</p>
-                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Die Zeit laeuft offen weiter, bis du pausierst oder speicherst.</p>
+                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Die Zeit läuft offen weiter, bis du pausierst oder speicherst.</p>
                       </div>
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                         Offen
@@ -661,7 +661,7 @@ export default function DashboardQuickActions({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-base font-semibold">Pomodoro-Dauer</p>
-                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Waehle ein Preset oder setze eine eigene Dauer in Minuten.</p>
+                        <p className={cn("mt-1 text-sm", mutedTextClass)}>Wähle ein Preset oder setze eine eigene Dauer in Minuten.</p>
                       </div>
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                         {timerPreset} Min.
@@ -723,7 +723,7 @@ export default function DashboardQuickActions({
                             )}
                           />
                           <Button type="button" variant="secondary" className={cn("h-11 rounded-[1rem] px-4", darkMode ? "bg-slate-100 text-slate-950 hover:bg-white" : "")} onClick={applyCustomPomodoroMinutes}>
-                            Uebernehmen
+                            Übernehmen
                           </Button>
                         </div>
                         {customPomodoroError ? <p className="text-xs text-red-500">{customPomodoroError}</p> : null}
@@ -739,7 +739,7 @@ export default function DashboardQuickActions({
                         {timerTaskSelectMode ? "Schritt 2 von 2" : "Schritt 1 von 2"}
                       </p>
                       <h4 className="mt-1 text-base font-semibold">
-                        {timerTaskSelectMode ? "Aufgabe auswaehlen" : "Fach auswaehlen"}
+                        {timerTaskSelectMode ? "Aufgabe auswählen" : "Fach auswählen"}
                       </h4>
                     </div>
                     {timerTaskSelectMode ? (
@@ -749,11 +749,11 @@ export default function DashboardQuickActions({
                         className={cn("inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-medium transition", darkMode ? "border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")}
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        Zurueck
+                        Zurück
                       </button>
                     ) : (
                       <Badge variant="outline" className={cn("rounded-full border px-3 py-1.5 text-xs", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
-                        {subjects.length} Faecher
+                        {subjects.length} Fächer
                       </Badge>
                     )}
                   </div>
@@ -778,7 +778,7 @@ export default function DashboardQuickActions({
                             </span>
                             <div className="min-w-0 flex-1">
                               <p className={cn("truncate font-semibold", darkMode ? "text-slate-100" : "text-slate-900")}>{subject.name}</p>
-                              <p className={cn("mt-1 text-xs", mutedTextClass)}>Verfuegbare Aufgaben fuer dieses Fach anzeigen.</p>
+                              <p className={cn("mt-1 text-xs", mutedTextClass)}>Verfügbare Aufgaben für dieses Fach anzeigen.</p>
                             </div>
                             {isSelected ? (
                               <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
@@ -794,12 +794,12 @@ export default function DashboardQuickActions({
                       <>
                         <div className={cn("rounded-[1rem] border px-4 py-3 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-200" : "border-slate-200 bg-white text-slate-700")}>
                           <span className="font-semibold">{subjects.find((subject) => subject.id === timerSubjectId)?.name || "Fach"}</span>
-                          <span className={cn("ml-2", mutedTextClass)}>Aufgabe auswaehlen oder direkt ohne Aufgabe starten.</span>
+                          <span className={cn("ml-2", mutedTextClass)}>Aufgabe auswählen oder direkt ohne Aufgabe starten.</span>
                         </div>
 
                         {timerTaskChoices.length === 0 ? (
                           <div className={cn("rounded-[1rem] border px-4 py-4 text-sm", darkMode ? "border-slate-700 bg-slate-900/80 text-slate-400" : "border-slate-200 bg-white text-slate-600")}>
-                            Noch keine offenen Aufgaben fuer dieses Fach vorhanden.
+                            Noch keine offenen Aufgaben für dieses Fach vorhanden.
                           </div>
                         ) : (
                           <>
@@ -841,8 +841,8 @@ export default function DashboardQuickActions({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className={cn("min-w-0 text-sm", mutedTextClass)}>
                   {timerTaskSelectMode
-                    ? "Waehle eine Aufgabe fuer den Timer oder starte direkt ohne Aufgabe."
-                    : "Waehle zuerst ein Fach. Die Aufgabenliste folgt im zweiten Schritt."}
+                    ? "Wähle eine Aufgabe für den Timer oder starte direkt ohne Aufgabe."
+                    : "Wähle zuerst ein Fach. Die Aufgabenliste folgt im zweiten Schritt."}
                 </p>
                 {timerTaskSelectMode ? (
                   <Button type="button" onClick={handleTimerStartWithoutTask} className="h-11 rounded-[1rem] bg-blue-600 px-4 text-white hover:bg-blue-500" disabled={!timerSubjectId || !!activeTimer || timerBusy}>
@@ -884,7 +884,7 @@ export default function DashboardQuickActions({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                   <span className={cn("rounded-full px-3 py-1.5", isPaused ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/20 text-emerald-300")}>
-                    {isPaused ? "Pausiert" : "Laeuft"}
+                    {isPaused ? "Pausiert" : "Läuft"}
                   </span>
                   <span className={cn("rounded-full px-3 py-1.5", darkMode ? "bg-slate-900 text-slate-300" : "bg-slate-100 text-slate-700")}>
                     {activeTimer?.mode === "pomodoro" ? `${activeTimer.presetMinutes || timerPreset} Min. Pomodoro` : "Stoppuhr"}
@@ -928,7 +928,7 @@ export default function DashboardQuickActions({
             <p className={darkMode ? "text-slate-100" : "text-slate-900"}>Aktuelle Dauer: <span className="font-mono font-semibold">{timerDisplay}</span></p>
           </div>
           <div className="flex flex-col gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
-            <Button variant="outline" onClick={() => setExpireDialogOpen(false)} className="rounded-[1rem]">Zurueck</Button>
+            <Button variant="outline" onClick={() => setExpireDialogOpen(false)} className="rounded-[1rem]">Zurück</Button>
             <Button variant="destructive" onClick={handleExpireDiscard} className="rounded-[1rem]" disabled={timerBusy}>Verwerfen</Button>
             <Button onClick={handleExpireSave} className="rounded-[1rem] bg-blue-600 hover:bg-blue-500" disabled={timerBusy}>Speichern</Button>
           </div>

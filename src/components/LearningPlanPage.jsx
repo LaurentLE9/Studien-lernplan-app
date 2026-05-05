@@ -208,7 +208,7 @@ export default function LearningPlanPage({
   const renderTopicCard = (topic, options = {}) => {
     const hasCheatsheet = Boolean(topic.cheatsheetText || topic.cheatsheetUrl);
     const badgeText = options.mode === "today"
-      ? topic.overdue ? "ueberfaellig" : "heute faellig"
+      ? topic.overdue ? "überfällig" : "heute fällig"
       : getTopicStatusLabel(topic.status);
 
     return (
@@ -223,8 +223,8 @@ export default function LearningPlanPage({
             </div>
             <p className="mt-2 text-lg font-semibold">{topic.title}</p>
             <div className="mt-2 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
-              <span>Letzte Uebung: {formatLearningDate(topic.lastStudiedAt, "noch nicht geuebt", { includeTime: true })}</span>
-              <span>Naechste Wiederholung: {formatLearningDate(topic.nextReviewAt, "nach erster Uebung")}</span>
+              <span>Letzte Übung: {formatLearningDate(topic.lastStudiedAt, "noch nicht geübt", { includeTime: true })}</span>
+              <span>Nächste Wiederholung: {formatLearningDate(topic.nextReviewAt, "nach erster Übung")}</span>
             </div>
             {expandedCheatsheetId === topic.id && topic.cheatsheetText ? (
               <div className={cn("mt-3 rounded-xl border p-3 text-sm", darkMode ? "border-slate-800 bg-slate-900 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
@@ -233,9 +233,9 @@ export default function LearningPlanPage({
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" className="rounded-xl" onClick={() => onStartTopicPractice?.(topic)}>Uebung starten</Button>
+            <Button size="sm" className="rounded-xl" onClick={() => onStartTopicPractice?.(topic)}>Übung starten</Button>
             <Button size="sm" variant="outline" className="rounded-xl" onClick={() => openCheatsheet(topic)} disabled={!hasCheatsheet}>
-              {hasCheatsheet ? "Cheatsheet oeffnen" : "Cheatsheet anlegen"}
+              {hasCheatsheet ? "Cheatsheet öffnen" : "Cheatsheet anlegen"}
               {topic.cheatsheetUrl ? <ExternalLink className="h-3.5 w-3.5" /> : null}
             </Button>
             {options.mode === "today" ? (
@@ -251,7 +251,7 @@ export default function LearningPlanPage({
     <div className="grid gap-2">
       <h4 className="text-sm font-semibold">{title}</h4>
       {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Keine Eintraege.</p>
+        <p className="text-sm text-muted-foreground">Keine Einträge.</p>
       ) : rows.map((topic) => (
         <div key={`${title}-${topic.id}`} className="grid gap-2 rounded-xl border px-3 py-2 text-sm md:grid-cols-[1fr_1.5fr_auto_auto] md:items-center">
           <span className="font-medium">{topic.subject?.name || "Fach"}</span>
@@ -267,7 +267,7 @@ export default function LearningPlanPage({
     <Tabs value={activeLearningPlanTab} onValueChange={setActiveLearningPlanTab} className="w-full">
       <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-slate-200 dark:bg-[#2a3554]">
         <TabsTrigger value="plan">Lernplan</TabsTrigger>
-        <TabsTrigger value="subjects">Faecher auswaehlen</TabsTrigger>
+        <TabsTrigger value="subjects">Fächer auswählen</TabsTrigger>
       </TabsList>
 
       <TabsContent value="plan" className="mt-6">
@@ -277,9 +277,9 @@ export default function LearningPlanPage({
               <div className="grid gap-2">
                 <Label>Fachfilter</Label>
                 <Select value={learningPlanFilter.subjectId} onValueChange={(value) => setLearningPlanFilter((prev) => ({ ...prev, subjectId: value }))}>
-                  <SelectTrigger><SelectValue placeholder="Fach waehlen" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Fach wählen" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle ausgewaehlten Faecher</SelectItem>
+                    <SelectItem value="all">Alle ausgewählten Fächer</SelectItem>
                     {learningPlanModel.selectedSubjects.map((subject) => (
                       <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>
                     ))}
@@ -291,14 +291,14 @@ export default function LearningPlanPage({
                 <Select value={learningPlanFilter.sort} onValueChange={(value) => setLearningPlanFilter((prev) => ({ ...prev, sort: value }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="due">Faelligkeit</SelectItem>
+                    <SelectItem value="due">Fälligkeit</SelectItem>
                     <SelectItem value="subject">Fach</SelectItem>
                     <SelectItem value="title">Thema</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label>Ausgewaehlte Faecher</Label>
+                <Label>Ausgewählte Fächer</Label>
                 <div className={cn("rounded-xl border px-3 py-2 text-sm", darkMode ? "border-slate-700 bg-slate-800/50 text-slate-200" : "border-slate-200 bg-slate-50 text-slate-700")}>
                   {selectedSubjectCount} von {data.subjects.length}
                 </div>
@@ -319,10 +319,10 @@ export default function LearningPlanPage({
           ) : activeFilterHasNoTopics ? (
             <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
               <CardContent className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">Fuer dieses Fach gibt es noch keine Lernthemen.</p>
+                <p className="text-sm text-muted-foreground">Für dieses Fach gibt es noch keine Lernthemen.</p>
                 <Button className="rounded-xl" onClick={() => seedTopicDraft(learningPlanFilter.subjectId)}>
                   <Plus className="h-4 w-4" />
-                  Lernthema fuer dieses Fach anlegen
+                  Lernthema für dieses Fach anlegen
                 </Button>
               </CardContent>
             </Card>
@@ -333,11 +333,11 @@ export default function LearningPlanPage({
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                 <CardHeader>
                   <CardTitle>Heute lernen</CardTitle>
-                  <CardDescription>Konkrete Lernthemen, die ueberfaellig oder heute faellig sind.</CardDescription>
+                  <CardDescription>Konkrete Lernthemen, die überfällig oder heute fällig sind.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">
                   {todayTopics.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Heute ist keine Wiederholung faellig.</p>
+                    <p className="text-sm text-muted-foreground">Heute ist keine Wiederholung fällig.</p>
                   ) : todayTopics.map((topic) => renderTopicCard(topic, { mode: "today" }))}
                 </CardContent>
               </Card>
@@ -345,7 +345,7 @@ export default function LearningPlanPage({
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                 <CardHeader>
                   <CardTitle>Weiterlernen</CardTitle>
-                  <CardDescription>Nicht faellige oder neue Lernthemen fuer die naechste Lerneinheit.</CardDescription>
+                  <CardDescription>Nicht fällige oder neue Lernthemen für die nächste Lerneinheit.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">
                   {continueTopics.length === 0 ? (
@@ -400,7 +400,7 @@ export default function LearningPlanPage({
             <CardContent className="grid gap-5">
               {renderPreviewRows("Morgen", previewGroups.tomorrow)}
               {renderPreviewRows("Diese Woche", previewGroups.week)}
-              {renderPreviewRows("Spaeter", previewGroups.later)}
+              {renderPreviewRows("Später", previewGroups.later)}
             </CardContent>
           </Card>
 
@@ -414,7 +414,7 @@ export default function LearningPlanPage({
                 <div className="grid gap-2">
                   <Label>Fach</Label>
                   <Select value={topicDraft.subjectId || undefined} onValueChange={(value) => setTopicDraft((prev) => ({ ...prev, subjectId: value }))}>
-                    <SelectTrigger><SelectValue placeholder="Fach waehlen" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Fach wählen" /></SelectTrigger>
                     <SelectContent>
                       {(data.subjects || []).map((subject) => (
                         <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>
@@ -489,16 +489,16 @@ export default function LearningPlanPage({
           <CardHeader className="sticky top-0 z-10 border-b backdrop-blur supports-[backdrop-filter]:bg-inherit">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>Faecher auswaehlen</CardTitle>
-                <CardDescription>Nur ausgewaehlte Faecher erscheinen im Lernplan-Filter.</CardDescription>
+                <CardTitle>Fächer auswählen</CardTitle>
+                <CardDescription>Nur ausgewählte Fächer erscheinen im Lernplan-Filter.</CardDescription>
               </div>
-              <Badge variant="outline">{selectedSubjectCount} ausgewaehlt</Badge>
+              <Badge variant="outline">{selectedSubjectCount} ausgewählt</Badge>
             </div>
           </CardHeader>
           <CardContent className="max-h-[calc(100vh-17rem)] overflow-y-auto pr-2 pt-4">
             <div className="grid gap-6">
               {groupedSubjects.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Noch keine Faecher vorhanden.</p>
+                <p className="text-sm text-muted-foreground">Noch keine Fächer vorhanden.</p>
               ) : groupedSubjects.map((group) => (
                 <div key={group.id} className="grid gap-4">
                   <div className="flex items-center gap-2">
@@ -535,7 +535,7 @@ export default function LearningPlanPage({
 
                             <div className="mt-4 grid gap-2 text-sm">
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Im Lernplan</span><span>{subject.includeInLearningPlan !== false ? "ja" : "nein"}</span></div>
-                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Faellige Themen</span><span>{overview.dueReviewsCount}</span></div>
+                              <div className="flex items-center justify-between"><span className="text-muted-foreground">Fällige Themen</span><span>{overview.dueReviewsCount}</span></div>
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Weiterlernen</span><span>{overview.newTopicsCount}</span></div>
                               <div className="flex items-center justify-between"><span className="text-muted-foreground">Pausiert</span><span>{overview.postponedCount}</span></div>
                             </div>
