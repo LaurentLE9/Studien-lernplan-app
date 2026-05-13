@@ -3968,6 +3968,7 @@ export default function StudyPlannerApp() {
     })();
 
     let weeklyAverageSinceSemesterStart = 0;
+    let dailyAverageSinceSemesterStart = 0;
     let hasSemesterStart = false;
 
     if (semesterWithStart) {
@@ -3989,6 +3990,7 @@ export default function StudyPlannerApp() {
           .reduce((sum, session) => sum + Number(session.durationMinutes || 0), 0);
         const elapsedDays = Math.max(1, Math.floor((effectiveEnd.getTime() - semesterStart.getTime()) / 86400000) + 1);
         const elapsedWeeks = Math.max(1, Math.ceil(elapsedDays / 7));
+        dailyAverageSinceSemesterStart = Math.round(semesterMinutes / elapsedDays);
         weeklyAverageSinceSemesterStart = Math.round(semesterMinutes / elapsedWeeks);
       }
     }
@@ -4004,6 +4006,7 @@ export default function StudyPlannerApp() {
       streakDays,
       dailyAverage: Math.round((timedSessions.reduce((sum, s) => sum + s.durationMinutes, 0)) / activeDays),
       weeklyAverage: Math.round(weekMinutes / 7),
+      dailyAverageSinceSemesterStart,
       weeklyAverageSinceSemesterStart,
       hasSemesterStart,
       recentSubjects: [...timedSessions]
@@ -6187,7 +6190,7 @@ export default function StudyPlannerApp() {
 
           {page === "stats" ? (
             <div className="grid gap-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard darkMode={darkMode} title="Gesamtlernzeit" value={formatMinutes(studyStats.total)} sub="Über alle Fächer" icon={Clock3} /><StatCard darkMode={darkMode} title="Heute" value={formatMinutes(studyStats.todayMinutes)} sub="Heutige Lernzeit" icon={CalendarClock} /><StatCard darkMode={darkMode} title="Durchschnitt / Tag" value={formatMinutes(studyStats.dailyAverage)} sub="Über aktive Lerntage" icon={BarChart3} /><StatCard darkMode={darkMode} title="Durchschnitt / Woche" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.weeklyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BookOpen} /></div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard darkMode={darkMode} title="Gesamtlernzeit" value={formatMinutes(studyStats.total)} sub="Über alle Fächer" icon={Clock3} /><StatCard darkMode={darkMode} title="Heute" value={formatMinutes(studyStats.todayMinutes)} sub="Heutige Lernzeit" icon={CalendarClock} /><StatCard darkMode={darkMode} title="Durchschnitt / Tag" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.dailyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BarChart3} /><StatCard darkMode={darkMode} title="Durchschnitt / Woche" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.weeklyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BookOpen} /></div>
               <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Wochenübersicht</CardTitle><CardDescription>Lernstunden pro Tag in dieser Woche</CardDescription></CardHeader><CardContent className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={studyStats.weekLine} margin={{ top: 28, right: 12, left: 0, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="day" /><YAxis /><Tooltip formatter={(value) => formatMinutes(Math.round(Number(value) * 60))} /><Line type="monotone" dataKey="Stunden" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} label={(props) => <LinePointLabel {...props} darkMode={darkMode} />} /></LineChart></ResponsiveContainer></CardContent></Card><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Verteilung der Lernzeit</CardTitle><CardDescription>Alle Fächer bleiben in der Statistik sichtbar</CardDescription></CardHeader><CardContent className="grid gap-4 xl:grid-cols-[1fr_220px]"><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={studyStats.bySubject} dataKey="minutes" nameKey="name" innerRadius={65} outerRadius={100} paddingAngle={3}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip formatter={(value) => formatMinutes(Number(value))} /></PieChart></ResponsiveContainer></div><div className="grid content-start gap-2">{studyStats.bySubject.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><span className="font-medium">{formatMinutes(subject.minutes)}</span></div>)}</div></CardContent></Card></div>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Stunden pro Fach</CardTitle><CardDescription>Direkter Vergleich der Lernzeit</CardDescription></CardHeader><CardContent className="h-[390px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={studyStats.bySubject} margin={{ top: 42, right: 12, left: 0, bottom: 24 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} height={62} tick={(props) => <SubjectAxisTick {...props} darkMode={darkMode} />} /><YAxis domain={[0, "dataMax + 4"]} /><Tooltip formatter={(_value, _name, item) => [formatMinutes(item?.payload?.minutes || 0), item?.payload?.name || "Lernzeit"]} /><Bar dataKey="hours" radius={[8, 8, 0, 0]}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}<LabelList position="top" dataKey="hours" content={(props) => <BarTopLabel {...props} darkMode={darkMode} />} /></Bar></BarChart></ResponsiveContainer></CardContent></Card>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Diese Auswertung zeigt nur Aufgaben, denen Lernzeit direkt zugewiesen wurde</CardDescription></CardHeader><CardContent><TaskTimeStatsTable darkMode={darkMode} rows={studyStats.byTask} subjects={data.subjects} formatMinutes={formatMinutes} formatDateTimeDisplay={formatDateTimeDisplay} getActivityTypeLabel={getActivityTypeLabel} /></CardContent></Card>
