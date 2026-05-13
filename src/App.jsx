@@ -38,6 +38,7 @@ import DashboardQuickActionsPanel from "@/components/DashboardQuickActions";
 import ExamsPage from "@/components/ExamsPage";
 import ManualStudySheet from "@/components/ManualStudySheet";
 import ResizablePanel from "@/components/ResizablePanel";
+import TaskTimeStatsTable from "@/components/TaskTimeStatsTable";
 import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -3884,23 +3885,45 @@ export default function StudyPlannerApp() {
       };
     });
 
+    const sessionsByTaskId = new Map();
+    timedSessions.forEach((session) => {
+      if (!session.taskId) return;
+      const current = sessionsByTaskId.get(session.taskId) || [];
+      current.push(session);
+      sessionsByTaskId.set(session.taskId, current);
+    });
+
     const byTask = data.tasks
       .map((task) => {
+        const sessions = sessionsByTaskId.get(task.id) || [];
+        if (sessions.length === 0) return null;
         const subject = data.subjects.find((s) => s.id === task.subjectId);
-        const minutes = data.studySessions
-          .filter((s) => (s.topicId || s.taskId) === task.id)
-          .reduce((sum, s) => sum + s.durationMinutes, 0);
+        const totalMinutes = sessions.reduce((sum, s) => sum + Number(s.durationMinutes || 0), 0);
+        const sortedSessions = [...sessions].sort((a, b) => {
+          const first = new Date(a.createdAt || a.recordedAt || 0).getTime();
+          const second = new Date(b.createdAt || b.recordedAt || 0).getTime();
+          return second - first;
+        });
+        const lastStudiedAt = sortedSessions[0]?.createdAt || sortedSessions[0]?.recordedAt || null;
         return {
           id: task.id,
-          name: task.title,
+          taskId: task.id,
+          title: task.title || "Unbenannte Aufgabe",
+          name: task.title || "Unbenannte Aufgabe",
+          subjectId: task.subjectId,
           subjectName: subject?.name || "Unbekannt",
-          minutes,
-          hours: Number((minutes / 60).toFixed(4)),
+          totalMinutes,
+          minutes: totalMinutes,
+          hours: Number((totalMinutes / 60).toFixed(4)),
+          sessionCount: sessions.length,
+          averageMinutes: Math.round(totalMinutes / Math.max(1, sessions.length)),
+          lastStudiedAt,
           color: subject?.color || "#94a3b8",
+          sessions: sortedSessions,
         };
       })
-      .filter((t) => t.minutes > 0)
-      .sort((a, b) => b.minutes - a.minutes);
+      .filter(Boolean)
+      .sort((a, b) => b.totalMinutes - a.totalMinutes);
 
     const weekLine = Array.from({ length: 7 }).map((_, idx) => {
       const d = new Date(weekStart);
@@ -3938,6 +3961,38 @@ export default function StudyPlannerApp() {
       timedSessions.map((s) => startOfDay(new Date(s.createdAt)).getTime())
     ).size || 1;
 
+    const semesterWithStart = (() => {
+      const selected = semesters.find((semester) => semester.id === selectedSemesterId);
+      if (selected && isValidDateValue(selected.startDate)) return selected;
+      return semesters.find((semester) => isValidDateValue(semester.startDate)) || null;
+    })();
+
+    let weeklyAverageSinceSemesterStart = 0;
+    let hasSemesterStart = false;
+
+    if (semesterWithStart) {
+      const semesterStart = startOfDay(new Date(semesterWithStart.startDate));
+      const todayStart = startOfDay(today);
+      const semesterEnd = isValidDateValue(semesterWithStart.endDate)
+        ? startOfDay(new Date(semesterWithStart.endDate))
+        : todayStart;
+      const effectiveEnd = semesterEnd.getTime() < todayStart.getTime() ? semesterEnd : todayStart;
+
+      if (!Number.isNaN(semesterStart.getTime()) && effectiveEnd.getTime() >= semesterStart.getTime()) {
+        hasSemesterStart = true;
+        const semesterMinutes = data.studySessions
+          .filter((session) => {
+            const sessionDate = new Date(session.createdAt || session.recordedAt || 0);
+            if (Number.isNaN(sessionDate.getTime())) return false;
+            return sessionDate.getTime() >= semesterStart.getTime() && sessionDate.getTime() <= effectiveEnd.getTime() + 86399999;
+          })
+          .reduce((sum, session) => sum + Number(session.durationMinutes || 0), 0);
+        const elapsedDays = Math.max(1, Math.floor((effectiveEnd.getTime() - semesterStart.getTime()) / 86400000) + 1);
+        const elapsedWeeks = Math.max(1, Math.ceil(elapsedDays / 7));
+        weeklyAverageSinceSemesterStart = Math.round(semesterMinutes / elapsedWeeks);
+      }
+    }
+
     return {
       total,
       todayMinutes,
@@ -3949,12 +4004,14 @@ export default function StudyPlannerApp() {
       streakDays,
       dailyAverage: Math.round((timedSessions.reduce((sum, s) => sum + s.durationMinutes, 0)) / activeDays),
       weeklyAverage: Math.round(weekMinutes / 7),
+      weeklyAverageSinceSemesterStart,
+      hasSemesterStart,
       recentSubjects: [...timedSessions]
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .slice(0, 5)
         .map((s) => ({ ...s, subject: subjectsById[s.subjectId] })),
     };
-  }, [data.studySessions, data.subjects, subjectsById]);
+  }, [data.studySessions, data.subjects, data.tasks, subjectsById, semesters, selectedSemesterId]);
 
   const taskSummary = useMemo(() => {
     const visibleTasks = enhancedTasks.filter((task) => !task.archived);
@@ -6130,10 +6187,10 @@ export default function StudyPlannerApp() {
 
           {page === "stats" ? (
             <div className="grid gap-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard darkMode={darkMode} title="Gesamtlernzeit" value={formatMinutes(studyStats.total)} sub="Über alle Fächer" icon={Clock3} /><StatCard darkMode={darkMode} title="Heute" value={formatMinutes(studyStats.todayMinutes)} sub="Heutige Lernzeit" icon={CalendarClock} /><StatCard darkMode={darkMode} title="Durchschnitt / Tag" value={formatMinutes(studyStats.dailyAverage)} sub="Über aktive Lerntage" icon={BarChart3} /><StatCard darkMode={darkMode} title="Durchschnitt / Woche" value={formatMinutes(studyStats.weeklyAverage * 7)} sub="Auf Basis dieser Woche" icon={BookOpen} /></div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard darkMode={darkMode} title="Gesamtlernzeit" value={formatMinutes(studyStats.total)} sub="Über alle Fächer" icon={Clock3} /><StatCard darkMode={darkMode} title="Heute" value={formatMinutes(studyStats.todayMinutes)} sub="Heutige Lernzeit" icon={CalendarClock} /><StatCard darkMode={darkMode} title="Durchschnitt / Tag" value={formatMinutes(studyStats.dailyAverage)} sub="Über aktive Lerntage" icon={BarChart3} /><StatCard darkMode={darkMode} title="Durchschnitt / Woche" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.weeklyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BookOpen} /></div>
               <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Wochenübersicht</CardTitle><CardDescription>Lernstunden pro Tag in dieser Woche</CardDescription></CardHeader><CardContent className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={studyStats.weekLine} margin={{ top: 28, right: 12, left: 0, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="day" /><YAxis /><Tooltip formatter={(value) => formatMinutes(Math.round(Number(value) * 60))} /><Line type="monotone" dataKey="Stunden" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} label={(props) => <LinePointLabel {...props} darkMode={darkMode} />} /></LineChart></ResponsiveContainer></CardContent></Card><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Verteilung der Lernzeit</CardTitle><CardDescription>Alle Fächer bleiben in der Statistik sichtbar</CardDescription></CardHeader><CardContent className="grid gap-4 xl:grid-cols-[1fr_220px]"><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={studyStats.bySubject} dataKey="minutes" nameKey="name" innerRadius={65} outerRadius={100} paddingAngle={3}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip formatter={(value) => formatMinutes(Number(value))} /></PieChart></ResponsiveContainer></div><div className="grid content-start gap-2">{studyStats.bySubject.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><span className="font-medium">{formatMinutes(subject.minutes)}</span></div>)}</div></CardContent></Card></div>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Stunden pro Fach</CardTitle><CardDescription>Direkter Vergleich der Lernzeit</CardDescription></CardHeader><CardContent className="h-[390px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={studyStats.bySubject} margin={{ top: 42, right: 12, left: 0, bottom: 24 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} height={62} tick={(props) => <SubjectAxisTick {...props} darkMode={darkMode} />} /><YAxis domain={[0, "dataMax + 4"]} /><Tooltip formatter={(_value, _name, item) => [formatMinutes(item?.payload?.minutes || 0), item?.payload?.name || "Lernzeit"]} /><Bar dataKey="hours" radius={[8, 8, 0, 0]}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}<LabelList position="top" dataKey="hours" content={(props) => <BarTopLabel {...props} darkMode={darkMode} />} /></Bar></BarChart></ResponsiveContainer></CardContent></Card>
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Diese Auswertung zeigt nur Aufgaben, denen Zeit zugewiesen wurde</CardDescription></CardHeader><CardContent className="h-[390px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={studyStats.byTask} margin={{ top: 42, right: 12, left: 0, bottom: 24 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} height={62} tick={(props) => <SubjectAxisTick {...props} darkMode={darkMode} />} /><YAxis domain={[0, "dataMax + 4"]} /><Tooltip formatter={(_value, _name, item) => [formatMinutes(item?.payload?.minutes || 0), `${item?.payload?.name} (${item?.payload?.subjectName})`]} /><Bar dataKey="hours" radius={[8, 8, 0, 0]}>{studyStats.byTask.map((entry, index) => <Cell key={index} fill={entry.color} />)}<LabelList position="top" dataKey="hours" content={(props) => <BarTopLabel {...props} darkMode={darkMode} />} /></Bar></BarChart></ResponsiveContainer></CardContent></Card>
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Diese Auswertung zeigt nur Aufgaben, denen Lernzeit direkt zugewiesen wurde</CardDescription></CardHeader><CardContent><TaskTimeStatsTable darkMode={darkMode} rows={studyStats.byTask} subjects={data.subjects} formatMinutes={formatMinutes} formatDateTimeDisplay={formatDateTimeDisplay} getActivityTypeLabel={getActivityTypeLabel} /></CardContent></Card>
             </div>
           ) : null}
 
