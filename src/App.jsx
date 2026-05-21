@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import {
@@ -3498,22 +3498,31 @@ function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
   );
 }
 
-function useContainerWidth(initialWidth) {
-  const [width, setWidth] = useState(initialWidth?.initialWidth || 1200);
-  const containerRef = useRef(null);
+function useContainerWidth(options) {
+  const [width, setWidth] = useState(options?.initialWidth || 1200);
+  const observerRef = useRef(null);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    setWidth(containerRef.current.getBoundingClientRect().width);
+  const containerRef = useCallback((node) => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
     
-    const observer = new ResizeObserver((entries) => {
-      for (let entry of entries) {
-        setWidth(entry.contentRect.width);
-      }
-    });
+    if (node) {
+      setWidth(node.getBoundingClientRect().width);
+      
+      const observer = new ResizeObserver((entries) => {
+        window.requestAnimationFrame(() => {
+          if (!Array.isArray(entries) || !entries.length) return;
+          for (let entry of entries) {
+            setWidth(entry.contentRect.width);
+          }
+        });
+      });
 
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
+      observer.observe(node);
+      observerRef.current = observer;
+    }
   }, []);
 
   return { width, containerRef };
