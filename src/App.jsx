@@ -170,11 +170,11 @@ const TILE_SIZE_LABELS = {
   large: "groß",
 };
 const DEFAULT_DASHBOARD_TILE_SIZES = {
-  stats: "wide",
+  stats: "large",
   deadlines: "wide",
   projects: "medium",
-  hours: "wide",
-  "task-time": "wide",
+  hours: "large",
+  "task-time": "large",
   today: "medium",
   recent: "medium",
   done: "medium",

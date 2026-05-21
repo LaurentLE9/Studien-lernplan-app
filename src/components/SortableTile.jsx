@@ -24,7 +24,7 @@ export function SortableTile({ id, className, children, isEditing, size = "mediu
   };
 
   return (
-    <div ref={setNodeRef} style={style} className={cn("relative group rounded-2xl", className, isEditing ? "ring-2 ring-primary/20 bg-slate-50 dark:bg-slate-900 shadow-sm" : "")}>
+    <div ref={setNodeRef} style={style} className={cn("relative group min-w-0 w-full max-w-full overflow-hidden rounded-2xl", className, isEditing ? "ring-2 ring-primary/20 bg-slate-50 dark:bg-slate-900 shadow-sm" : "")}>
       {isEditing && (
         <div className="absolute right-3 top-3 z-50 flex flex-wrap items-center justify-end gap-2">
           <select
@@ -47,7 +47,7 @@ export function SortableTile({ id, className, children, isEditing, size = "mediu
           </div>
         </div>
       )}
-      <div className={cn("w-full h-full", isEditing && "pt-14")}>
+      <div className={cn("min-w-0 w-full h-full", isEditing && "pt-14")}>
          {children}
       </div>
     </div>

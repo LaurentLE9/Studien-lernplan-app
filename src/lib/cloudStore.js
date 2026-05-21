@@ -12,11 +12,11 @@ const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
 const TASK_TYPES = ["task", "deadline", "project"];
 const TILE_SIZE_KEYS = ["small", "medium", "wide", "tall", "large"];
 const DEFAULT_DASHBOARD_TILE_SIZES = {
-  stats: "wide",
+  stats: "large",
   deadlines: "wide",
   projects: "medium",
-  hours: "wide",
-  "task-time": "wide",
+  hours: "large",
+  "task-time": "large",
   today: "medium",
   recent: "medium",
   done: "medium",

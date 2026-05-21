@@ -141,18 +141,22 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
   .dashboard-grid {
     display: grid;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-flow: row;
     gap: 1.5rem;
     align-items: stretch;
   }
 
   .dashboard-tile-size-small {
-    grid-column: span 3;
+    grid-column: span 4;
     min-height: 180px;
   }
 
   .dashboard-tile-size-medium {
-    grid-column: span 4;
+    grid-column: span 6;
     min-height: 260px;
   }
 
@@ -162,18 +166,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   }
 
   .dashboard-tile-size-tall {
-    grid-column: span 4;
+    grid-column: span 6;
     min-height: 460px;
   }
 
   .dashboard-tile-size-large {
-    grid-column: span 8;
+    grid-column: 1 / -1;
     min-height: 460px;
   }
 
   @media (max-width: 768px) {
     .dashboard-grid {
       grid-template-columns: 1fr;
+      overflow-x: hidden;
     }
 
     .dashboard-grid > *,
@@ -182,9 +187,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     .dashboard-tile-size-wide,
     .dashboard-tile-size-tall,
     .dashboard-tile-size-large {
-      grid-column: span 1;
+      grid-column: 1 / -1;
       width: 100%;
       max-width: 100%;
+      min-width: 0;
     }
   }
 }
