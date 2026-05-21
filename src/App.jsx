@@ -43,7 +43,7 @@ import ResizablePanel from "@/components/ResizablePanel";
 import TaskTimeStatsTable from "@/components/TaskTimeStatsTable";
 import TopicTimeStatsCard from "@/components/TopicTimeStatsCard";
   
-import { Responsive, useContainerWidth } from "react-grid-layout";
+import { Responsive } from "react-grid-layout";
 import { SortableTile } from "@/components/SortableTile";
 import LearningPlanPage from "@/components/LearningPlanPage";
 
@@ -995,7 +995,7 @@ function StudyOverviewStrip({ studyStats, darkMode }) {
 
   return (
     <div className={cn("rounded-[1.2rem] border px-4 py-3", darkMode ? "border-slate-800 bg-[#1b2237] text-slate-100" : "border-slate-200 bg-slate-50 text-slate-900")}>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(110px,1fr))]">
         {overview.map((item) => {
           const progress = Math.min(100, Math.round((item.value / item.target) * 100));
           return (
@@ -3498,6 +3498,27 @@ function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
   );
 }
 
+function useContainerWidth(initialWidth) {
+  const [width, setWidth] = useState(initialWidth?.initialWidth || 1200);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    setWidth(containerRef.current.getBoundingClientRect().width);
+    
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return { width, containerRef };
+}
+
 export default function StudyPlannerApp() {
   const [data, setData] = usePersistentState();
   const hasSupabaseEnv = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
@@ -5893,11 +5914,13 @@ export default function StudyPlannerApp() {
                     if (widgetId === "stats") {
                       return (
                         <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                            <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
-                            <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
-                            <StatCard darkMode={darkMode} title="Überfällig" value={taskSummary.overdue} sub="Sofort im Blick behalten" icon={AlertTriangle} />
-                            <StatCard darkMode={darkMode} title="Erledigte Aufgaben" value={taskSummary.done} sub="Bereits abgeschlossen" icon={CheckCircle2} />
+                          <div className="flex flex-col h-full overflow-hidden p-1">
+                            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+                              <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
+                              <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
+                              <StatCard darkMode={darkMode} title="Überfällig" value={taskSummary.overdue} sub="Sofort im Blick behalten" icon={AlertTriangle} />
+                              <StatCard darkMode={darkMode} title="Erledigte Aufgaben" value={taskSummary.done} sub="Bereits abgeschlossen" icon={CheckCircle2} />
+                            </div>
                           </div>
                         </SortableTile>
                       );
@@ -6885,7 +6908,7 @@ function ProjectsPage({ projects, topics, allTasks, subjects, darkMode, onEditPr
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
           {visibleProjects.map((project) => (
             <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} darkMode={darkMode} />
           ))}
