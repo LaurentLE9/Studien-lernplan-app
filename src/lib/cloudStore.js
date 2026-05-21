@@ -7,7 +7,20 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
-const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "task-time", "today", "recent", "done"];
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "projects", "hours", "task-time", "today", "recent", "done"];
+const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
+const TASK_TYPES = ["task", "deadline", "project"];
+const TILE_SIZE_KEYS = ["small", "medium", "wide", "tall", "large"];
+const DEFAULT_DASHBOARD_TILE_SIZES = {
+  stats: "wide",
+  deadlines: "wide",
+  projects: "medium",
+  hours: "wide",
+  "task-time": "wide",
+  today: "medium",
+  recent: "medium",
+  done: "medium",
+};
 const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
@@ -329,10 +342,31 @@ function logSyncDebug(event, payload) {
 }
 
 function normalizeDashboardLayout(layout) {
-  if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
+  if (!Array.isArray(layout)) return [...DEFAULT_DASHBOARD_LAYOUT];
   const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
   const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
   return [...filtered, ...missing];
+}
+
+function normalizeTask(rawTask) {
+  return {
+    ...(rawTask || {}),
+    type: TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task",
+  };
+}
+
+function normalizeTasks(tasks) {
+  return Array.isArray(tasks) ? tasks.map(normalizeTask) : [];
+}
+
+function normalizeDashboardTileSizes(inputSizes) {
+  const safeInput = inputSizes && typeof inputSizes === "object" ? inputSizes : {};
+  return Object.fromEntries(
+    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => [
+      tileKey,
+      TILE_SIZE_KEYS.includes(safeInput[tileKey]) ? safeInput[tileKey] : defaultSize,
+    ])
+  );
 }
 
 function normalizeDeadlineWidgetSettings(value) {
@@ -817,12 +851,14 @@ export async function loadUserPlannerData(userId) {
       return {
         ...normalizeDefaultData(),
         ...rawData,
+        tasks: normalizeTasks(rawData.tasks),
         settings: {
           ...normalizeDefaultData().settings,
           ...rawSettings,
           appearance,
           sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
           dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
+          dashboardTileSizes: normalizeDashboardTileSizes(rawSettings.dashboardTileSizes),
           deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
         },
         seeds: {
@@ -905,7 +941,8 @@ export function normalizeDefaultData() {
     settings: {
       appearance: "light",
       sidebarCollapsed: false,
-      dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+      dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
+      dashboardTileSizes: normalizeDashboardTileSizes(),
       deadlineWidget: { activeFilter: "all", defaultFilter: "all" },
     },
     seeds: { tasks: false, sessions: false },

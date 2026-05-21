@@ -153,7 +153,32 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "study_planner_app_v3";
-const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "hours", "task-time", "today", "recent", "done"];
+const TASK_TYPES = ["task", "deadline", "project"];
+const TASK_TYPE_LABELS = {
+  task: "Aufgabe",
+  deadline: "Deadline",
+  project: "Projekt",
+};
+const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "projects", "hours", "task-time", "today", "recent", "done"];
+const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
+const TILE_SIZE_KEYS = ["small", "medium", "wide", "tall", "large"];
+const TILE_SIZE_LABELS = {
+  small: "klein",
+  medium: "mittel",
+  wide: "breit",
+  tall: "hoch",
+  large: "groß",
+};
+const DEFAULT_DASHBOARD_TILE_SIZES = {
+  stats: "wide",
+  deadlines: "wide",
+  projects: "medium",
+  hours: "wide",
+  "task-time": "wide",
+  today: "medium",
+  recent: "medium",
+  done: "medium",
+};
 const DEADLINE_SORT_OPTIONS = [
   { id: "due", label: "Fälligkeit" },
   { id: "acceptance", label: "Abnahme" },
@@ -186,10 +211,47 @@ function writeUserCache(userId, data) {
 }
 
 function normalizeDashboardLayout(layout) {
-  if (!Array.isArray(layout)) return [...DASHBOARD_WIDGET_IDS];
+  if (!Array.isArray(layout)) return [...DEFAULT_DASHBOARD_LAYOUT];
   const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
   const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
   return [...filtered, ...missing];
+}
+
+function normalizeDashboardTileSizes(inputSizes) {
+  const safeInput = inputSizes && typeof inputSizes === "object" ? inputSizes : {};
+  return Object.fromEntries(
+    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => [
+      tileKey,
+      TILE_SIZE_KEYS.includes(safeInput[tileKey]) ? safeInput[tileKey] : defaultSize,
+    ])
+  );
+}
+
+function getDashboardTileSizeClass(size) {
+  return `dashboard-tile-size-${TILE_SIZE_KEYS.includes(size) ? size : "medium"}`;
+}
+
+function normalizeTask(rawTask) {
+  const type = TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task";
+  return { ...(rawTask || {}), type };
+}
+
+function normalizeTasks(tasks) {
+  return Array.isArray(tasks) ? tasks.map(normalizeTask) : [];
+}
+
+function cleanTaskAfterTypeChange(task) {
+  const cleaned = normalizeTask(task);
+  if (cleaned.type === "task") {
+    delete cleaned.linkedTopicId;
+    delete cleaned.projectMeta;
+    delete cleaned.manualProgress;
+    delete cleaned.subTasks;
+    delete cleaned.subTaskIds;
+    delete cleaned.projectStatus;
+    delete cleaned.projectNotes;
+  }
+  return cleaned;
 }
 
 function normalizeDeadlineWidgetSettings(value) {
@@ -615,6 +677,68 @@ function getTaskSortTimestamp(task) {
   return new Date(task.acceptanceDate || task.nextRelevantDate || task.dueDate || task.createdAt || 0).getTime();
 }
 
+function isTaskDone(task) {
+  return task?.completed === true || task?.done === true || task?.status === "done" || task?.status === "erledigt";
+}
+
+function getProjectSubTasks(projectTask, allTasks = []) {
+  if (!projectTask?.id) return [];
+  if (Array.isArray(projectTask.subTasks)) return projectTask.subTasks;
+  if (Array.isArray(projectTask.subTaskIds)) {
+    return allTasks.filter((task) => projectTask.subTaskIds.includes(task.id));
+  }
+  return allTasks.filter((task) => task.parentProjectId === projectTask.id);
+}
+
+function getProgressFromTaskStatus(task) {
+  if (isTaskDone(task)) return 100;
+  if (task?.status === "in Bearbeitung" || task?.status === "in_progress" || task?.status === "inBearbeitung") return 50;
+  return 0;
+}
+
+function getProgressFromTopic(topic, projectTask) {
+  const items = Array.isArray(topic?.items) ? topic.items : Array.isArray(topic?.tasks) ? topic.tasks : [];
+  if (items.length > 0) {
+    const doneItems = items.filter(isTaskDone).length;
+    return Math.round((doneItems / items.length) * 100);
+  }
+  if (isTaskDone(topic)) return 100;
+  if (topic?.status === "in_progress" || topic?.status === "inBearbeitung" || topic?.status === "active") return 50;
+  return getProgressFromTaskStatus(projectTask);
+}
+
+function getProjectProgress(projectTask, topics = [], allTasks = []) {
+  if (!projectTask || projectTask.type !== "project") return 0;
+  const subTasks = getProjectSubTasks(projectTask, allTasks);
+  if (subTasks.length > 0) {
+    return Math.round((subTasks.filter(isTaskDone).length / subTasks.length) * 100);
+  }
+  if (projectTask.linkedTopicId) {
+    const linkedTopic = topics.find((topic) => topic.id === projectTask.linkedTopicId);
+    return linkedTopic ? getProgressFromTopic(linkedTopic, projectTask) : getProgressFromTaskStatus(projectTask);
+  }
+  return getProgressFromTaskStatus(projectTask);
+}
+
+function getProjectWorkSummary(projectTask, topics = [], allTasks = []) {
+  const subTasks = getProjectSubTasks(projectTask, allTasks);
+  if (subTasks.length > 0) {
+    const open = subTasks.filter((task) => !isTaskDone(task)).length;
+    return { label: `${open} Teilaufgaben offen`, openCount: open, totalCount: subTasks.length };
+  }
+  if (projectTask?.linkedTopicId) {
+    const topic = topics.find((entry) => entry.id === projectTask.linkedTopicId);
+    if (!topic) return { label: "Verknüpftes Thema fehlt", openCount: 0, totalCount: 1 };
+    const items = Array.isArray(topic.items) ? topic.items : Array.isArray(topic.tasks) ? topic.tasks : [];
+    if (items.length > 0) {
+      const open = items.filter((item) => !isTaskDone(item)).length;
+      return { label: `${open} Themen offen`, openCount: open, totalCount: items.length };
+    }
+    return { label: isTaskDone(topic) ? "0 Themen offen" : "1 Thema offen", openCount: isTaskDone(topic) ? 0 : 1, totalCount: 1 };
+  }
+  return { label: "Keine Themen verknüpft", openCount: 0, totalCount: 0 };
+}
+
 function isTaskArchived(task) {
   if (task.archived) return true;
   if (task.status !== "erledigt") return false;
@@ -639,7 +763,8 @@ function usePersistentState() {
           settings: {
             appearance: "light",
             sidebarCollapsed: false,
-            dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+            dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
+            dashboardTileSizes: normalizeDashboardTileSizes(),
             deadlineWidget: normalizeDeadlineWidgetSettings(),
           },
           seeds: { tasks: false, sessions: false },
@@ -649,7 +774,7 @@ function usePersistentState() {
       return {
         subjects: parsed.subjects?.length ? parsed.subjects : makeInitialSubjects(),
         topics: parsed.topics || [],
-        tasks: parsed.tasks || [],
+        tasks: normalizeTasks(parsed.tasks),
         studySessions: parsed.studySessions || [],
         exams: parsed.exams || [],
         todayFocus: parsed.todayFocus || [],
@@ -657,6 +782,7 @@ function usePersistentState() {
           appearance: parsed.settings?.appearance || "light",
           sidebarCollapsed: parsed.settings?.sidebarCollapsed || false,
           dashboardLayout: normalizeDashboardLayout(parsed.settings?.dashboardLayout),
+          dashboardTileSizes: normalizeDashboardTileSizes(parsed.settings?.dashboardTileSizes),
           deadlineWidget: normalizeDeadlineWidgetSettings(parsed.settings?.deadlineWidget),
         },
         seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
@@ -672,8 +798,9 @@ function usePersistentState() {
         settings: {
           appearance: "light",
           sidebarCollapsed: false,
-          dashboardLayout: [...DASHBOARD_WIDGET_IDS],
-          deadlineWidget: normalizeDeadlineWidgetSettings(),
+            dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
+            dashboardTileSizes: normalizeDashboardTileSizes(),
+            deadlineWidget: normalizeDeadlineWidgetSettings(),
         },
         seeds: { tasks: false, sessions: false },
       };
@@ -694,7 +821,8 @@ function createLoggedOutData() {
       ...normalizeDefaultData().settings,
       appearance: "light",
       sidebarCollapsed: false,
-      dashboardLayout: [...DASHBOARD_WIDGET_IDS],
+      dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
+      dashboardTileSizes: normalizeDashboardTileSizes(),
       deadlineWidget: normalizeDeadlineWidgetSettings(),
     },
   };
@@ -2891,7 +3019,7 @@ function SemesterForm({ onSave, initialValue, onDone }) {
 }
 
 function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
-  const [form, setForm] = useState(initialValue || { title: "", description: "", subjectId: "", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" });
+  const [form, setForm] = useState(normalizeTask(initialValue || { title: "", description: "", subjectId: "", type: "task", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" }));
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
     initialValue?.title && initialSubject?.name && initialValue.title === initialSubject.name ? initialSubject.name : ""
@@ -2963,6 +3091,7 @@ function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
       <div className="grid gap-2"><Label>Beschreibung / Notizen</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+      <div className="grid gap-2"><Label>Typ</Label><Select value={form.type || "task"} onValueChange={(value) => setForm({ ...form, type: TASK_TYPES.includes(value) ? value : "task" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="task">Aufgabe</SelectItem><SelectItem value="deadline">Deadline</SelectItem><SelectItem value="project">Projekt</SelectItem></SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
@@ -3216,6 +3345,7 @@ function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
             <div className="flex flex-wrap gap-2">
               <Badge variant="outline">{subject?.name || "Ohne Fach"}</Badge>
               <Badge variant={priorityTone(task.priority)}>{task.priority}</Badge>
+              <Badge variant="outline">{TASK_TYPE_LABELS[task.type] || "Aufgabe"}</Badge>
               <Badge variant="outline">{task.status}</Badge>
               {task.nextRelevantDate ? <Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge> : null}
               {task.dueDate ? <Badge variant="outline">Abgabe: {formatDateDisplay(task.dueDate)}</Badge> : null}
@@ -3247,6 +3377,7 @@ export default function StudyPlannerApp() {
     const hasPendingCloudSaveRef = useRef(false);
   const [page, setPage] = useState("dashboard");
   const dashboardLayout = useMemo(() => normalizeDashboardLayout(data.settings?.dashboardLayout), [data.settings?.dashboardLayout]);
+  const dashboardTileSizes = useMemo(() => normalizeDashboardTileSizes(data.settings?.dashboardTileSizes), [data.settings?.dashboardTileSizes]);
   const [isEditingDashboard, setIsEditingDashboard] = useState(false);
 
   const dndSensors = useSensors(
@@ -3272,6 +3403,31 @@ export default function StudyPlannerApp() {
         },
       };
     });
+  };
+
+  const updateDashboardTileSize = (tileId, size) => {
+    if (!DASHBOARD_WIDGET_IDS.includes(tileId) || !TILE_SIZE_KEYS.includes(size)) return;
+    setData((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        dashboardTileSizes: {
+          ...normalizeDashboardTileSizes(prev.settings?.dashboardTileSizes),
+          [tileId]: size,
+        },
+      },
+    }));
+  };
+
+  const resetDashboardLayout = () => {
+    setData((prev) => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
+        dashboardTileSizes: normalizeDashboardTileSizes(),
+      },
+    }));
   };
 
   const flushCloudSaveNow = async (snapshot = data) => {
@@ -3413,6 +3569,13 @@ export default function StudyPlannerApp() {
           setData((prev) => {
             const merged = {
               ...cloudData,
+              tasks: normalizeTasks(cloudData.tasks),
+              settings: {
+                ...cloudData.settings,
+                dashboardLayout: normalizeDashboardLayout(cloudData.settings?.dashboardLayout),
+                dashboardTileSizes: normalizeDashboardTileSizes(cloudData.settings?.dashboardTileSizes),
+                deadlineWidget: normalizeDeadlineWidgetSettings(cloudData.settings?.deadlineWidget),
+              },
               subjects: prev.subjects,
               topics: prev.topics,
               exams: prev.exams,
@@ -3795,7 +3958,7 @@ export default function StudyPlannerApp() {
     return Object.fromEntries(allSubjects.map((s) => [s.id, s]));
   }, [data.subjects, archivedSubjects]);
 
-  const enhancedTasks = useMemo(() => data.tasks.map((task) => {
+  const enhancedTasks = useMemo(() => normalizeTasks(data.tasks).map((task) => {
     const nextMilestone = getNextTaskMilestone(task);
     return {
       ...task,
@@ -3806,6 +3969,8 @@ export default function StudyPlannerApp() {
       subject: subjectsById[task.subjectId],
     };
   }), [data.tasks, subjectsById]);
+
+  const projectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project"), [enhancedTasks]);
 
   const filteredTasks = useMemo(() => {
     let list = [...enhancedTasks].filter((task) => !task.archived);
@@ -4811,17 +4976,22 @@ export default function StudyPlannerApp() {
   }
 
   function saveTask(task) {
+    const cleanedTask = cleanTaskAfterTypeChange({
+      ...task,
+      id: task.id || crypto.randomUUID(),
+      updatedAt: new Date().toISOString(),
+    });
     setData((prev) => {
-      const isNewTask = !prev.tasks.some((t) => t.id === task.id);
+      const isNewTask = !prev.tasks.some((t) => t.id === cleanedTask.id);
       const updatedTasks = isNewTask
-        ? [...prev.tasks, { ...task, id: crypto.randomUUID() }]
-        : prev.tasks.map((t) => (t.id === task.id ? task : t));
+        ? [...prev.tasks, { ...cleanedTask, createdAt: cleanedTask.createdAt || formatDateInput(new Date()) }]
+        : prev.tasks.map((t) => (t.id === cleanedTask.id ? cleanedTask : t));
       
       // Auto-generate recurring task when a task is marked as done
-      if (task.status === "erledigt" && task.recurringPattern && task.recurringPattern !== "none") {
-        const recurringTask = generateRecurringTask(task, task.recurringPattern);
+      if (cleanedTask.status === "erledigt" && cleanedTask.recurringPattern && cleanedTask.recurringPattern !== "none") {
+        const recurringTask = generateRecurringTask(cleanedTask, cleanedTask.recurringPattern);
         if (recurringTask) {
-          updatedTasks.push(recurringTask);
+          updatedTasks.push(normalizeTask(recurringTask));
         }
       }
       
@@ -5245,6 +5415,7 @@ export default function StudyPlannerApp() {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "learning-plan", label: "Lernplan", icon: BookOpen },
     { id: "tasks", label: "Aufgaben", icon: ListTodo },
+    { id: "projects", label: "Projekte", icon: Maximize2 },
     { id: "exams", label: "Klausuren", icon: CalendarClock },
     { id: "semester-config", label: "Semesterkonfiguration", icon: CalendarClock },
     { id: "subjects", label: "Fächer", icon: GraduationCap },
@@ -5429,7 +5600,10 @@ export default function StudyPlannerApp() {
                   <p className="text-sm font-semibold">Dashboard-Bearbeitung aktiv</p>
                   <p className="text-xs text-muted-foreground">Änderungen werden direkt übernommen. Du kannst die Bearbeitung jetzt jederzeit beenden.</p>
                 </div>
-                <div className="flex gap-2 self-end md:self-auto">
+                <div className="flex flex-wrap gap-2 self-end md:self-auto">
+                  <Button variant="outline" className="rounded-[1rem]" onClick={resetDashboardLayout}>
+                    Layout zurücksetzen
+                  </Button>
                   <Button variant="outline" className="rounded-[1rem]" onClick={() => setIsEditingDashboard(false)}>
                     Abbrechen
                   </Button>
@@ -5479,14 +5653,14 @@ export default function StudyPlannerApp() {
               <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
-                <Plus className="h-4 w-4" />Aufgabe
+                <Plus className="h-4 w-4" />Eintrag anlegen
               </Button>
               <ResizablePanel
                 open={taskDialogOpen}
                 onOpenChange={setTaskDialogOpen}
                 darkMode={darkMode}
-                title="Aufgabe anlegen"
-                description="Erstelle eine neue Aufgabe, weise sie einem Fach zu und setze ein Fälligkeitsdatum."
+                title="Eintrag anlegen"
+                description="Erstelle eine Aufgabe, Deadline oder ein Projekt und weise den Eintrag einem Fach zu."
                 badgeText="Neu erfassen"
               >
                 <TaskForm subjects={data.subjects} topics={data.topics} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
@@ -5500,11 +5674,11 @@ export default function StudyPlannerApp() {
           {page === "dashboard" ? (
             <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={dashboardLayout} strategy={rectSortingStrategy}>
-                <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-6 auto-rows-max">
+                <div className="dashboard-grid">
                   {dashboardLayout.map((widgetId) => {
                     if (widgetId === "stats") {
                       return (
-                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} className="col-span-full">
+                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} size={dashboardTileSizes.stats} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.stats)}>
                           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
                             <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
@@ -5516,7 +5690,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "deadlines") {
                       return (
-                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} size={dashboardTileSizes.deadlines} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.deadlines)}>
                           <Card className={cn("flex h-full max-h-[760px] flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader>
                               <div className="flex items-start justify-between gap-3">
@@ -5580,9 +5754,23 @@ export default function StudyPlannerApp() {
                         </SortableTile>
                       );
                     }
+                    if (widgetId === "projects") {
+                      return (
+                        <SortableTile key="projects" id="projects" isEditing={isEditingDashboard} size={dashboardTileSizes.projects} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.projects)}>
+                          <ProjectOverviewCard
+                            projects={projectTasks}
+                            topics={data.topics}
+                            allTasks={enhancedTasks}
+                            darkMode={darkMode}
+                            onEditProject={setEditingTask}
+                            onOpenProjects={() => setPage("projects")}
+                          />
+                        </SortableTile>
+                      );
+                    }
                     if (widgetId === "hours") {
                       return (
-                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} size={dashboardTileSizes.hours} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.hours)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
                             <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
@@ -5592,7 +5780,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "task-time") {
                       return (
-                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} className="col-span-full xl:col-span-3">
+                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} size={dashboardTileSizes["task-time"]} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes["task-time"])}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Investierte Zeit für einzelne Lernaufgaben</CardDescription></CardHeader>
                             <CardContent className="px-3 pb-5 sm:px-5">
@@ -5610,21 +5798,21 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "today") {
                       return (
-                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} size={dashboardTileSizes.today} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.today)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "recent") {
                       return (
-                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} size={dashboardTileSizes.recent} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.recent)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "done") {
                       return (
-                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} className="col-span-full md:col-span-1 xl:col-span-2">
+                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} size={dashboardTileSizes.done} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.done)}>
                         <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</CardContent></Card>
                       </SortableTile>
                       );
@@ -5854,6 +6042,17 @@ export default function StudyPlannerApp() {
                 </CardContent>
               </Card>
             </div>
+          ) : null}
+
+          {page === "projects" ? (
+            <ProjectsPage
+              projects={projectTasks}
+              topics={data.topics}
+              allTasks={enhancedTasks}
+              subjects={data.subjects}
+              darkMode={darkMode}
+              onEditProject={setEditingTask}
+            />
           ) : null}
 
           {page === "tasks" ? (
@@ -6271,8 +6470,8 @@ export default function StudyPlannerApp() {
             open={!!editingTask} 
             onOpenChange={(open) => !open && setEditingTask(null)}
             darkMode={darkMode}
-            title="Aufgabe bearbeiten"
-            description="Passe die Eigenschaften dieser Aufgabe an."
+            title="Eintrag bearbeiten"
+            description="Passe Typ, Fach und Eigenschaften dieses Eintrags an."
             badgeText="Bearbeiten"
           >
             {editingTask ? (
@@ -6339,6 +6538,146 @@ export default function StudyPlannerApp() {
           </main>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProjectListItem({ project, topics, allTasks, onEdit, compact = false, darkMode }) {
+  const progress = getProjectProgress(project, topics, allTasks);
+  const workSummary = getProjectWorkSummary(project, topics, allTasks);
+  const dueText = project.nextRelevantDate ? deadlineLabel(project.nextRelevantDate, project.status) : "Kein Abgabedatum";
+
+  return (
+    <div className={cn("rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.subject?.color || "#94a3b8" }} />
+              <p className="min-w-0 break-words font-semibold">{project.title}</p>
+              <Badge variant="outline">{project.status || "offen"}</Badge>
+            </div>
+            <p className="mt-1 truncate text-sm text-muted-foreground">{project.subject?.name || "Ohne Fach"}</p>
+          </div>
+          {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="text-muted-foreground">Fortschritt</span>
+            <span className="font-medium">{progress} %</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+
+        <div className={cn("grid gap-2 text-sm", compact ? "" : "sm:grid-cols-2")}>
+          <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Abgabe</p>
+            <p className="truncate font-medium">{project.nextRelevantDate ? formatDateDisplay(project.nextRelevantDate) : "Nicht gesetzt"}</p>
+            <p className="text-xs text-muted-foreground">{dueText}</p>
+          </div>
+          <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
+            <p className="text-xs text-muted-foreground">Verknüpfung</p>
+            <p className="truncate font-medium">{workSummary.label}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onOpenProjects }) {
+  const sortedProjects = useMemo(() => {
+    return [...projects].sort((a, b) => {
+      const dateDiff = getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
+      if (dateDiff !== 0) return dateDiff;
+      return (a.title || "").localeCompare(b.title || "", "de");
+    });
+  }, [projects]);
+
+  return (
+    <Card className={cn("flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+      <CardHeader className="shrink-0">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle>Projekte</CardTitle>
+            <CardDescription>Langzeitprojekte aus deinen Einträgen</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={onOpenProjects}>Alle Projekte anzeigen</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="min-h-0 flex-1 overflow-y-auto pr-2">
+        {sortedProjects.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Noch keine Projekte angelegt.</p>
+        ) : (
+          <div className="grid gap-3">
+            {sortedProjects.map((project) => (
+              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} compact darkMode={darkMode} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProjectsPage({ projects, topics, allTasks, subjects, darkMode, onEditProject }) {
+  const [filters, setFilters] = useState({ subjectId: "all", status: "all", sort: "due" });
+  const visibleProjects = useMemo(() => {
+    let list = [...projects];
+    if (filters.subjectId !== "all") list = list.filter((project) => project.subjectId === filters.subjectId);
+    if (filters.status !== "all") list = list.filter((project) => project.status === filters.status);
+    list.sort((a, b) => {
+      if (filters.sort === "progress") return getProjectProgress(a, topics, allTasks) - getProjectProgress(b, topics, allTasks);
+      if (filters.sort === "subject") return (a.subject?.name || "").localeCompare(b.subject?.name || "", "de");
+      if (filters.sort === "status") return (a.status || "").localeCompare(b.status || "", "de");
+      return getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
+    });
+    return list;
+  }, [projects, filters, topics, allTasks]);
+
+  return (
+    <div className="grid gap-6">
+      <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+        <CardContent className="grid gap-4 p-5 md:grid-cols-3">
+          <div className="grid gap-2">
+            <Label>Fach</Label>
+            <Select value={filters.subjectId} onValueChange={(value) => setFilters((prev) => ({ ...prev, subjectId: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Alle Fächer</SelectItem>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Status</Label>
+            <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="all">Alle Status</SelectItem><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-2">
+            <Label>Sortierung</Label>
+            <Select value={filters.sort} onValueChange={(value) => setFilters((prev) => ({ ...prev, sort: value }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="due">Fälligkeit</SelectItem><SelectItem value="progress">Fortschritt</SelectItem><SelectItem value="status">Status</SelectItem><SelectItem value="subject">Fach</SelectItem></SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {visibleProjects.length === 0 ? (
+        <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">Noch keine Projekte angelegt.</p>
+            <p className="mt-1">Lege über „Eintrag anlegen“ einen Eintrag vom Typ „Projekt“ an.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {visibleProjects.map((project) => (
+            <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} darkMode={darkMode} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

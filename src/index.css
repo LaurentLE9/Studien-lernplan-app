@@ -138,4 +138,53 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .app-page-grid {
     @apply grid gap-5 sm:gap-6;
   }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1.5rem;
+    align-items: stretch;
+  }
+
+  .dashboard-tile-size-small {
+    grid-column: span 3;
+    min-height: 180px;
+  }
+
+  .dashboard-tile-size-medium {
+    grid-column: span 4;
+    min-height: 260px;
+  }
+
+  .dashboard-tile-size-wide {
+    grid-column: span 8;
+    min-height: 320px;
+  }
+
+  .dashboard-tile-size-tall {
+    grid-column: span 4;
+    min-height: 460px;
+  }
+
+  .dashboard-tile-size-large {
+    grid-column: span 8;
+    min-height: 460px;
+  }
+
+  @media (max-width: 768px) {
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .dashboard-grid > *,
+    .dashboard-tile-size-small,
+    .dashboard-tile-size-medium,
+    .dashboard-tile-size-wide,
+    .dashboard-tile-size-tall,
+    .dashboard-tile-size-large {
+      grid-column: span 1;
+      width: 100%;
+      max-width: 100%;
+    }
+  }
 }
