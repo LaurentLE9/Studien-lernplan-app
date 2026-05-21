@@ -142,28 +142,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 .dashboard-grid {
-  display: grid;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: 140px;
-  grid-auto-flow: row;
-  gap: 1.5rem;
-  align-items: stretch;
 }
 
 .dashboard-grid > [data-dashboard-tile] {
-  grid-column: var(--dashboard-tile-x, auto) / span var(--dashboard-tile-col-span, 6);
-  grid-row: var(--dashboard-tile-y, auto) / span var(--dashboard-tile-row-span, 2);
-  align-self: stretch;
-  justify-self: stretch;
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  transition:
-    grid-column 120ms ease,
-    grid-row 120ms ease;
+  height: 100%;
+  transition: box-shadow 120ms ease;
+}
+
+.dashboard-grid .react-grid-placeholder {
+  border-radius: 1rem;
+  background: hsl(var(--primary) / 0.18);
+  opacity: 1;
+}
+
+.dashboard-grid .react-resizable-handle {
+  z-index: 60;
+  opacity: 0.8;
 }
 
 .dashboard-grid > [data-dashboard-tile] [data-slot="card"] {
@@ -187,34 +187,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   display: none;
 }
 
-body.dashboard-resizing {
-  cursor: se-resize;
-  user-select: none;
-}
-
-body.dashboard-dragging {
-  cursor: grabbing;
-  user-select: none;
-}
-
-body.dashboard-resizing .dashboard-grid > [data-dashboard-tile] {
-  transition: none;
-}
-
-body.dashboard-dragging .dashboard-grid > [data-dashboard-tile] {
-  transition: none;
-}
-
 @media (max-width: 768px) {
   .dashboard-grid {
-    grid-template-columns: 1fr;
-    grid-auto-flow: row;
     overflow-x: hidden;
   }
 
   .dashboard-grid > * {
-    grid-column: 1 / -1;
-    grid-row: auto;
     width: 100%;
     max-width: 100%;
     min-width: 0;
