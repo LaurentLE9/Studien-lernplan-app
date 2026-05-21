@@ -179,6 +179,13 @@ const DEFAULT_DASHBOARD_TILE_SIZES = {
   recent: "medium",
   done: "medium",
 };
+const DASHBOARD_TILE_SIZE_CLASSES = {
+  small: "dashboard-tile-size-small",
+  medium: "dashboard-tile-size-medium",
+  wide: "dashboard-tile-size-wide",
+  tall: "dashboard-tile-size-tall",
+  large: "dashboard-tile-size-large",
+};
 const DEADLINE_SORT_OPTIONS = [
   { id: "due", label: "Fälligkeit" },
   { id: "acceptance", label: "Abnahme" },
@@ -228,7 +235,7 @@ function normalizeDashboardTileSizes(inputSizes) {
 }
 
 function getDashboardTileSizeClass(size) {
-  return `dashboard-tile-size-${TILE_SIZE_KEYS.includes(size) ? size : "medium"}`;
+  return DASHBOARD_TILE_SIZE_CLASSES[size] || DASHBOARD_TILE_SIZE_CLASSES.medium;
 }
 
 function normalizeTask(rawTask) {
