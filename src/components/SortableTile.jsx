@@ -99,6 +99,8 @@ export function SortableTile({
     <div
       ref={setNodeRef}
       data-dashboard-tile
+      data-dashboard-col-span={Number(size?.colSpan) || 6}
+      data-dashboard-row-span={Number(size?.rowSpan) || 2}
       style={style}
       className={cn(
         "relative group min-w-0 w-full max-w-full overflow-hidden rounded-2xl",

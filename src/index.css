@@ -148,7 +148,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   min-width: 0;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: 140px;
-  grid-auto-flow: row;
+  grid-auto-flow: row dense;
   gap: 1.5rem;
   align-items: stretch;
 }
@@ -156,6 +156,35 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .dashboard-grid > [data-dashboard-tile] {
   grid-column: span var(--dashboard-tile-col-span, 6);
   grid-row: span var(--dashboard-tile-row-span, 2);
+  align-self: stretch;
+  justify-self: stretch;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  transition:
+    grid-column 120ms ease,
+    grid-row 120ms ease;
+}
+
+.dashboard-grid > [data-dashboard-tile] [data-slot="card"] {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.dashboard-grid > [data-dashboard-tile] [data-slot="card-header"],
+.dashboard-grid > [data-dashboard-tile] [data-slot="card-content"] {
+  min-width: 0;
+}
+
+.dashboard-grid > [data-dashboard-tile] [data-slot="card-title"],
+.dashboard-grid > [data-dashboard-tile] [data-slot="card-description"] {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-grid > [data-dashboard-col-span="4"] [data-slot="card-description"],
+.dashboard-grid > [data-dashboard-row-span="1"] [data-slot="card-description"] {
+  display: none;
 }
 
 body.dashboard-resizing {
@@ -163,9 +192,14 @@ body.dashboard-resizing {
   user-select: none;
 }
 
+body.dashboard-resizing .dashboard-grid > [data-dashboard-tile] {
+  transition: none;
+}
+
 @media (max-width: 768px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
+    grid-auto-flow: row;
     overflow-x: hidden;
   }
 
