@@ -148,14 +148,14 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   min-width: 0;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: 140px;
-  grid-auto-flow: row dense;
+  grid-auto-flow: row;
   gap: 1.5rem;
   align-items: stretch;
 }
 
 .dashboard-grid > [data-dashboard-tile] {
-  grid-column: span var(--dashboard-tile-col-span, 6);
-  grid-row: span var(--dashboard-tile-row-span, 2);
+  grid-column: var(--dashboard-tile-x, auto) / span var(--dashboard-tile-col-span, 6);
+  grid-row: var(--dashboard-tile-y, auto) / span var(--dashboard-tile-row-span, 2);
   align-self: stretch;
   justify-self: stretch;
   min-width: 0;
@@ -192,7 +192,16 @@ body.dashboard-resizing {
   user-select: none;
 }
 
+body.dashboard-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
 body.dashboard-resizing .dashboard-grid > [data-dashboard-tile] {
+  transition: none;
+}
+
+body.dashboard-dragging .dashboard-grid > [data-dashboard-tile] {
   transition: none;
 }
 

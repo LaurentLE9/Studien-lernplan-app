@@ -31,6 +31,7 @@ const DEFAULT_DASHBOARD_TILE_SIZES = {
   recent: { colSpan: 6, rowSpan: 3 },
   done: { colSpan: 6, rowSpan: 3 },
 };
+const DASHBOARD_GRID_COLUMNS = 12;
 const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
@@ -389,6 +390,84 @@ function normalizeDashboardTileSizes(inputSizes) {
       ];
     })
   );
+}
+
+function normalizeDashboardTileSize(size, fallback = DEFAULT_DASHBOARD_TILE_SIZES.projects) {
+  const safeSize = size && typeof size === "object" ? size : fallback;
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || min));
+  return {
+    colSpan: clamp(safeSize.colSpan ?? fallback.colSpan, DASHBOARD_MIN_COL_SPAN, DASHBOARD_MAX_COL_SPAN),
+    rowSpan: clamp(safeSize.rowSpan ?? fallback.rowSpan, DASHBOARD_MIN_ROW_SPAN, DASHBOARD_MAX_ROW_SPAN),
+  };
+}
+
+function dashboardRectsOverlap(a, b) {
+  return a.x < b.x + b.colSpan && a.x + a.colSpan > b.x && a.y < b.y + b.rowSpan && a.y + a.rowSpan > b.y;
+}
+
+function dashboardItemFits(candidate, placedItems) {
+  if (candidate.x < 0 || candidate.y < 0 || candidate.x + candidate.colSpan > DASHBOARD_GRID_COLUMNS) return false;
+  return !placedItems.some((item) => dashboardRectsOverlap(candidate, item));
+}
+
+function findDashboardSlot(item, placedItems, startY = 0) {
+  const colSpan = Math.min(DASHBOARD_GRID_COLUMNS, item.colSpan);
+  for (let y = Math.max(0, startY); y < 200; y += 1) {
+    for (let x = 0; x <= DASHBOARD_GRID_COLUMNS - colSpan; x += 1) {
+      const candidate = { ...item, x, y };
+      if (dashboardItemFits(candidate, placedItems)) return candidate;
+    }
+  }
+  return { ...item, x: 0, y: Math.max(0, startY) };
+}
+
+function compactDashboardTileLayout(items, priorityId = null) {
+  const normalizedItems = (Array.isArray(items) ? items : [])
+    .filter((item) => DASHBOARD_WIDGET_IDS.includes(item?.id))
+    .map((item, index) => {
+      const size = normalizeDashboardTileSize(item, DEFAULT_DASHBOARD_TILE_SIZES[item.id]);
+      return {
+        id: item.id,
+        x: Math.min(DASHBOARD_GRID_COLUMNS - size.colSpan, Math.max(0, Number(item.x) || 0)),
+        y: Math.max(0, Number(item.y) || 0),
+        colSpan: size.colSpan,
+        rowSpan: size.rowSpan,
+        order: Number.isFinite(Number(item.order)) ? Number(item.order) : index,
+      };
+    });
+
+  const missingItems = DASHBOARD_WIDGET_IDS
+    .filter((id) => !normalizedItems.some((item) => item.id === id))
+    .map((id, index) => ({ id, x: 0, y: normalizedItems.length + index, ...DEFAULT_DASHBOARD_TILE_SIZES[id], order: normalizedItems.length + index }));
+
+  const allItems = [...normalizedItems, ...missingItems];
+  const priorityItem = priorityId ? allItems.find((item) => item.id === priorityId) : null;
+  const placedItems = [];
+  if (priorityItem) {
+    placedItems.push({
+      ...priorityItem,
+      x: Math.min(DASHBOARD_GRID_COLUMNS - priorityItem.colSpan, Math.max(0, priorityItem.x)),
+      y: Math.max(0, priorityItem.y),
+    });
+  }
+
+  allItems
+    .filter((item) => item.id !== priorityId)
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.order - b.order))
+    .forEach((item) => placedItems.push(findDashboardSlot(item, placedItems)));
+
+  return placedItems
+    .sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.order - b.order))
+    .map(({ order, ...item }, index) => ({ ...item, order: index }));
+}
+
+function makeDashboardLayoutItems(layout = DEFAULT_DASHBOARD_LAYOUT, sizes = DEFAULT_DASHBOARD_TILE_SIZES) {
+  return normalizeDashboardLayout(layout).map((id, index) => ({ id, x: 0, y: index, ...normalizeDashboardTileSize(sizes[id], DEFAULT_DASHBOARD_TILE_SIZES[id]), order: index }));
+}
+
+function normalizeDashboardTileLayout(inputLayout, legacyLayout, legacySizes) {
+  if (Array.isArray(inputLayout)) return compactDashboardTileLayout(inputLayout);
+  return compactDashboardTileLayout(makeDashboardLayoutItems(legacyLayout, normalizeDashboardTileSizes(legacySizes)));
 }
 
 function normalizeDeadlineWidgetSettings(value) {
@@ -881,6 +960,7 @@ export async function loadUserPlannerData(userId) {
           sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
           dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
           dashboardTileSizes: normalizeDashboardTileSizes(rawSettings.dashboardTileSizes),
+          dashboardTileLayout: normalizeDashboardTileLayout(rawSettings.dashboardTileLayout, rawSettings.dashboardLayout, rawSettings.dashboardTileSizes),
           deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
         },
         seeds: {
@@ -965,6 +1045,7 @@ export function normalizeDefaultData() {
       sidebarCollapsed: false,
       dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
       dashboardTileSizes: normalizeDashboardTileSizes(),
+      dashboardTileLayout: normalizeDashboardTileLayout(),
       deadlineWidget: { activeFilter: "all", defaultFilter: "all" },
     },
     seeds: { tasks: false, sessions: false },
