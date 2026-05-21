@@ -1,24 +1,27 @@
+import React from "react";
 import { EyeOff, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function SortableTile({
+export const SortableTile = React.forwardRef(({
   id,
   className,
   children,
   isEditing,
   layout = { colSpan: 6, rowSpan: 2 },
   onHide,
-}) {
-  const colSpan = Number(layout?.colSpan ?? layout?.w) || 6;
-  const rowSpan = Number(layout?.rowSpan ?? layout?.h) || 2;
-
+  style,
+  ...props
+}, ref) => {
   return (
     <div
+      ref={ref}
+      style={style}
+      {...props}
       data-dashboard-tile
-      data-dashboard-col-span={colSpan}
-      data-dashboard-row-span={rowSpan}
+      data-dashboard-col-span={layout?.colSpan ?? layout?.w ?? 6}
+      data-dashboard-row-span={layout?.rowSpan ?? layout?.h ?? 2}
       className={cn(
-        "relative group min-w-0 w-full max-w-full overflow-hidden rounded-2xl",
+        "relative group overflow-hidden rounded-2xl bg-white dark:bg-slate-950",
         isEditing ? "ring-2 ring-primary/20 bg-slate-50 dark:bg-slate-900 shadow-sm" : "",
         className
       )}
@@ -49,4 +52,4 @@ export function SortableTile({
       </div>
     </div>
   );
-}
+});
