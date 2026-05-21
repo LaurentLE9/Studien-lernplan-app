@@ -161,30 +161,26 @@ const TASK_TYPE_LABELS = {
 };
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "projects", "hours", "task-time", "today", "recent", "done"];
 const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
-const TILE_SIZE_KEYS = ["small", "medium", "wide", "tall", "large"];
-const TILE_SIZE_LABELS = {
-  small: "klein",
-  medium: "mittel",
-  wide: "breit",
-  tall: "hoch",
-  large: "groß",
+const DASHBOARD_MIN_COL_SPAN = 4;
+const DASHBOARD_MAX_COL_SPAN = 12;
+const DASHBOARD_MIN_ROW_SPAN = 1;
+const DASHBOARD_MAX_ROW_SPAN = 6;
+const LEGACY_DASHBOARD_TILE_SIZE_MAP = {
+  small: { colSpan: 4, rowSpan: 1 },
+  medium: { colSpan: 6, rowSpan: 2 },
+  wide: { colSpan: 8, rowSpan: 2 },
+  tall: { colSpan: 6, rowSpan: 3 },
+  large: { colSpan: 12, rowSpan: 3 },
 };
 const DEFAULT_DASHBOARD_TILE_SIZES = {
-  stats: "large",
-  deadlines: "wide",
-  projects: "medium",
-  hours: "large",
-  "task-time": "large",
-  today: "medium",
-  recent: "medium",
-  done: "medium",
-};
-const DASHBOARD_TILE_SIZE_CLASSES = {
-  small: "dashboard-tile-size-small",
-  medium: "dashboard-tile-size-medium",
-  wide: "dashboard-tile-size-wide",
-  tall: "dashboard-tile-size-tall",
-  large: "dashboard-tile-size-large",
+  stats: { colSpan: 12, rowSpan: 1 },
+  deadlines: { colSpan: 8, rowSpan: 3 },
+  projects: { colSpan: 4, rowSpan: 3 },
+  hours: { colSpan: 12, rowSpan: 3 },
+  "task-time": { colSpan: 12, rowSpan: 3 },
+  today: { colSpan: 6, rowSpan: 3 },
+  recent: { colSpan: 6, rowSpan: 3 },
+  done: { colSpan: 6, rowSpan: 3 },
 };
 const DEADLINE_SORT_OPTIONS = [
   { id: "due", label: "Fälligkeit" },
@@ -226,16 +222,35 @@ function normalizeDashboardLayout(layout) {
 
 function normalizeDashboardTileSizes(inputSizes) {
   const safeInput = inputSizes && typeof inputSizes === "object" ? inputSizes : {};
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || min));
   return Object.fromEntries(
-    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => [
-      tileKey,
-      TILE_SIZE_KEYS.includes(safeInput[tileKey]) ? safeInput[tileKey] : defaultSize,
-    ])
+    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => {
+      const savedSize = safeInput[tileKey];
+      const candidate = typeof savedSize === "string"
+        ? LEGACY_DASHBOARD_TILE_SIZE_MAP[savedSize]
+        : savedSize && typeof savedSize === "object"
+          ? savedSize
+          : null;
+      return [
+        tileKey,
+        {
+          colSpan: clamp(candidate?.colSpan ?? defaultSize.colSpan, DASHBOARD_MIN_COL_SPAN, DASHBOARD_MAX_COL_SPAN),
+          rowSpan: clamp(candidate?.rowSpan ?? defaultSize.rowSpan, DASHBOARD_MIN_ROW_SPAN, DASHBOARD_MAX_ROW_SPAN),
+        },
+      ];
+    })
   );
 }
 
-function getDashboardTileSizeClass(size) {
-  return DASHBOARD_TILE_SIZE_CLASSES[size] || DASHBOARD_TILE_SIZE_CLASSES.medium;
+function getDashboardTileStyle(size) {
+  const fallback = DEFAULT_DASHBOARD_TILE_SIZES.projects;
+  const safeSize = size && typeof size === "object" ? size : fallback;
+  const colSpan = Math.min(DASHBOARD_MAX_COL_SPAN, Math.max(DASHBOARD_MIN_COL_SPAN, Number(safeSize.colSpan) || fallback.colSpan));
+  const rowSpan = Math.min(DASHBOARD_MAX_ROW_SPAN, Math.max(DASHBOARD_MIN_ROW_SPAN, Number(safeSize.rowSpan) || fallback.rowSpan));
+  return {
+    "--dashboard-tile-col-span": colSpan,
+    "--dashboard-tile-row-span": rowSpan,
+  };
 }
 
 function normalizeTask(rawTask) {
@@ -3413,14 +3428,14 @@ export default function StudyPlannerApp() {
   };
 
   const updateDashboardTileSize = (tileId, size) => {
-    if (!DASHBOARD_WIDGET_IDS.includes(tileId) || !TILE_SIZE_KEYS.includes(size)) return;
+    if (!DASHBOARD_WIDGET_IDS.includes(tileId) || !size || typeof size !== "object") return;
     setData((prev) => ({
       ...prev,
       settings: {
         ...prev.settings,
         dashboardTileSizes: {
           ...normalizeDashboardTileSizes(prev.settings?.dashboardTileSizes),
-          [tileId]: size,
+          [tileId]: normalizeDashboardTileSizes({ [tileId]: size })[tileId],
         },
       },
     }));
@@ -5685,7 +5700,7 @@ export default function StudyPlannerApp() {
                   {dashboardLayout.map((widgetId) => {
                     if (widgetId === "stats") {
                       return (
-                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} size={dashboardTileSizes.stats} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.stats)}>
+                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} size={dashboardTileSizes.stats} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.stats)}>
                           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                             <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
                             <StatCard darkMode={darkMode} title="Bald fällig" value={taskSummary.dueSoon} sub="In den nächsten 3 Tagen" icon={CalendarClock} />
@@ -5697,7 +5712,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "deadlines") {
                       return (
-                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} size={dashboardTileSizes.deadlines} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.deadlines)}>
+                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} size={dashboardTileSizes.deadlines} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.deadlines)}>
                           <Card className={cn("flex h-full max-h-[760px] flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader>
                               <div className="flex items-start justify-between gap-3">
@@ -5763,7 +5778,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "projects") {
                       return (
-                        <SortableTile key="projects" id="projects" isEditing={isEditingDashboard} size={dashboardTileSizes.projects} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.projects)}>
+                        <SortableTile key="projects" id="projects" isEditing={isEditingDashboard} size={dashboardTileSizes.projects} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.projects)}>
                           <ProjectOverviewCard
                             projects={projectTasks}
                             topics={data.topics}
@@ -5777,7 +5792,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "hours") {
                       return (
-                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} size={dashboardTileSizes.hours} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.hours)}>
+                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} size={dashboardTileSizes.hours} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.hours)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
                             <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
@@ -5787,7 +5802,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "task-time") {
                       return (
-                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} size={dashboardTileSizes["task-time"]} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes["task-time"])}>
+                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} size={dashboardTileSizes["task-time"]} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes["task-time"])}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Investierte Zeit für einzelne Lernaufgaben</CardDescription></CardHeader>
                             <CardContent className="px-3 pb-5 sm:px-5">
@@ -5805,21 +5820,21 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "today") {
                       return (
-                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} size={dashboardTileSizes.today} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.today)}>
+                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} size={dashboardTileSizes.today} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.today)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "recent") {
                       return (
-                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} size={dashboardTileSizes.recent} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.recent)}>
+                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} size={dashboardTileSizes.recent} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.recent)}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "done") {
                       return (
-                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} size={dashboardTileSizes.done} sizeLabels={TILE_SIZE_LABELS} onSizeChange={updateDashboardTileSize} className={getDashboardTileSizeClass(dashboardTileSizes.done)}>
+                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} size={dashboardTileSizes.done} onSizeChange={updateDashboardTileSize} tileStyle={getDashboardTileStyle(dashboardTileSizes.done)}>
                         <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="grid max-h-[520px] gap-3 overflow-y-auto pr-2">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</CardContent></Card>
                       </SortableTile>
                       );

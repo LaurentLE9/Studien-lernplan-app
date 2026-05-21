@@ -10,16 +10,26 @@ const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "projects", "hours", "task-time", "today", "recent", "done"];
 const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
 const TASK_TYPES = ["task", "deadline", "project"];
-const TILE_SIZE_KEYS = ["small", "medium", "wide", "tall", "large"];
+const DASHBOARD_MIN_COL_SPAN = 4;
+const DASHBOARD_MAX_COL_SPAN = 12;
+const DASHBOARD_MIN_ROW_SPAN = 1;
+const DASHBOARD_MAX_ROW_SPAN = 6;
+const LEGACY_DASHBOARD_TILE_SIZE_MAP = {
+  small: { colSpan: 4, rowSpan: 1 },
+  medium: { colSpan: 6, rowSpan: 2 },
+  wide: { colSpan: 8, rowSpan: 2 },
+  tall: { colSpan: 6, rowSpan: 3 },
+  large: { colSpan: 12, rowSpan: 3 },
+};
 const DEFAULT_DASHBOARD_TILE_SIZES = {
-  stats: "large",
-  deadlines: "wide",
-  projects: "medium",
-  hours: "large",
-  "task-time": "large",
-  today: "medium",
-  recent: "medium",
-  done: "medium",
+  stats: { colSpan: 12, rowSpan: 1 },
+  deadlines: { colSpan: 8, rowSpan: 3 },
+  projects: { colSpan: 4, rowSpan: 3 },
+  hours: { colSpan: 12, rowSpan: 3 },
+  "task-time": { colSpan: 12, rowSpan: 3 },
+  today: { colSpan: 6, rowSpan: 3 },
+  recent: { colSpan: 6, rowSpan: 3 },
+  done: { colSpan: 6, rowSpan: 3 },
 };
 const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
@@ -361,11 +371,23 @@ function normalizeTasks(tasks) {
 
 function normalizeDashboardTileSizes(inputSizes) {
   const safeInput = inputSizes && typeof inputSizes === "object" ? inputSizes : {};
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Number(value) || min));
   return Object.fromEntries(
-    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => [
-      tileKey,
-      TILE_SIZE_KEYS.includes(safeInput[tileKey]) ? safeInput[tileKey] : defaultSize,
-    ])
+    Object.entries(DEFAULT_DASHBOARD_TILE_SIZES).map(([tileKey, defaultSize]) => {
+      const savedSize = safeInput[tileKey];
+      const candidate = typeof savedSize === "string"
+        ? LEGACY_DASHBOARD_TILE_SIZE_MAP[savedSize]
+        : savedSize && typeof savedSize === "object"
+          ? savedSize
+          : null;
+      return [
+        tileKey,
+        {
+          colSpan: clamp(candidate?.colSpan ?? defaultSize.colSpan, DASHBOARD_MIN_COL_SPAN, DASHBOARD_MAX_COL_SPAN),
+          rowSpan: clamp(candidate?.rowSpan ?? defaultSize.rowSpan, DASHBOARD_MIN_ROW_SPAN, DASHBOARD_MAX_ROW_SPAN),
+        },
+      ];
+    })
   );
 }
 
