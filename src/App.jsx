@@ -5913,7 +5913,7 @@ export default function StudyPlannerApp() {
                   isDraggable={canEditDashboardGrid}
                   isResizable={canEditDashboardGrid}
                   draggableHandle=".dashboard-drag-handle"
-                  resizeHandles={["se"]}
+                  resizeHandles={["n", "s", "e", "w", "ne", "nw", "se", "sw"]}
                   onBreakpointChange={setDashboardBreakpoint}
                   onDragStop={persistDashboardTileLayout}
                   onResizeStop={persistDashboardTileLayout}
