@@ -6333,20 +6333,20 @@ export default function StudyPlannerApp() {
                                     {deadlineTab === "due" ? (
                                       deadlineLists.due.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : deadlineLists.due.map((task) => (
                                         <div key={task.id} className={cn("flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
-                                          <div>
-                                            <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
-                                            <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex min-w-0 items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="min-w-0 truncate overflow-hidden font-medium" title={task.title}>{task.title}</p></div>
+                                            <p className="mt-1 truncate text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex shrink-0 items-center gap-2 md:min-w-[13rem] md:justify-end"><Badge className={cn("shrink-0 border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     ) : (
                                       deadlineLists.done.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : deadlineLists.done.map((task) => (
                                         <div key={task.id} className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
-                                          <div>
-                                            <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+                                          <div className="min-w-0 flex-1">
+                                            <div className="flex min-w-0 items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="min-w-0 truncate overflow-hidden font-medium" title={task.title}>{task.title}</p></div><p className="mt-1 truncate text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex flex-wrap items-center gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex shrink-0 flex-wrap items-center gap-2 md:min-w-[13rem] md:justify-end">{task.nextRelevantType ? <Badge variant="outline" className="shrink-0">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="shrink-0 border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     )}
@@ -7186,20 +7186,23 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
   const workSummary = getProjectWorkSummary(project, allTasks);
   const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
   const dueText = displayDate ? deadlineLabel(displayDate, project.status) : "Kein Abgabedatum";
+  const dateLabel = displayDate && project.acceptanceDate === displayDate ? "Abnahme" : "Abgabe";
 
   return (
     <div className={cn("rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
       <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
               <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.subject?.color || "#94a3b8" }} />
-              <p className="min-w-0 break-words font-semibold">{project.title}</p>
-              <Badge variant="outline">{project.status || "offen"}</Badge>
+              <p className="min-w-0 truncate overflow-hidden font-semibold" title={project.title}>{project.title}</p>
+              <Badge variant="outline" className="shrink-0">{project.status || "offen"}</Badge>
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{project.subject?.name || "Ohne Fach"}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap items-center gap-2 md:min-w-[13rem] md:justify-end">
+            {displayDate ? <Badge className={cn("shrink-0 border-0", deadlineTone(displayDate, project.status))}>{dateLabel}: {formatDateDisplay(displayDate)}</Badge> : <Badge variant="outline" className="shrink-0">Kein Abgabedatum</Badge>}
+            {displayDate ? <Badge className={cn("shrink-0 border-0", deadlineTone(displayDate, project.status))}>{dueText}</Badge> : null}
             {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
             {onStartTimer ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
             {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
@@ -7215,12 +7218,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
           <Progress value={progress} className="h-2" />
         </div>
 
-        <div className={cn("grid gap-2 text-sm", compact ? "" : "sm:grid-cols-2")}>
-          <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
-            <p className="text-xs text-muted-foreground">Abgabe</p>
-            <p className="truncate font-medium">{displayDate ? formatDateDisplay(displayDate) : "Nicht gesetzt"}</p>
-            <p className="text-xs text-muted-foreground">{dueText}</p>
-          </div>
+        <div className="grid gap-2 text-sm">
           <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
             <p className="text-xs text-muted-foreground">Verknüpfung</p>
             <p className="truncate font-medium">{workSummary.label}</p>
