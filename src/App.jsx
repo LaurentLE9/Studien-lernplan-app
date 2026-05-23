@@ -115,6 +115,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -3173,15 +3174,81 @@ function SemesterForm({ onSave, initialValue, onDone }) {
   );
 }
 
-function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave, initialValue, onDone }) {
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeDirtyValue(value) {
+  return value ?? "";
+}
+
+function normalizeTaskDirtySnapshot(task, projectRows = [], persistedTaskIds = new Set()) {
+  const normalized = normalizeTask(task || {});
+  const snapshot = {
+    title: normalizeDirtyValue(normalized.title),
+    description: normalizeDirtyValue(normalized.description),
+    type: normalizeDirtyValue(normalized.type || "task"),
+    subjectId: normalizeDirtyValue(normalized.subjectId),
+    priority: normalizeDirtyValue(normalized.priority || "mittel"),
+    createdAt: normalizeDirtyValue(normalized.createdAt),
+    dueDate: normalizeDirtyValue(normalized.dueDate),
+    acceptanceDate: normalizeDirtyValue(normalized.acceptanceDate),
+    status: normalizeDirtyValue(normalized.status || "offen"),
+    urgent: Boolean(normalized.urgent),
+    flaggedToday: Boolean(normalized.flaggedToday),
+    linkedTopicId: normalizeDirtyValue(normalized.linkedTopicId),
+    recurringPattern: normalizeDirtyValue(normalized.recurringPattern || "none"),
+    parentProjectId: normalized.type === "project" ? "" : normalizeDirtyValue(normalized.parentProjectId),
+    projectRows: normalized.type === "project"
+      ? projectRows.map((row) => {
+        const normalizedRow = normalizeTask(row || {});
+        return {
+          ...(persistedTaskIds.has(normalizedRow.id) ? { id: normalizedRow.id } : {}),
+          title: normalizeDirtyValue(normalizedRow.title),
+          description: normalizeDirtyValue(normalizedRow.description),
+          type: "task",
+          subjectId: normalizeDirtyValue(normalizedRow.subjectId),
+          priority: normalizeDirtyValue(normalizedRow.priority || "mittel"),
+          status: isTaskDone(normalizedRow) ? "erledigt" : normalizeDirtyValue(normalizedRow.status || "offen"),
+          createdAt: normalizeDirtyValue(normalizedRow.createdAt),
+          dueDate: normalizeDirtyValue(normalizedRow.dueDate),
+          acceptanceDate: normalizeDirtyValue(normalizedRow.acceptanceDate),
+          urgent: Boolean(normalizedRow.urgent),
+          flaggedToday: Boolean(normalizedRow.flaggedToday),
+          linkedTopicId: normalizeDirtyValue(normalizedRow.linkedTopicId),
+          recurringPattern: normalizeDirtyValue(normalizedRow.recurringPattern || "none"),
+          parentProjectId: normalizeDirtyValue(normalized.id || normalizedRow.parentProjectId),
+        };
+      }).sort((a, b) => stableSerialize(a).localeCompare(stableSerialize(b)))
+      : [],
+  };
+  return snapshot;
+}
+
+function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave, initialValue, onDone, onDirtyChange }) {
   const defaultTask = { title: "", description: "", subjectId: "", type: "task", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" };
   const buildProjectRows = (project) => getProjectSubTasks(project, allTasks).map((task) => ({
     ...task,
     title: task.title || "",
     status: isTaskDone(task) ? "erledigt" : (task.status || "offen"),
   }));
+  const persistedTaskIds = useMemo(() => new Set(allTasks.map((task) => task.id).filter(Boolean)), [allTasks]);
+  const buildDirtySnapshot = useCallback((task, rows) => stableSerialize(normalizeTaskDirtySnapshot(task, rows, persistedTaskIds)), [persistedTaskIds]);
   const [form, setForm] = useState(normalizeTask(initialValue || defaultTask));
   const [projectRows, setProjectRows] = useState(() => buildProjectRows(normalizeTask(initialValue || defaultTask)));
+  const [initialDirtySnapshot, setInitialDirtySnapshot] = useState(() => {
+    const initialForm = normalizeTask(initialValue || defaultTask);
+    return buildDirtySnapshot(initialForm, buildProjectRows(initialForm));
+  });
+  const currentDirtySnapshot = useMemo(() => buildDirtySnapshot(form, projectRows), [buildDirtySnapshot, form, projectRows]);
+  const isDirty = currentDirtySnapshot !== initialDirtySnapshot;
+  const isDirtyRef = useRef(isDirty);
   const [doneProjectTasksOpen, setDoneProjectTasksOpen] = useState(false);
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
@@ -3190,11 +3257,20 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
   const [errors, setErrors] = useState({ title: "", subjectId: "", projectTasks: "" });
 
   useEffect(() => {
+    isDirtyRef.current = isDirty;
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (isDirtyRef.current) return;
     const nextForm = normalizeTask(initialValue || defaultTask);
+    const nextProjectRows = buildProjectRows(nextForm);
     setForm(nextForm);
-    setProjectRows(buildProjectRows(nextForm));
+    setProjectRows(nextProjectRows);
+    setInitialDirtySnapshot(buildDirtySnapshot(nextForm, nextProjectRows));
     setDoneProjectTasksOpen(false);
-  }, [initialValue?.id]);
+    onDirtyChange?.(false);
+  }, [initialValue?.id, buildDirtySnapshot, onDirtyChange]);
 
   function validateTaskForm(currentForm) {
     const nextErrors = { title: "", subjectId: "", projectTasks: "" };
@@ -3252,7 +3328,7 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
     });
   }
 
-  function handleSaveClick() {
+  async function handleSaveClick() {
     if (!validateTaskForm(form)) return;
     const parentProjectId = form.type === "project"
       ? ""
@@ -3272,8 +3348,11 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
           parentProjectId: form.id || initialValue?.id || "",
         }))
       : [];
-    onSave({ ...initialValue, ...form, parentProjectId, projectTasks: cleanedProjectRows });
-    onDone?.();
+    const payload = { ...initialValue, ...form, parentProjectId, projectTasks: cleanedProjectRows };
+    await onSave(payload);
+    setInitialDirtySnapshot(buildDirtySnapshot({ ...initialValue, ...form, parentProjectId }, cleanedProjectRows));
+    onDirtyChange?.(false);
+    onDone?.({ saved: true });
   }
 
   function addProjectRow() {
@@ -3408,7 +3487,7 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
           ) : null}
         </div>
       ) : null}
-      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
+      <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={() => onDone({ saved: false })}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
     </div>
   );
 }
@@ -3877,6 +3956,8 @@ export default function StudyPlannerApp() {
   const [editingSubject, setEditingSubject] = useState(null);
   const [archiveCollapsed, setArchiveCollapsed] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [isEditingTaskDirty, setIsEditingTaskDirty] = useState(false);
+  const [pendingEditDiscardAction, setPendingEditDiscardAction] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
   const [taskCompletionPrompt, setTaskCompletionPrompt] = useState(null);
   const [timerStartRequest, setTimerStartRequest] = useState(null);
@@ -5429,7 +5510,39 @@ export default function StudyPlannerApp() {
       
       return { ...prev, tasks: updatedTasks };
     });
-    setEditingTask(null);
+  }
+
+  function runOrConfirmEditDiscard(action) {
+    if (editingTask && isEditingTaskDirty) {
+      setPendingEditDiscardAction(() => action);
+      return;
+    }
+    action();
+  }
+
+  function closeEditingTaskPanel() {
+    runOrConfirmEditDiscard(() => {
+      setIsEditingTaskDirty(false);
+      setEditingTask(null);
+    });
+  }
+
+  function startTaskEdit(task) {
+    runOrConfirmEditDiscard(() => {
+      setIsEditingTaskDirty(false);
+      setEditingTask(task);
+    });
+  }
+
+  function confirmEditDiscard() {
+    const action = pendingEditDiscardAction;
+    setPendingEditDiscardAction(null);
+    setIsEditingTaskDirty(false);
+    action?.();
+  }
+
+  function continueEditingTask() {
+    setPendingEditDiscardAction(null);
   }
 
   async function saveExam(exam) {
@@ -5883,17 +5996,22 @@ export default function StudyPlannerApp() {
 
   const currentPageLabel = navItems.find((n) => n.id === page)?.label || "Dashboard";
   const handlePageChange = (nextPage) => {
-    setPage(nextPage);
+    runOrConfirmEditDiscard(() => {
+      setPage(nextPage);
+      setMobileNavOpen(false);
+    });
   };
   const handleAppearanceChange = (appearance) => {
     setData((prev) => ({ ...prev, settings: { ...prev.settings, appearance } }));
   };
 
   const handleStartDashboardEdit = () => {
-    setIsEditingDashboard(true);
-    if (page !== "dashboard") {
-      setPage("dashboard");
-    }
+    runOrConfirmEditDiscard(() => {
+      setIsEditingDashboard(true);
+      if (page !== "dashboard") {
+        setPage("dashboard");
+      }
+    });
   };
 
   return (
@@ -6219,7 +6337,7 @@ export default function StudyPlannerApp() {
                                             <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
                                             <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     ) : (
@@ -6228,7 +6346,7 @@ export default function StudyPlannerApp() {
                                           <div>
                                             <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div><p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex flex-wrap items-center gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex flex-wrap items-center gap-2">{task.nextRelevantType ? <Badge variant="outline">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     )}
@@ -6248,9 +6366,9 @@ export default function StudyPlannerApp() {
                             topics={data.topics}
                             allTasks={enhancedTasks}
                             darkMode={darkMode}
-                            onEditProject={setEditingTask}
+                            onEditProject={startTaskEdit}
                             onStartProjectTimer={handleTaskTimerStart}
-                            onOpenProjects={() => setPage("projects")}
+                            onOpenProjects={() => handlePageChange("projects")}
                           />
                         </SortableTile>
                       );
@@ -6538,7 +6656,7 @@ export default function StudyPlannerApp() {
               allTasks={enhancedTasks}
               subjects={data.subjects}
               darkMode={darkMode}
-              onEditProject={setEditingTask}
+              onEditProject={startTaskEdit}
               onDeleteProject={deleteTask}
               onRestoreProject={restoreProject}
               onStartProjectTimer={handleTaskTimerStart}
@@ -6627,7 +6745,7 @@ export default function StudyPlannerApp() {
                             darkMode={darkMode}
                             onToggleDone={() => toggleTaskDone(task)}
                             onDelete={() => deleteTask(task.id)}
-                            onEdit={() => setEditingTask(task)}
+                            onEdit={() => startTaskEdit(task)}
                           />
                         ))
                     )}
@@ -6655,7 +6773,7 @@ export default function StudyPlannerApp() {
                             darkMode={darkMode}
                             onToggleDone={() => toggleTaskDone(task)}
                             onDelete={() => deleteTask(task.id)}
-                            onEdit={() => setEditingTask(task)}
+                            onEdit={() => startTaskEdit(task)}
                           />
                         ))
                     )}
@@ -6693,7 +6811,7 @@ export default function StudyPlannerApp() {
                               <p className="mt-1 text-sm text-muted-foreground">Abnahme: {formatDateDisplay(task.acceptanceDate)}</p>
                             </div>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button>
+                              <Button variant="outline" size="icon" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button>
                             </div>
                           </div>
                         </div>
@@ -6958,16 +7076,47 @@ export default function StudyPlannerApp() {
           </ResizablePanel>
           <ResizablePanel 
             open={!!editingTask} 
-            onOpenChange={(open) => !open && setEditingTask(null)}
+            onOpenChange={(open) => !open && closeEditingTaskPanel()}
             darkMode={darkMode}
             title="Eintrag bearbeiten"
             description="Passe Typ, Fach und Eigenschaften dieses Eintrags an."
             badgeText="Bearbeiten"
           >
             {editingTask ? (
-              <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} allTasks={enhancedTasks} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+              <TaskForm
+                key={editingTask.id}
+                subjects={data.subjects}
+                topics={data.topics}
+                projects={projectTasks}
+                allTasks={enhancedTasks}
+                initialValue={editingTask}
+                onSave={saveTask}
+                onDirtyChange={setIsEditingTaskDirty}
+                onDone={(result) => {
+                  if (result?.saved) {
+                    setIsEditingTaskDirty(false);
+                    setEditingTask(null);
+                    return;
+                  }
+                  closeEditingTaskPanel();
+                }}
+              />
             ) : null}
           </ResizablePanel>
+          <Dialog open={Boolean(pendingEditDiscardAction)} onOpenChange={(open) => !open && continueEditingTask()}>
+            <DialogContent className={cn("max-w-md rounded-[1.5rem]", darkMode ? "border-slate-800 bg-[#11192b]" : "border-slate-200 bg-white")}>
+              <DialogHeader>
+                <DialogTitle className={darkMode ? "text-white" : "text-slate-900"}>Änderungen verwerfen?</DialogTitle>
+                <DialogDescription>
+                  Du hast ungespeicherte Änderungen. Möchtest du sie wirklich verwerfen?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={continueEditingTask} className="rounded-[1rem]">Weiter bearbeiten</Button>
+                <Button type="button" variant="destructive" onClick={confirmEditDiscard} className="rounded-[1rem]">Verwerfen</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           <ResizablePanel
             open={!!taskCompletionPrompt}
             onOpenChange={(open) => !open && setTaskCompletionPrompt(null)}
