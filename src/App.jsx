@@ -847,6 +847,10 @@ function isPlannerTask(task) {
   return normalizeTaskType(task) !== "project" && !isProjectDeleted(task) && !isTaskArchived(task);
 }
 
+function isTimerResolvableTask(task) {
+  return Boolean(task?.id) && !isProjectDeleted(task) && !isTaskArchived(task);
+}
+
 function isDeadlineListTask(task) {
   return isPlannerTask(task) && Boolean(getTaskDeadlineDate(task));
 }
@@ -4407,7 +4411,6 @@ export default function StudyPlannerApp() {
     });
 
     const byTask = data.tasks
-      .filter((task) => normalizeTaskType(task) !== "project")
       .map((task) => {
         const sessions = sessionsByTaskId.get(task.id) || [];
         if (sessions.length === 0) return null;
@@ -5721,7 +5724,7 @@ export default function StudyPlannerApp() {
     saveTask({ ...task, status: "erledigt" });
   }
 
-  function handleDeadlineTimerStart(task) {
+  function handleTaskTimerStart(task) {
     if (!task?.id || !task?.subjectId) return;
     setTimerStartRequest({
       id: `${task.id}-${Date.now()}`,
@@ -6084,7 +6087,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={enhancedTasks.filter(isPlannerTask)} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
+              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={enhancedTasks.filter(isTimerResolvableTask)} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Eintrag anlegen
@@ -6186,7 +6189,7 @@ export default function StudyPlannerApp() {
                                             <div className="flex items-center gap-2"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="font-medium">{task.title}</p></div>
                                             <p className="mt-1 text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
                                           </div>
-                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleDeadlineTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
+                                          <div className="flex items-center gap-2"><Badge className={cn("border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" onClick={() => setEditingTask(task)}><Pencil className="h-4 w-4" /></Button></div>
                                         </div>
                                       ))
                                     ) : (
@@ -6216,6 +6219,7 @@ export default function StudyPlannerApp() {
                             allTasks={enhancedTasks}
                             darkMode={darkMode}
                             onEditProject={setEditingTask}
+                            onStartProjectTimer={handleTaskTimerStart}
                             onOpenProjects={() => setPage("projects")}
                           />
                         </SortableTile>
@@ -6507,6 +6511,7 @@ export default function StudyPlannerApp() {
               onEditProject={setEditingTask}
               onDeleteProject={deleteTask}
               onRestoreProject={restoreProject}
+              onStartProjectTimer={handleTaskTimerStart}
             />
           ) : null}
 
@@ -6997,7 +7002,7 @@ export default function StudyPlannerApp() {
   );
 }
 
-function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, compact = false, darkMode }) {
+function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, onStartTimer, compact = false, darkMode }) {
   const progress = getProjectProgress(project, allTasks);
   const workSummary = getProjectWorkSummary(project, allTasks);
   const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
@@ -7017,6 +7022,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
           </div>
           <div className="flex shrink-0 gap-2">
             {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
+            {onStartTimer ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
             {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
             {onDelete ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600" onClick={() => onDelete(project)}><Trash2 className="h-4 w-4" /></Button> : null}
           </div>
@@ -7046,7 +7052,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
   );
 }
 
-function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onOpenProjects }) {
+function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onStartProjectTimer, onOpenProjects }) {
   const sortedProjects = useMemo(() => {
     return [...projects].sort((a, b) => {
       const dateDiff = getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
@@ -7072,7 +7078,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
         ) : (
           <div className="grid gap-3">
             {sortedProjects.map((project) => (
-              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} compact darkMode={darkMode} />
+              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} onStartTimer={onStartProjectTimer} compact darkMode={darkMode} />
             ))}
           </div>
         )}
@@ -7081,7 +7087,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
   );
 }
 
-function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjects, darkMode, onEditProject, onDeleteProject, onRestoreProject }) {
+function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjects, darkMode, onEditProject, onDeleteProject, onRestoreProject, onStartProjectTimer }) {
   const [filters, setFilters] = useState({ subjectId: "all", status: "all", sort: "due" });
   const visibleProjects = useMemo(() => {
     let list = [...projects];
@@ -7141,6 +7147,7 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
               allTasks={allTasks}
               onEdit={onEditProject}
               onDelete={(entry) => onDeleteProject?.(entry.id)}
+              onStartTimer={onStartProjectTimer}
               darkMode={darkMode}
             />
           ))}
