@@ -864,53 +864,22 @@ function getProjectSubTasks(projectTask, allTasks = []) {
   return [];
 }
 
-function getProgressFromTaskStatus(task) {
-  if (isTaskDone(task)) return 100;
-  if (task?.status === "in Bearbeitung" || task?.status === "in_progress" || task?.status === "inBearbeitung") return 50;
-  return 0;
-}
-
-function getProgressFromTopic(topic, projectTask) {
-  const items = Array.isArray(topic?.items) ? topic.items : Array.isArray(topic?.tasks) ? topic.tasks : [];
-  if (items.length > 0) {
-    const doneItems = items.filter(isTaskDone).length;
-    return Math.round((doneItems / items.length) * 100);
-  }
-  if (isTaskDone(topic)) return 100;
-  if (topic?.status === "in_progress" || topic?.status === "inBearbeitung" || topic?.status === "active") return 50;
-  return getProgressFromTaskStatus(projectTask);
-}
-
-function getProjectProgress(projectTask, topics = [], allTasks = []) {
+function getProjectProgress(projectTask, allTasks = []) {
   if (!projectTask || normalizeTaskType(projectTask) !== "project") return 0;
   const subTasks = getProjectSubTasks(projectTask, allTasks);
   if (subTasks.length > 0) {
     return Math.round((subTasks.filter(isTaskDone).length / subTasks.length) * 100);
   }
-  if (projectTask.linkedTopicId) {
-    const linkedTopic = topics.find((topic) => topic.id === projectTask.linkedTopicId);
-    return linkedTopic ? getProgressFromTopic(linkedTopic, projectTask) : getProgressFromTaskStatus(projectTask);
-  }
-  return getProgressFromTaskStatus(projectTask);
+  return 0;
 }
 
-function getProjectWorkSummary(projectTask, topics = [], allTasks = []) {
+function getProjectWorkSummary(projectTask, allTasks = []) {
   const subTasks = getProjectSubTasks(projectTask, allTasks);
   if (subTasks.length > 0) {
     const open = subTasks.filter((task) => !isTaskDone(task)).length;
     return { label: `${open} Teilaufgaben offen`, openCount: open, totalCount: subTasks.length };
   }
-  if (projectTask?.linkedTopicId) {
-    const topic = topics.find((entry) => entry.id === projectTask.linkedTopicId);
-    if (!topic) return { label: "Verknüpftes Thema fehlt", openCount: 0, totalCount: 1 };
-    const items = Array.isArray(topic.items) ? topic.items : Array.isArray(topic.tasks) ? topic.tasks : [];
-    if (items.length > 0) {
-      const open = items.filter((item) => !isTaskDone(item)).length;
-      return { label: `${open} Themen offen`, openCount: open, totalCount: items.length };
-    }
-    return { label: isTaskDone(topic) ? "0 Themen offen" : "1 Thema offen", openCount: isTaskDone(topic) ? 0 : 1, totalCount: 1 };
-  }
-  return { label: "Keine Themen verknüpft", openCount: 0, totalCount: 0 };
+  return { label: "Keine Teilaufgaben", openCount: 0, totalCount: 0 };
 }
 
 function isTaskArchived(task) {
@@ -3200,24 +3169,40 @@ function SemesterForm({ onSave, initialValue, onDone }) {
   );
 }
 
-function TaskForm({ subjects, topics = [], projects = [], onSave, initialValue, onDone }) {
-  const [form, setForm] = useState(normalizeTask(initialValue || { title: "", description: "", subjectId: "", type: "task", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" }));
+function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave, initialValue, onDone }) {
+  const defaultTask = { title: "", description: "", subjectId: "", type: "task", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" };
+  const buildProjectRows = (project) => getProjectSubTasks(project, allTasks).map((task) => ({
+    ...task,
+    title: task.title || "",
+    status: isTaskDone(task) ? "erledigt" : (task.status || "offen"),
+  }));
+  const [form, setForm] = useState(normalizeTask(initialValue || defaultTask));
+  const [projectRows, setProjectRows] = useState(() => buildProjectRows(normalizeTask(initialValue || defaultTask)));
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
     initialValue?.title && initialSubject?.name && initialValue.title === initialSubject.name ? initialSubject.name : ""
   );
-  const [errors, setErrors] = useState({ title: "", subjectId: "" });
+  const [errors, setErrors] = useState({ title: "", subjectId: "", projectTasks: "" });
+
+  useEffect(() => {
+    const nextForm = normalizeTask(initialValue || defaultTask);
+    setForm(nextForm);
+    setProjectRows(buildProjectRows(nextForm));
+  }, [initialValue?.id]);
 
   function validateTaskForm(currentForm) {
-    const nextErrors = { title: "", subjectId: "" };
+    const nextErrors = { title: "", subjectId: "", projectTasks: "" };
     if (!currentForm.title.trim()) {
       nextErrors.title = "Bitte gib einen Titel ein.";
     }
     if (!currentForm.subjectId) {
       nextErrors.subjectId = "Bitte wähle ein Fach aus.";
     }
+    if (currentForm.type === "project" && projectRows.some((row) => row.title.trim() === "")) {
+      nextErrors.projectTasks = "Projektaufgaben brauchen einen Titel.";
+    }
     setErrors(nextErrors);
-    return !nextErrors.title && !nextErrors.subjectId;
+    return !nextErrors.title && !nextErrors.subjectId && !nextErrors.projectTasks;
   }
 
   function shouldAutofillTitleFromSubject(currentTitle) {
@@ -3253,6 +3238,9 @@ function TaskForm({ subjects, topics = [], projects = [], onSave, initialValue, 
       const next = { ...prev, type };
       if (type === "project") {
         next.parentProjectId = "";
+        next.linkedTopicId = "";
+        next.flaggedToday = false;
+        next.recurringPattern = "none";
       }
       return next;
     });
@@ -3265,8 +3253,48 @@ function TaskForm({ subjects, topics = [], projects = [], onSave, initialValue, 
       : availableProjects.some((project) => project.id === form.parentProjectId)
         ? form.parentProjectId
         : "";
-    onSave({ ...initialValue, ...form, parentProjectId });
+    const cleanedProjectRows = form.type === "project"
+      ? projectRows
+        .filter((row) => row.title.trim())
+        .map((row) => ({
+          ...row,
+          title: row.title.trim(),
+          type: "task",
+          subjectId: row.subjectId || form.subjectId,
+          priority: row.priority || form.priority || "mittel",
+          status: isTaskDone(row) ? "erledigt" : (row.status || "offen"),
+          parentProjectId: form.id || initialValue?.id || "",
+        }))
+      : [];
+    onSave({ ...initialValue, ...form, parentProjectId, projectTasks: cleanedProjectRows });
     onDone?.();
+  }
+
+  function addProjectRow() {
+    setProjectRows((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        title: "",
+        description: "",
+        type: "task",
+        subjectId: form.subjectId,
+        priority: form.priority || "mittel",
+        status: "offen",
+        createdAt: formatDateInput(new Date()),
+      },
+    ]);
+    setErrors((prev) => ({ ...prev, projectTasks: "" }));
+  }
+
+  function updateProjectRow(id, patch) {
+    setProjectRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setErrors((prev) => ({ ...prev, projectTasks: "" }));
+  }
+
+  function removeProjectRow(id) {
+    setProjectRows((prev) => prev.filter((row) => row.id !== id));
+    setErrors((prev) => ({ ...prev, projectTasks: "" }));
   }
 
   function openDatePicker(event) {
@@ -3305,18 +3333,47 @@ function TaskForm({ subjects, topics = [], projects = [], onSave, initialValue, 
       {form.type !== "project" ? (
         <div className="grid gap-2"><Label>Projekt (optional)</Label><Select value={selectedProjectId} onValueChange={(value) => setForm({ ...form, parentProjectId: value === "none" ? "" : value })}><SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger><SelectContent><SelectItem value="none">Kein Projekt</SelectItem>{availableProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.title}</SelectItem>)}</SelectContent></Select></div>
       ) : null}
-      <div className="grid gap-2"><Label>Verknüpftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswählen" : "Zuerst Fach wählen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
+      {form.type !== "project" ? (
+        <div className="grid gap-2"><Label>Verknüpftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswählen" : "Zuerst Fach wählen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abgabe</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Abnahme</Label><Input type="date" value={form.acceptanceDate} onChange={(e) => setForm({ ...form, acceptanceDate: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
         <div className="grid gap-2"><Label>Status</Label><Select value={form.status} onValueChange={(value) => setForm({ ...form, status: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent></Select></div>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Heute lernen</span><Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm({ ...form, flaggedToday: checked })} /></label>
+      <div className={cn("grid grid-cols-1 gap-4", form.type === "project" ? "md:grid-cols-1" : "md:grid-cols-3")}>
+        {form.type !== "project" ? <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Heute lernen</span><Switch checked={form.flaggedToday} onCheckedChange={(checked) => setForm({ ...form, flaggedToday: checked })} /></label> : null}
         <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Dringend markieren</span><Switch checked={form.urgent} onCheckedChange={(checked) => setForm({ ...form, urgent: checked })} /></label>
-        <div className="grid gap-2"><Label>Wiederholen</Label><Select value={form.recurringPattern} onValueChange={(value) => setForm({ ...form, recurringPattern: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Nicht wiederholen</SelectItem><SelectItem value="weekly">Wöchentlich</SelectItem><SelectItem value="monthly">Monatlich</SelectItem></SelectContent></Select></div>
+        {form.type !== "project" ? <div className="grid gap-2"><Label>Wiederholen</Label><Select value={form.recurringPattern} onValueChange={(value) => setForm({ ...form, recurringPattern: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Nicht wiederholen</SelectItem><SelectItem value="weekly">Wöchentlich</SelectItem><SelectItem value="monthly">Monatlich</SelectItem></SelectContent></Select></div> : null}
       </div>
+      {form.type === "project" ? (
+        <div className="grid gap-3 rounded-2xl border p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <Label>Projektaufgaben</Label>
+              <p className="text-sm text-muted-foreground">Normale Aufgaben, die mit diesem Projekt verknüpft werden.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={addProjectRow}><Plus className="mr-2 h-4 w-4" />Aufgabe</Button>
+          </div>
+          {errors.projectTasks ? <p className="text-sm text-red-500">{errors.projectTasks}</p> : null}
+          {projectRows.length === 0 ? (
+            <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Noch keine Projektaufgaben.</div>
+          ) : (
+            <div className="grid gap-3">
+              {projectRows.map((row) => (
+                <div key={row.id} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
+                  <button type="button" onClick={() => updateProjectRow(row.id, { status: isTaskDone(row) ? "offen" : "erledigt" })} aria-label={isTaskDone(row) ? "Als offen markieren" : "Als erledigt markieren"} className={cn("flex h-9 w-9 items-center justify-center rounded-md border transition-colors", isTaskDone(row) ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white hover:bg-slate-100")}>
+                    {isTaskDone(row) ? <Check className="h-4 w-4" /> : null}
+                  </button>
+                  <Input value={row.title} onChange={(event) => updateProjectRow(row.id, { title: event.target.value })} placeholder="Aufgabentitel" />
+                  <Button type="button" variant="outline" size="icon" onClick={() => removeProjectRow(row.id)} aria-label="Projektaufgabe entfernen"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
       <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
     </div>
   );
@@ -5277,19 +5334,60 @@ export default function StudyPlannerApp() {
   }
 
   function saveTask(task) {
+    const projectTasks = Array.isArray(task.projectTasks) ? task.projectTasks : [];
+    const { projectTasks: _projectTasks, ...taskDraft } = task;
+    const taskId = taskDraft.id || crypto.randomUUID();
     const cleanedTask = cleanTaskAfterTypeChange({
-      ...task,
-      id: task.id || crypto.randomUUID(),
+      ...taskDraft,
+      id: taskId,
       updatedAt: new Date().toISOString(),
     });
     setData((prev) => {
-      const isNewTask = !prev.tasks.some((t) => t.id === cleanedTask.id);
-      const updatedTasks = isNewTask
-        ? [...prev.tasks, { ...cleanedTask, createdAt: cleanedTask.createdAt || formatDateInput(new Date()) }]
-        : prev.tasks.map((t) => (t.id === cleanedTask.id ? cleanedTask : t));
+      const isProject = normalizeTaskType(cleanedTask) === "project";
+      const existingTask = prev.tasks.find((t) => t.id === cleanedTask.id) || null;
+      const savedTask = {
+        ...existingTask,
+        ...cleanedTask,
+        parentProjectId: isProject ? "" : (cleanedTask.parentProjectId === cleanedTask.id ? "" : cleanedTask.parentProjectId),
+        createdAt: existingTask?.createdAt || cleanedTask.createdAt || formatDateInput(new Date()),
+      };
+      const withoutProjectPayload = prev.tasks.map((t) => (t.id === savedTask.id ? savedTask : t));
+      let updatedTasks = existingTask ? withoutProjectPayload : [...withoutProjectPayload, savedTask];
+
+      if (isProject) {
+        const nowIso = new Date().toISOString();
+        const nextLinkedIds = new Set(projectTasks.map((entry) => entry.id).filter(Boolean));
+        updatedTasks = updatedTasks.map((entry) => {
+          if (entry.id === savedTask.id) return savedTask;
+          if (entry.parentProjectId === savedTask.id && !nextLinkedIds.has(entry.id)) {
+            return { ...entry, parentProjectId: "", updatedAt: nowIso };
+          }
+          return entry;
+        });
+
+        projectTasks.forEach((entry) => {
+          if (!entry?.id || !entry.title?.trim() || entry.id === savedTask.id) return;
+          const existingSubTask = updatedTasks.find((candidate) => candidate.id === entry.id) || null;
+          const nextSubTask = normalizeTask({
+            ...existingSubTask,
+            ...entry,
+            id: entry.id,
+            type: "task",
+            parentProjectId: savedTask.id,
+            subjectId: entry.subjectId || savedTask.subjectId,
+            priority: entry.priority || savedTask.priority || "mittel",
+            status: entry.status === "erledigt" ? "erledigt" : "offen",
+            createdAt: existingSubTask?.createdAt || entry.createdAt || formatDateInput(new Date()),
+            updatedAt: nowIso,
+          });
+          updatedTasks = existingSubTask
+            ? updatedTasks.map((candidate) => (candidate.id === nextSubTask.id ? nextSubTask : candidate))
+            : [...updatedTasks, nextSubTask];
+        });
+      }
       
       // Auto-generate recurring task when a task is marked as done
-      if (cleanedTask.status === "erledigt" && cleanedTask.recurringPattern && cleanedTask.recurringPattern !== "none") {
+      if (!isProject && cleanedTask.status === "erledigt" && cleanedTask.recurringPattern && cleanedTask.recurringPattern !== "none") {
         const recurringTask = generateRecurringTask(cleanedTask, cleanedTask.recurringPattern);
         if (recurringTask) {
           updatedTasks.push(normalizeTask(recurringTask));
@@ -5986,7 +6084,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={data.tasks || []} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
+              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={enhancedTasks.filter(isPlannerTask)} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Eintrag anlegen
@@ -5999,7 +6097,7 @@ export default function StudyPlannerApp() {
                 description="Erstelle eine Aufgabe, Deadline oder ein Projekt und weise den Eintrag einem Fach zu."
                 badgeText="Neu erfassen"
               >
-                <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} allTasks={enhancedTasks} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
               </ResizablePanel>
 
               
@@ -6832,7 +6930,7 @@ export default function StudyPlannerApp() {
             badgeText="Bearbeiten"
           >
             {editingTask ? (
-              <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+              <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} allTasks={enhancedTasks} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
             ) : null}
           </ResizablePanel>
           <ResizablePanel
@@ -6863,7 +6961,7 @@ export default function StudyPlannerApp() {
             onOpenChange={(open) => !open && setEditingSession(null)}
             subjects={data.subjects || []}
             topics={data.topics || []}
-            tasks={(data.tasks || []).filter((task) => normalizeTaskType(task) !== "project")}
+            tasks={enhancedTasks.filter(isPlannerTask)}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value, taskId: undefined, topicId: undefined } : prev)}
@@ -6900,8 +6998,8 @@ export default function StudyPlannerApp() {
 }
 
 function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, compact = false, darkMode }) {
-  const progress = getProjectProgress(project, topics, allTasks);
-  const workSummary = getProjectWorkSummary(project, topics, allTasks);
+  const progress = getProjectProgress(project, allTasks);
+  const workSummary = getProjectWorkSummary(project, allTasks);
   const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
   const dueText = displayDate ? deadlineLabel(displayDate, project.status) : "Kein Abgabedatum";
 
@@ -6990,7 +7088,7 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
     if (filters.subjectId !== "all") list = list.filter((project) => project.subjectId === filters.subjectId);
     if (filters.status !== "all") list = list.filter((project) => project.status === filters.status);
     list.sort((a, b) => {
-      if (filters.sort === "progress") return getProjectProgress(a, topics, allTasks) - getProjectProgress(b, topics, allTasks);
+      if (filters.sort === "progress") return getProjectProgress(a, allTasks) - getProjectProgress(b, allTasks);
       if (filters.sort === "subject") return (a.subject?.name || "").localeCompare(b.subject?.name || "", "de");
       if (filters.sort === "status") return (a.status || "").localeCompare(b.status || "", "de");
       return getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
