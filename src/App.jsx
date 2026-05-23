@@ -3182,6 +3182,7 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
   }));
   const [form, setForm] = useState(normalizeTask(initialValue || defaultTask));
   const [projectRows, setProjectRows] = useState(() => buildProjectRows(normalizeTask(initialValue || defaultTask)));
+  const [doneProjectTasksOpen, setDoneProjectTasksOpen] = useState(false);
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
     initialValue?.title && initialSubject?.name && initialValue.title === initialSubject.name ? initialSubject.name : ""
@@ -3192,6 +3193,7 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
     const nextForm = normalizeTask(initialValue || defaultTask);
     setForm(nextForm);
     setProjectRows(buildProjectRows(nextForm));
+    setDoneProjectTasksOpen(false);
   }, [initialValue?.id]);
 
   function validateTaskForm(currentForm) {
@@ -3324,6 +3326,8 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
     (!form.subjectId || !project.subjectId || project.subjectId === form.subjectId)
   ));
   const selectedProjectId = availableProjects.some((project) => project.id === form.parentProjectId) ? form.parentProjectId : "none";
+  const openProjectRows = projectRows.filter((row) => !isTaskDone(row));
+  const doneProjectRows = projectRows.filter(isTaskDone);
 
   return (
     <div className="grid gap-4">
@@ -3361,21 +3365,47 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
             <Button type="button" variant="outline" size="sm" onClick={addProjectRow}><Plus className="mr-2 h-4 w-4" />Aufgabe</Button>
           </div>
           {errors.projectTasks ? <p className="text-sm text-red-500">{errors.projectTasks}</p> : null}
-          {projectRows.length === 0 ? (
+          {openProjectRows.length === 0 ? (
             <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">Noch keine Projektaufgaben.</div>
           ) : (
-            <div className="grid gap-3">
-              {projectRows.map((row) => (
-                <div key={row.id} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
-                  <button type="button" onClick={() => updateProjectRow(row.id, { status: isTaskDone(row) ? "offen" : "erledigt" })} aria-label={isTaskDone(row) ? "Als offen markieren" : "Als erledigt markieren"} className={cn("flex h-9 w-9 items-center justify-center rounded-md border transition-colors", isTaskDone(row) ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white hover:bg-slate-100")}>
-                    {isTaskDone(row) ? <Check className="h-4 w-4" /> : null}
-                  </button>
-                  <Input value={row.title} onChange={(event) => updateProjectRow(row.id, { title: event.target.value })} placeholder="Aufgabentitel" />
-                  <Button type="button" variant="outline" size="icon" onClick={() => removeProjectRow(row.id)} aria-label="Projektaufgabe entfernen"><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              ))}
+            <div className="max-h-[min(42dvh,26rem)] overflow-y-auto pr-1">
+              <div className="grid gap-3">
+                {openProjectRows.map((row) => (
+                  <div key={row.id} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
+                    <button type="button" onClick={() => updateProjectRow(row.id, { status: "erledigt" })} aria-label="Als erledigt markieren" className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 bg-white transition-colors hover:bg-slate-100">
+                      <span className="sr-only">Als erledigt markieren</span>
+                    </button>
+                    <Input value={row.title} onChange={(event) => updateProjectRow(row.id, { title: event.target.value })} placeholder="Aufgabentitel" />
+                    <Button type="button" variant="outline" size="icon" onClick={() => removeProjectRow(row.id)} aria-label="Projektaufgabe entfernen"><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+          {doneProjectRows.length > 0 ? (
+            <div className="rounded-xl border bg-muted/20">
+              <button type="button" onClick={() => setDoneProjectTasksOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 p-3 text-left">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-medium">Erledigte Projektaufgaben</span>
+                  <Badge variant="outline">{doneProjectRows.length}</Badge>
+                </span>
+                <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", doneProjectTasksOpen ? "rotate-180" : "")} />
+              </button>
+              {doneProjectTasksOpen ? (
+                <div className="grid gap-3 border-t p-3">
+                  {doneProjectRows.map((row) => (
+                <div key={row.id} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
+                  <button type="button" onClick={() => updateProjectRow(row.id, { status: "offen" })} aria-label="Als offen markieren" className="flex h-9 w-9 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors">
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <p className="min-w-0 break-words text-sm font-medium">{row.title}</p>
+                  <Button type="button" variant="outline" size="icon" onClick={() => removeProjectRow(row.id)} aria-label="Projektaufgabe entfernen"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className="flex justify-end gap-2">{onDone ? <Button variant="outline" onClick={onDone}>Abbrechen</Button> : null}<Button onClick={handleSaveClick}>Speichern</Button></div>
