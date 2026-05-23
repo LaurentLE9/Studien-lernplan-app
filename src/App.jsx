@@ -6333,22 +6333,11 @@ export default function StudyPlannerApp() {
                                   <div className="grid gap-3">
                                     {deadlineTab === "due" ? (
                                       deadlineLists.due.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : deadlineLists.due.map((task) => (
-                                        <div key={task.id} className={cn("flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status))}>
-                                          <div className="min-w-0 flex-1">
-                                            <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als erledigt markieren" className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")} /><div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="min-w-0 truncate overflow-hidden whitespace-nowrap font-medium" title={task.title}>{task.title}</p></div>
-                                            <p className="mt-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
-                                          </div>
-                                          <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 overflow-hidden md:w-[13rem] md:justify-end"><Badge className={cn("shrink-0 whitespace-nowrap border-0", deadlineTone(task.nextRelevantDate, task.status))}>{deadlineLabel(task.nextRelevantDate, task.status)}</Badge><Button variant="outline" size="icon" className="shrink-0" onClick={() => handleTaskTimerStart(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button><Button variant="outline" size="icon" className="shrink-0" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
-                                        </div>
+                                        <DeadlineListItem key={task.id} task={task} darkMode={darkMode} onToggleDone={toggleTaskDone} onStartTimer={handleTaskTimerStart} onEdit={startTaskEdit} />
                                       ))
                                     ) : (
                                       deadlineLists.done.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Deadline-Aufgaben.</p> : deadlineLists.done.map((task) => (
-                                        <div key={task.id} className="flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between">
-                                          <div className="min-w-0 flex-1">
-                                            <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"><button type="button" onClick={() => toggleTaskDone(task)} aria-label="Als offen markieren" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors"><Check className="h-4 w-4" /></button><div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} /><p className="min-w-0 truncate overflow-hidden whitespace-nowrap font-medium" title={task.title}>{task.title}</p></div><p className="mt-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
-                                          </div>
-                                          <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 overflow-hidden md:w-[13rem] md:justify-end">{task.nextRelevantType ? <Badge variant="outline" className="shrink-0 whitespace-nowrap">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}<Badge className="shrink-0 whitespace-nowrap border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge><Button variant="outline" size="icon" className="shrink-0" onClick={() => startTaskEdit(task)}><Pencil className="h-4 w-4" /></Button></div>
-                                        </div>
+                                        <DeadlineListItem key={task.id} task={task} darkMode={darkMode} done onToggleDone={toggleTaskDone} onEdit={startTaskEdit} />
                                       ))
                                     )}
                                   </div>
@@ -7179,6 +7168,63 @@ export default function StudyPlannerApp() {
         </div>
       </div>
     </div>
+  );
+}
+
+function DeadlineListItem({ task, darkMode, done = false, onToggleDone, onStartTimer, onEdit }) {
+  const relativeLabel = deadlineLabel(task.nextRelevantDate, task.status);
+  const statusText = task.status || (done ? "erledigt" : "offen");
+  const rowClassName = done
+    ? "flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4 md:flex-row md:items-center md:justify-between"
+    : cn("flex min-w-0 flex-col gap-3 overflow-hidden rounded-2xl border p-4 md:flex-row md:items-center md:justify-between", deadlineCardTone(task.nextRelevantDate, task.status));
+
+  return (
+    <TooltipPrimitive.Provider delayDuration={250}>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger asChild>
+          <div className={rowClassName}>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => onToggleDone(task)}
+                  aria-label={done ? "Als offen markieren" : "Als erledigt markieren"}
+                  className={done ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors" : cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")}
+                >
+                  {done ? <Check className="h-4 w-4" /> : null}
+                </button>
+                <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: task.subject?.color || "#94a3b8" }} />
+                <p className="min-w-0 truncate overflow-hidden whitespace-nowrap font-medium" title={task.title}>{task.title}</p>
+              </div>
+              <p className="mt-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-sm text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+            </div>
+            <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 pr-1 md:w-[14.5rem] md:justify-end">
+              {done ? (
+                <>
+                  {task.nextRelevantType ? <Badge variant="outline" className="shrink-0 whitespace-nowrap">{task.nextRelevantType}: {formatDateDisplay(task.nextRelevantDate)}</Badge> : null}
+                  <Badge className="shrink-0 whitespace-nowrap border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge>
+                </>
+              ) : (
+                <Badge className={cn("shrink-0 whitespace-nowrap border-0", deadlineTone(task.nextRelevantDate, task.status))}>{relativeLabel}</Badge>
+              )}
+              {done ? null : <Button variant="outline" size="icon" className="shrink-0" onClick={() => onStartTimer(task)} disabled={!task.subjectId} aria-label={`Timer für ${task.title} starten`}><Play className="h-4 w-4" /></Button>}
+              <Button variant="outline" size="icon" className="shrink-0" onClick={() => onEdit(task)}><Pencil className="h-4 w-4" /></Button>
+            </div>
+          </div>
+        </TooltipPrimitive.Trigger>
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Content side="top" align="start" sideOffset={8} className={cn("z-[100] grid max-w-[280px] gap-1 rounded-xl border px-3 py-2 text-xs shadow-lg", darkMode ? "border-slate-700 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900")}>
+            <p className="truncate font-semibold">{task.title}</p>
+            <p className="text-muted-foreground">{task.subject?.name || "Ohne Fach"}</p>
+            <p>Status: {statusText}</p>
+            <p>Abgabe: {task.dueDate ? formatDateDisplay(task.dueDate) : "Nicht gesetzt"}</p>
+            <p>Abnahme: {task.acceptanceDate ? formatDateDisplay(task.acceptanceDate) : "Nicht gesetzt"}</p>
+            <p>{relativeLabel}</p>
+            <TooltipPrimitive.Arrow className={darkMode ? "fill-slate-950" : "fill-white"} />
+          </TooltipPrimitive.Content>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </TooltipPrimitive.Provider>
   );
 }
 
