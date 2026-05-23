@@ -27,6 +27,7 @@ import {
   Pencil,
   Play,
   Plus,
+  RotateCcw,
   Search,
   Settings,
   Sun,
@@ -364,7 +365,11 @@ function fromReactGridLayout(layoutItems) {
 
 function normalizeTask(rawTask) {
   const type = TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task";
-  return { ...(rawTask || {}), type };
+  const normalized = { ...(rawTask || {}), type };
+  if (type === "project") {
+    normalized.deletedAt = normalized.deletedAt || normalized.archivedAt || null;
+  }
+  return normalized;
 }
 
 function normalizeTasks(tasks) {
@@ -381,6 +386,8 @@ function cleanTaskAfterTypeChange(task) {
     delete cleaned.subTaskIds;
     delete cleaned.projectStatus;
     delete cleaned.projectNotes;
+    delete cleaned.deletedAt;
+    delete cleaned.archivedAt;
   }
   return cleaned;
 }
@@ -877,6 +884,10 @@ function isTaskArchived(task) {
   const acceptance = startOfDay(new Date(task.acceptanceDate));
   const today = startOfDay(new Date());
   return acceptance.getTime() <= today.getTime();
+}
+
+function isProjectDeleted(project) {
+  return Boolean(project?.deletedAt || project?.archivedAt);
 }
 
 function usePersistentState() {
@@ -4188,7 +4199,8 @@ export default function StudyPlannerApp() {
     };
   }), [data.tasks, subjectsById]);
 
-  const projectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project"), [enhancedTasks]);
+  const projectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project" && !isProjectDeleted(task)), [enhancedTasks]);
+  const deletedProjectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project" && isProjectDeleted(task)), [enhancedTasks]);
 
   const filteredTasks = useMemo(() => {
     let list = [...enhancedTasks].filter((task) => !task.archived);
@@ -5320,7 +5332,32 @@ export default function StudyPlannerApp() {
   }
 
   function deleteTask(id) {
-    setData((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
+    setData((prev) => {
+      const existingTask = prev.tasks.find((task) => task.id === id);
+      if (existingTask?.type === "project") {
+        const deletedAt = new Date().toISOString();
+        return {
+          ...prev,
+          tasks: prev.tasks.map((task) => (
+            task.id === id
+              ? { ...task, deletedAt, archivedAt: task.archivedAt || deletedAt, updatedAt: deletedAt }
+              : task
+          )),
+        };
+      }
+      return { ...prev, tasks: prev.tasks.filter((t) => t.id !== id) };
+    });
+  }
+
+  function restoreProject(id) {
+    setData((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((task) => {
+        if (task.id !== id || task.type !== "project") return task;
+        const { deletedAt, archivedAt, ...restoredTask } = task;
+        return { ...restoredTask, updatedAt: new Date().toISOString() };
+      }),
+    }));
   }
 
   function openStudySessionSheet(seed = {}) {
@@ -5913,6 +5950,7 @@ export default function StudyPlannerApp() {
                   isDraggable={canEditDashboardGrid}
                   isResizable={canEditDashboardGrid}
                   draggableHandle=".dashboard-drag-handle"
+                  draggableCancel=".dashboard-scroll-area, button, a, input, textarea, select, option"
                   resizeHandles={["n", "s", "e", "w", "ne", "nw", "se", "sw"]}
                   onBreakpointChange={setDashboardBreakpoint}
                   onDragStop={persistDashboardTileLayout}
@@ -5937,7 +5975,7 @@ export default function StudyPlannerApp() {
                     if (widgetId === "deadlines") {
                       return (
                         <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                          <Card className={cn("flex h-full max-h-[760px] flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                          <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader>
                               <div className="flex items-start justify-between gap-3">
                                 <div>
@@ -5970,7 +6008,7 @@ export default function StudyPlannerApp() {
 
                                 <p className="text-xs text-muted-foreground">Aktive Sortierung: {DEADLINE_SORT_OPTIONS.find((option) => option.id === deadlineWidgetSettings.sortBy)?.label || "Fälligkeit"}</p>
 
-                                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                                <div className="dashboard-scroll-area min-h-0 flex-1 overflow-y-auto pr-1">
                                   <div className="grid gap-3">
                                     {deadlineTab === "due" ? (
                                       deadlineLists.due.length === 0 ? <p className="text-sm text-muted-foreground">Keine anstehenden Deadlines vorhanden.</p> : deadlineLists.due.map((task) => (
@@ -6045,21 +6083,21 @@ export default function StudyPlannerApp() {
                     if (widgetId === "today") {
                       return (
                         <SortableTile key="today" id="today" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                          <Card className={cn("flex flex-col overflow-hidden h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-y-auto pr-2"><div className="grid gap-3">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</div></CardContent></Card>
+                          <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</div></CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "recent") {
                       return (
                         <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                          <Card className={cn("flex flex-col overflow-hidden h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-y-auto pr-2"><div className="grid gap-3">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</div></CardContent></Card>
+                          <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</div></CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "done") {
                       return (
                       <SortableTile key="done" id="done" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                        <Card className={cn("flex flex-col overflow-hidden h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-y-auto pr-2"><div className="grid gap-3">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</div></CardContent></Card>
+                        <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</div></CardContent></Card>
                       </SortableTile>
                       );
                     }
@@ -6292,11 +6330,14 @@ export default function StudyPlannerApp() {
           {page === "projects" ? (
             <ProjectsPage
               projects={projectTasks}
+              deletedProjects={deletedProjectTasks}
               topics={data.topics}
               allTasks={enhancedTasks}
               subjects={data.subjects}
               darkMode={darkMode}
               onEditProject={setEditingTask}
+              onDeleteProject={deleteTask}
+              onRestoreProject={restoreProject}
             />
           ) : null}
 
@@ -6787,7 +6828,7 @@ export default function StudyPlannerApp() {
   );
 }
 
-function ProjectListItem({ project, topics, allTasks, onEdit, compact = false, darkMode }) {
+function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, compact = false, darkMode }) {
   const progress = getProjectProgress(project, topics, allTasks);
   const workSummary = getProjectWorkSummary(project, topics, allTasks);
   const dueText = project.nextRelevantDate ? deadlineLabel(project.nextRelevantDate, project.status) : "Kein Abgabedatum";
@@ -6804,7 +6845,11 @@ function ProjectListItem({ project, topics, allTasks, onEdit, compact = false, d
             </div>
             <p className="mt-1 truncate text-sm text-muted-foreground">{project.subject?.name || "Ohne Fach"}</p>
           </div>
-          {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
+          <div className="flex shrink-0 gap-2">
+            {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
+            {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
+            {onDelete ? <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg text-red-500 hover:text-red-600" onClick={() => onDelete(project)}><Trash2 className="h-4 w-4" /></Button> : null}
+          </div>
         </div>
 
         <div className="grid gap-2">
@@ -6866,7 +6911,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
   );
 }
 
-function ProjectsPage({ projects, topics, allTasks, subjects, darkMode, onEditProject }) {
+function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjects, darkMode, onEditProject, onDeleteProject, onRestoreProject }) {
   const [filters, setFilters] = useState({ subjectId: "all", status: "all", sort: "due" });
   const visibleProjects = useMemo(() => {
     let list = [...projects];
@@ -6919,10 +6964,45 @@ function ProjectsPage({ projects, topics, allTasks, subjects, darkMode, onEditPr
       ) : (
         <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
           {visibleProjects.map((project) => (
-            <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} darkMode={darkMode} />
+            <ProjectListItem
+              key={project.id}
+              project={project}
+              topics={topics}
+              allTasks={allTasks}
+              onEdit={onEditProject}
+              onDelete={(entry) => onDeleteProject?.(entry.id)}
+              darkMode={darkMode}
+            />
           ))}
         </div>
       )}
+
+      <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+        <CardHeader>
+          <CardTitle>Gelöschte Projekte</CardTitle>
+          <CardDescription>Archivierte Projekte bleiben mit Aufgaben, Zuordnungen und Fortschritt erhalten.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {deletedProjects.length === 0 ? (
+            <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
+              Keine gelöschten Projekte vorhanden.
+            </div>
+          ) : (
+            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+              {deletedProjects.map((project) => (
+                <ProjectListItem
+                  key={project.id}
+                  project={project}
+                  topics={topics}
+                  allTasks={allTasks}
+                  onRestore={(entry) => onRestoreProject?.(entry.id)}
+                  darkMode={darkMode}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

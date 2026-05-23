@@ -370,9 +370,16 @@ function normalizeDashboardLayout(layout) {
 }
 
 function normalizeTask(rawTask) {
-  return {
+  const type = TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task";
+  const normalized = {
     ...(rawTask || {}),
-    type: TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task",
+    type,
+  };
+  if (type === "project") {
+    normalized.deletedAt = normalized.deletedAt || normalized.archivedAt || null;
+  }
+  return {
+    ...normalized,
   };
 }
 
