@@ -7249,8 +7249,8 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
                   </div>
                   <p className="mt-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-sm text-muted-foreground">{project.subject?.name || "Ohne Fach"}</p>
                 </div>
-                <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 overflow-hidden md:w-auto md:max-w-[11.5rem] md:justify-end">
-                  {displayDate ? <Badge className={cn("shrink-0 whitespace-nowrap border-0", deadlineTone(displayDate, project.status))}>{dueText}</Badge> : <Badge variant="outline" className="shrink-0 whitespace-nowrap">Kein Datum</Badge>}
+                <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 md:w-auto md:max-w-[11.5rem] md:justify-end">
+                  {displayDate ? <span className={cn("inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border-0 px-2.5 text-xs font-medium leading-none whitespace-nowrap", deadlineTone(displayDate, project.status))}>{dueText}</span> : <span className="inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border border-border/80 px-2.5 text-xs font-medium leading-none whitespace-nowrap text-foreground">Kein Datum</span>}
                   {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
                   {onStartTimer ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
                   {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
