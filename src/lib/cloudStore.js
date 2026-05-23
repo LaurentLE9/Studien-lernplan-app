@@ -369,8 +369,12 @@ function normalizeDashboardLayout(layout) {
   return [...filtered, ...missing];
 }
 
+function normalizeTaskType(task) {
+  return TASK_TYPES.includes(task?.type) ? task.type : "task";
+}
+
 function normalizeTask(rawTask) {
-  const type = TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task";
+  const type = normalizeTaskType(rawTask);
   const normalized = {
     ...(rawTask || {}),
     type,

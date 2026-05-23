@@ -363,8 +363,12 @@ function fromReactGridLayout(layoutItems) {
   })));
 }
 
+function normalizeTaskType(task) {
+  return TASK_TYPES.includes(task?.type) ? task.type : "task";
+}
+
 function normalizeTask(rawTask) {
-  const type = TASK_TYPES.includes(rawTask?.type) ? rawTask.type : "task";
+  const type = normalizeTaskType(rawTask);
   const normalized = { ...(rawTask || {}), type };
   if (type === "project") {
     normalized.deletedAt = normalized.deletedAt || normalized.archivedAt || null;
@@ -378,8 +382,10 @@ function normalizeTasks(tasks) {
 
 function cleanTaskAfterTypeChange(task) {
   const cleaned = normalizeTask(task);
-  if (cleaned.type === "task") {
-    delete cleaned.linkedTopicId;
+  if (cleaned.type === "project") {
+    delete cleaned.parentProjectId;
+  }
+  if (cleaned.type !== "project") {
     delete cleaned.projectMeta;
     delete cleaned.manualProgress;
     delete cleaned.subTasks;
@@ -390,6 +396,18 @@ function cleanTaskAfterTypeChange(task) {
     delete cleaned.archivedAt;
   }
   return cleaned;
+}
+
+function isProjectDeleted(project) {
+  return Boolean(project?.deletedAt || project?.archivedAt);
+}
+
+function isProjectTask(task) {
+  return normalizeTaskType(task) === "project" && !isProjectDeleted(task);
+}
+
+function isDeletedProjectTask(task) {
+  return normalizeTaskType(task) === "project" && isProjectDeleted(task);
 }
 
 function normalizeDeadlineWidgetSettings(value) {
@@ -807,8 +825,14 @@ function getTaskMilestones(task) {
 }
 
 function getNextTaskMilestone(task) {
+  if (normalizeTaskType(task) === "project") return null;
   const milestones = getTaskMilestones(task);
   return milestones[0] || null;
+}
+
+function getTaskDeadlineDate(task) {
+  if (normalizeTaskType(task) === "project") return null;
+  return task?.acceptanceDate || task?.dueDate || null;
 }
 
 function getTaskSortTimestamp(task) {
@@ -819,13 +843,25 @@ function isTaskDone(task) {
   return task?.completed === true || task?.done === true || task?.status === "done" || task?.status === "erledigt";
 }
 
+function isPlannerTask(task) {
+  return normalizeTaskType(task) !== "project" && !isProjectDeleted(task) && !isTaskArchived(task);
+}
+
+function isDeadlineListTask(task) {
+  return isPlannerTask(task) && Boolean(getTaskDeadlineDate(task));
+}
+
 function getProjectSubTasks(projectTask, allTasks = []) {
   if (!projectTask?.id) return [];
-  if (Array.isArray(projectTask.subTasks)) return projectTask.subTasks;
+  const isActiveSubTask = (task) => task?.id && normalizeTaskType(task) !== "project" && !isProjectDeleted(task) && !isTaskArchived(task);
+  const canonicalTasks = allTasks.filter((task) => task.parentProjectId === projectTask.id && isActiveSubTask(task));
+  if (canonicalTasks.length > 0) return canonicalTasks;
   if (Array.isArray(projectTask.subTaskIds)) {
-    return allTasks.filter((task) => projectTask.subTaskIds.includes(task.id));
+    const legacyTasks = allTasks.filter((task) => projectTask.subTaskIds.includes(task.id) && isActiveSubTask(task));
+    if (legacyTasks.length > 0) return legacyTasks;
   }
-  return allTasks.filter((task) => task.parentProjectId === projectTask.id);
+  if (Array.isArray(projectTask.subTasks)) return projectTask.subTasks.filter(isActiveSubTask);
+  return [];
 }
 
 function getProgressFromTaskStatus(task) {
@@ -846,7 +882,7 @@ function getProgressFromTopic(topic, projectTask) {
 }
 
 function getProjectProgress(projectTask, topics = [], allTasks = []) {
-  if (!projectTask || projectTask.type !== "project") return 0;
+  if (!projectTask || normalizeTaskType(projectTask) !== "project") return 0;
   const subTasks = getProjectSubTasks(projectTask, allTasks);
   if (subTasks.length > 0) {
     return Math.round((subTasks.filter(isTaskDone).length / subTasks.length) * 100);
@@ -884,10 +920,6 @@ function isTaskArchived(task) {
   const acceptance = startOfDay(new Date(task.acceptanceDate));
   const today = startOfDay(new Date());
   return acceptance.getTime() <= today.getTime();
-}
-
-function isProjectDeleted(project) {
-  return Boolean(project?.deletedAt || project?.archivedAt);
 }
 
 function usePersistentState() {
@@ -3168,7 +3200,7 @@ function SemesterForm({ onSave, initialValue, onDone }) {
   );
 }
 
-function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
+function TaskForm({ subjects, topics = [], projects = [], onSave, initialValue, onDone }) {
   const [form, setForm] = useState(normalizeTask(initialValue || { title: "", description: "", subjectId: "", type: "task", createdAt: formatDateInput(new Date()), dueDate: "", acceptanceDate: "", priority: "mittel", status: "offen", flaggedToday: false, urgent: false, recurringPattern: "none" }));
   const initialSubject = subjects.find((subject) => subject.id === (initialValue?.subjectId || "")) || null;
   const [lastAutofilledTitle, setLastAutofilledTitle] = useState(
@@ -3201,6 +3233,7 @@ function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
       ...prev,
       subjectId,
       linkedTopicId: "",
+      parentProjectId: projects.some((project) => project.id === prev.parentProjectId && (!subjectId || !project.subjectId || project.subjectId === subjectId)) ? prev.parentProjectId : "",
       title: shouldAutofill ? selectedSubject.name : prev.title,
     }));
     if (shouldAutofill) {
@@ -3214,9 +3247,25 @@ function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
     setErrors((prev) => ({ ...prev, title: "" }));
   }
 
+  function handleTypeChange(value) {
+    const type = TASK_TYPES.includes(value) ? value : "task";
+    setForm((prev) => {
+      const next = { ...prev, type };
+      if (type === "project") {
+        next.parentProjectId = "";
+      }
+      return next;
+    });
+  }
+
   function handleSaveClick() {
     if (!validateTaskForm(form)) return;
-    onSave({ ...initialValue, ...form });
+    const parentProjectId = form.type === "project"
+      ? ""
+      : availableProjects.some((project) => project.id === form.parentProjectId)
+        ? form.parentProjectId
+        : "";
+    onSave({ ...initialValue, ...form, parentProjectId });
     onDone?.();
   }
 
@@ -3237,15 +3286,25 @@ function TaskForm({ subjects, topics = [], onSave, initialValue, onDone }) {
     return status !== "archived" && !topic.completed && !topic.archivedAt;
   });
 
+  const availableProjects = projects.filter((project) => (
+    isProjectTask(project) &&
+    project.id !== form.id &&
+    (!form.subjectId || !project.subjectId || project.subjectId === form.subjectId)
+  ));
+  const selectedProjectId = availableProjects.some((project) => project.id === form.parentProjectId) ? form.parentProjectId : "none";
+
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Titel</Label><Input value={form.title} onChange={(e) => handleTitleChange(e.target.value)} className={errors.title ? "border-red-500 focus-visible:ring-red-500" : ""} />{errors.title ? <p className="text-sm text-red-500">{errors.title}</p> : null}</div>
       <div className="grid gap-2"><Label>Beschreibung / Notizen</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-      <div className="grid gap-2"><Label>Typ</Label><Select value={form.type || "task"} onValueChange={(value) => setForm({ ...form, type: TASK_TYPES.includes(value) ? value : "task" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="task">Aufgabe</SelectItem><SelectItem value="deadline">Deadline</SelectItem><SelectItem value="project">Projekt</SelectItem></SelectContent></Select></div>
+      <div className="grid gap-2"><Label>Typ</Label><Select value={form.type || "task"} onValueChange={handleTypeChange}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="task">Aufgabe</SelectItem><SelectItem value="deadline">Deadline</SelectItem><SelectItem value="project">Projekt</SelectItem></SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="grid gap-2"><Label>Fach</Label><Select value={form.subjectId || undefined} onValueChange={handleSubjectChange}><SelectTrigger className={errors.subjectId ? "border-red-500 focus:ring-red-500" : ""}><SelectValue placeholder="Fach auswählen" /></SelectTrigger><SelectContent>{subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent></Select>{errors.subjectId ? <p className="text-sm text-red-500">{errors.subjectId}</p> : null}</div>
         <div className="grid gap-2"><Label>Priorität</Label><Select value={form.priority} onValueChange={(value) => setForm({ ...form, priority: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="niedrig">Niedrig</SelectItem><SelectItem value="mittel">Mittel</SelectItem><SelectItem value="hoch">Hoch</SelectItem></SelectContent></Select></div>
       </div>
+      {form.type !== "project" ? (
+        <div className="grid gap-2"><Label>Projekt (optional)</Label><Select value={selectedProjectId} onValueChange={(value) => setForm({ ...form, parentProjectId: value === "none" ? "" : value })}><SelectTrigger><SelectValue placeholder="Projekt auswählen" /></SelectTrigger><SelectContent><SelectItem value="none">Kein Projekt</SelectItem>{availableProjects.map((project) => <SelectItem key={project.id} value={project.id}>{project.title}</SelectItem>)}</SelectContent></Select></div>
+      ) : null}
       <div className="grid gap-2"><Label>Verknüpftes Lernthema (optional)</Label><Select value={form.linkedTopicId || "none"} onValueChange={(value) => setForm({ ...form, linkedTopicId: value === "none" ? "" : value })} disabled={!form.subjectId || availableTopics.length === 0}><SelectTrigger><SelectValue placeholder={form.subjectId ? "Lernthema auswählen" : "Zuerst Fach wählen"} /></SelectTrigger><SelectContent><SelectItem value="none">Kein Lernthema</SelectItem>{availableTopics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.title}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-2"><Label>Erstellungsdatum</Label><Input type="date" value={form.createdAt} onChange={(e) => setForm({ ...form, createdAt: e.target.value })} onClick={openDatePicker} className="h-12 cursor-pointer" /></div>
@@ -4189,21 +4248,23 @@ export default function StudyPlannerApp() {
 
   const enhancedTasks = useMemo(() => normalizeTasks(data.tasks).map((task) => {
     const nextMilestone = getNextTaskMilestone(task);
+    const nextRelevantDate = normalizeTaskType(task) === "project" ? null : getTaskDeadlineDate(task);
     return {
       ...task,
       archived: isTaskArchived(task),
-      daysLeft: nextMilestone?.date ? daysUntil(nextMilestone.date) : null,
-      nextRelevantDate: nextMilestone?.date || null,
-      nextRelevantType: nextMilestone?.label || null,
+      daysLeft: nextRelevantDate ? daysUntil(nextRelevantDate) : null,
+      nextRelevantDate,
+      nextRelevantType: task.acceptanceDate ? "Abnahme" : nextMilestone?.label || null,
+      projectDisplayDate: normalizeTaskType(task) === "project" ? nextMilestone?.date || null : null,
       subject: subjectsById[task.subjectId],
     };
   }), [data.tasks, subjectsById]);
 
-  const projectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project" && !isProjectDeleted(task)), [enhancedTasks]);
-  const deletedProjectTasks = useMemo(() => enhancedTasks.filter((task) => task.type === "project" && isProjectDeleted(task)), [enhancedTasks]);
+  const projectTasks = useMemo(() => enhancedTasks.filter(isProjectTask), [enhancedTasks]);
+  const deletedProjectTasks = useMemo(() => enhancedTasks.filter(isDeletedProjectTask), [enhancedTasks]);
 
   const filteredTasks = useMemo(() => {
-    let list = [...enhancedTasks].filter((task) => !task.archived);
+    let list = [...enhancedTasks].filter(isPlannerTask);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((task) => [task.title, task.description, task.subject?.name].some((value) => (value || "").toLowerCase().includes(q)));
@@ -4224,7 +4285,7 @@ export default function StudyPlannerApp() {
   }, [enhancedTasks, search, taskFilter]);
 
   const archivedTasks = useMemo(() => {
-    let list = [...enhancedTasks].filter((task) => task.archived);
+    let list = [...enhancedTasks].filter((task) => normalizeTaskType(task) !== "project" && task.archived);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((task) => [task.title, task.description, task.subject?.name].some((value) => (value || "").toLowerCase().includes(q)));
@@ -4289,6 +4350,7 @@ export default function StudyPlannerApp() {
     });
 
     const byTask = data.tasks
+      .filter((task) => normalizeTaskType(task) !== "project")
       .map((task) => {
         const sessions = sessionsByTaskId.get(task.id) || [];
         if (sessions.length === 0) return null;
@@ -4412,16 +4474,17 @@ export default function StudyPlannerApp() {
   }, [data.studySessions, data.subjects, data.tasks, subjectsById, semesters, selectedSemesterId]);
 
   const taskSummary = useMemo(() => {
-    const visibleTasks = enhancedTasks.filter((task) => !task.archived);
-    const archived = enhancedTasks.filter((task) => task.archived).length;
-    const open = visibleTasks.filter((t) => t.status !== "erledigt").length;
-    const done = visibleTasks.filter((t) => t.status === "erledigt").length;
-    const overdue = visibleTasks.filter((t) => t.status !== "erledigt" && t.nextRelevantDate && t.daysLeft < 0).length;
-    const dueSoon = visibleTasks.filter((t) => t.status !== "erledigt" && t.nextRelevantDate && t.daysLeft >= 0 && t.daysLeft <= 3).length;
-    const nextDeadlines = [...visibleTasks]
-      .filter((t) => t.status !== "erledigt" && t.nextRelevantDate)
+    const plannerTasks = enhancedTasks.filter(isPlannerTask);
+    const deadlineTasks = plannerTasks.filter(isDeadlineListTask);
+    const archived = enhancedTasks.filter((task) => normalizeTaskType(task) !== "project" && task.archived).length;
+    const open = plannerTasks.filter((t) => t.status !== "erledigt").length;
+    const done = plannerTasks.filter((t) => t.status === "erledigt").length;
+    const overdue = deadlineTasks.filter((t) => t.status !== "erledigt" && t.daysLeft < 0).length;
+    const dueSoon = deadlineTasks.filter((t) => t.status !== "erledigt" && t.daysLeft >= 0 && t.daysLeft <= 3).length;
+    const nextDeadlines = [...deadlineTasks]
+      .filter((t) => t.status !== "erledigt")
       .sort((a, b) => getTaskSortTimestamp(b) - getTaskSortTimestamp(a));
-    const completedDeadlines = [...visibleTasks]
+    const completedDeadlines = [...deadlineTasks]
       .filter((t) => t.status === "erledigt")
       .sort((a, b) => getTaskSortTimestamp(b) - getTaskSortTimestamp(a));
     return { open, done, overdue, dueSoon, nextDeadlines, completedDeadlines, archived };
@@ -4433,6 +4496,14 @@ export default function StudyPlannerApp() {
       done: [...taskSummary.completedDeadlines].sort((a, b) => compareDeadlineTasks(a, b, deadlineWidgetSettings.sortBy)),
     };
   }, [taskSummary.nextDeadlines, taskSummary.completedDeadlines, deadlineWidgetSettings.sortBy]);
+
+  const todayPlannerTasks = useMemo(() => (
+    enhancedTasks.filter((task) => isPlannerTask(task) && task.flaggedToday && task.status !== "erledigt")
+  ), [enhancedTasks]);
+
+  const donePlannerTasks = useMemo(() => (
+    enhancedTasks.filter((task) => isPlannerTask(task) && task.status === "erledigt")
+  ), [enhancedTasks]);
 
   const trackedSessions = useMemo(() => {
     return [...data.studySessions]
@@ -5334,7 +5405,7 @@ export default function StudyPlannerApp() {
   function deleteTask(id) {
     setData((prev) => {
       const existingTask = prev.tasks.find((task) => task.id === id);
-      if (existingTask?.type === "project") {
+      if (normalizeTaskType(existingTask) === "project") {
         const deletedAt = new Date().toISOString();
         return {
           ...prev,
@@ -5353,7 +5424,7 @@ export default function StudyPlannerApp() {
     setData((prev) => ({
       ...prev,
       tasks: prev.tasks.map((task) => {
-        if (task.id !== id || task.type !== "project") return task;
+        if (task.id !== id || normalizeTaskType(task) !== "project") return task;
         const { deletedAt, archivedAt, ...restoredTask } = task;
         return { ...restoredTask, updatedAt: new Date().toISOString() };
       }),
@@ -5928,7 +5999,7 @@ export default function StudyPlannerApp() {
                 description="Erstelle eine Aufgabe, Deadline oder ein Projekt und weise den Eintrag einem Fach zu."
                 badgeText="Neu erfassen"
               >
-                <TaskForm subjects={data.subjects} topics={data.topics} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
               </ResizablePanel>
 
               
@@ -6083,7 +6154,7 @@ export default function StudyPlannerApp() {
                     if (widgetId === "today") {
                       return (
                         <SortableTile key="today" id="today" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                          <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{todayFocusEntries.length === 0 && enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{enhancedTasks.filter((t) => t.flaggedToday && t.status !== "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</div></CardContent></Card>
+                          <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{todayFocusEntries.length === 0 && todayPlannerTasks.length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{todayPlannerTasks.slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</div></CardContent></Card>
                         </SortableTile>
                       );
                     }
@@ -6097,7 +6168,7 @@ export default function StudyPlannerApp() {
                     if (widgetId === "done") {
                       return (
                       <SortableTile key="done" id="done" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
-                        <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{enhancedTasks.filter((t) => t.status === "erledigt").length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : enhancedTasks.filter((t) => t.status === "erledigt").slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</div></CardContent></Card>
+                        <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{donePlannerTasks.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : donePlannerTasks.slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</div></CardContent></Card>
                       </SortableTile>
                       );
                     }
@@ -6215,7 +6286,7 @@ export default function StudyPlannerApp() {
                         <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                           {group.subjects.map((subject) => {
                             const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
-                            const openTasks = data.tasks.filter((t) => t.subjectId === subject.id && t.status !== "erledigt").length;
+                            const openTasks = enhancedTasks.filter((t) => isPlannerTask(t) && t.subjectId === subject.id && t.status !== "erledigt").length;
                             const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
                             const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
 
@@ -6527,7 +6598,7 @@ export default function StudyPlannerApp() {
 
                           try {
                             const semesterSubjects = data.subjects?.filter((s) => s && (s.semesterId === semester.id || s.groupId === semester.id)) || [];
-                            const semesterTasks = data.tasks?.filter((t) => t && (t.semesterId === semester.id)) || [];
+                            const semesterTasks = enhancedTasks.filter((t) => isPlannerTask(t) && t.semesterId === semester.id);
                             const semesterMinutes = data.studySessions
                               ?.filter((s) => s && semesterSubjects.some((sub) => sub && sub.id === s.subjectId))
                               .reduce((sum, s) => sum + (s?.durationMinutes || 0), 0) || 0;
@@ -6761,7 +6832,7 @@ export default function StudyPlannerApp() {
             badgeText="Bearbeiten"
           >
             {editingTask ? (
-              <TaskForm subjects={data.subjects} topics={data.topics} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
+              <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} initialValue={editingTask} onSave={saveTask} onDone={() => setEditingTask(null)} />
             ) : null}
           </ResizablePanel>
           <ResizablePanel
@@ -6792,7 +6863,7 @@ export default function StudyPlannerApp() {
             onOpenChange={(open) => !open && setEditingSession(null)}
             subjects={data.subjects || []}
             topics={data.topics || []}
-            tasks={data.tasks || []}
+            tasks={(data.tasks || []).filter((task) => normalizeTaskType(task) !== "project")}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || ""}
             onSelectedSubjectChange={(value) => setEditingSession((prev) => prev ? { ...prev, subjectId: value, taskId: undefined, topicId: undefined } : prev)}
@@ -6831,7 +6902,8 @@ export default function StudyPlannerApp() {
 function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, compact = false, darkMode }) {
   const progress = getProjectProgress(project, topics, allTasks);
   const workSummary = getProjectWorkSummary(project, topics, allTasks);
-  const dueText = project.nextRelevantDate ? deadlineLabel(project.nextRelevantDate, project.status) : "Kein Abgabedatum";
+  const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
+  const dueText = displayDate ? deadlineLabel(displayDate, project.status) : "Kein Abgabedatum";
 
   return (
     <div className={cn("rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
@@ -6863,7 +6935,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
         <div className={cn("grid gap-2 text-sm", compact ? "" : "sm:grid-cols-2")}>
           <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
             <p className="text-xs text-muted-foreground">Abgabe</p>
-            <p className="truncate font-medium">{project.nextRelevantDate ? formatDateDisplay(project.nextRelevantDate) : "Nicht gesetzt"}</p>
+            <p className="truncate font-medium">{displayDate ? formatDateDisplay(displayDate) : "Nicht gesetzt"}</p>
             <p className="text-xs text-muted-foreground">{dueText}</p>
           </div>
           <div className="min-w-0 rounded-xl border border-border/70 px-3 py-2">
