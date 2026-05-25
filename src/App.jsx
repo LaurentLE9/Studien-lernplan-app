@@ -197,6 +197,36 @@ const DEFAULT_DASHBOARD_TILE_LAYOUT = [
   { id: "recent", x: 6, y: 10, colSpan: 6, rowSpan: 3 },
   { id: "done", x: 0, y: 13, colSpan: 6, rowSpan: 3 },
 ];
+const DASHBOARD_PRESET_KEYS = ["standard", "compact", "focus", "custom"];
+const DASHBOARD_PRESET_LABELS = {
+  standard: "Standard",
+  compact: "Kompakt",
+  focus: "Fokus",
+  custom: "Benutzerdefiniert",
+};
+const DASHBOARD_PRESET_DEFAULT_LAYOUTS = {
+  standard: DEFAULT_DASHBOARD_TILE_LAYOUT,
+  compact: [
+    { id: "stats", x: 0, y: 0, colSpan: 12, rowSpan: 1 },
+    { id: "deadlines", x: 0, y: 1, colSpan: 6, rowSpan: 2 },
+    { id: "projects", x: 6, y: 1, colSpan: 6, rowSpan: 2 },
+    { id: "today", x: 0, y: 3, colSpan: 6, rowSpan: 2 },
+    { id: "recent", x: 6, y: 3, colSpan: 6, rowSpan: 2 },
+    { id: "hours", x: 0, y: 5, colSpan: 6, rowSpan: 2 },
+    { id: "task-time", x: 6, y: 5, colSpan: 6, rowSpan: 2 },
+    { id: "done", x: 0, y: 7, colSpan: 6, rowSpan: 2 },
+  ],
+  focus: [
+    { id: "today", x: 0, y: 0, colSpan: 8, rowSpan: 3 },
+    { id: "deadlines", x: 8, y: 0, colSpan: 4, rowSpan: 3 },
+    { id: "projects", x: 0, y: 3, colSpan: 4, rowSpan: 3 },
+    { id: "stats", x: 4, y: 3, colSpan: 8, rowSpan: 1 },
+    { id: "hours", x: 4, y: 4, colSpan: 8, rowSpan: 2 },
+    { id: "task-time", x: 0, y: 6, colSpan: 12, rowSpan: 2 },
+    { id: "recent", x: 0, y: 8, colSpan: 6, rowSpan: 2 },
+    { id: "done", x: 6, y: 8, colSpan: 6, rowSpan: 2 },
+  ],
+};
 const DASHBOARD_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 0 };
 const DASHBOARD_COLS = { lg: 12, md: 12, sm: 1, xs: 1 };
 const DEADLINE_SORT_OPTIONS = [
@@ -365,6 +395,94 @@ function fromReactGridLayout(layoutItems) {
   })));
 }
 
+function normalizeDashboardPresetKey(value) {
+  return DASHBOARD_PRESET_KEYS.includes(value) ? value : "standard";
+}
+
+function makeDashboardPresetValue(tileLayout = DEFAULT_DASHBOARD_TILE_LAYOUT, hiddenTiles = []) {
+  const normalizedTileLayout = normalizeDashboardTileLayout(tileLayout);
+  return {
+    tileLayout: normalizedTileLayout,
+    hiddenTiles: normalizeDashboardHiddenTiles(hiddenTiles),
+  };
+}
+
+function makeDefaultDashboardPresetLayouts(customSource) {
+  const customLayout = customSource?.tileLayout || customSource?.dashboardTileLayout || DEFAULT_DASHBOARD_TILE_LAYOUT;
+  const customHiddenTiles = customSource?.hiddenTiles || customSource?.dashboardHiddenTiles || [];
+  return {
+    standard: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.standard, []),
+    compact: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.compact, []),
+    focus: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.focus, []),
+    custom: makeDashboardPresetValue(customLayout, customHiddenTiles),
+  };
+}
+
+function normalizeDashboardPresetLayouts(inputLayouts, activeLayout, activeHiddenTiles) {
+  const defaults = makeDefaultDashboardPresetLayouts({
+    tileLayout: activeLayout,
+    hiddenTiles: activeHiddenTiles,
+  });
+  const safeInput = inputLayouts && typeof inputLayouts === "object" ? inputLayouts : {};
+  return Object.fromEntries(DASHBOARD_PRESET_KEYS.map((presetKey) => {
+    const savedPreset = safeInput[presetKey];
+    return [
+      presetKey,
+      makeDashboardPresetValue(
+        savedPreset?.tileLayout || savedPreset?.dashboardTileLayout || defaults[presetKey].tileLayout,
+        savedPreset?.hiddenTiles || savedPreset?.dashboardHiddenTiles || defaults[presetKey].hiddenTiles
+      ),
+    ];
+  }));
+}
+
+function applyDashboardPresetToSettings(settings, presetKey, presetLayouts) {
+  const safePresetKey = normalizeDashboardPresetKey(presetKey);
+  const normalizedPresetLayouts = normalizeDashboardPresetLayouts(
+    presetLayouts,
+    settings?.dashboardTileLayout,
+    settings?.dashboardHiddenTiles
+  );
+  const preset = normalizedPresetLayouts[safePresetKey] || normalizedPresetLayouts.standard;
+  const tileLayout = normalizeDashboardTileLayout(preset.tileLayout);
+  const hiddenTiles = normalizeDashboardHiddenTiles(preset.hiddenTiles);
+  return {
+    ...settings,
+    dashboardSelectedPreset: safePresetKey,
+    dashboardPresetLayouts: normalizedPresetLayouts,
+    dashboardLayout: tileLayout.map((item) => item.id),
+    dashboardTileSizes: Object.fromEntries(tileLayout.map((item) => [item.id, { colSpan: item.colSpan, rowSpan: item.rowSpan }])),
+    dashboardTileLayout: tileLayout,
+    dashboardHiddenTiles: hiddenTiles,
+  };
+}
+
+function normalizeAppSettings(rawSettings = {}) {
+  const dashboardTileLayout = normalizeDashboardTileLayout(
+    rawSettings.dashboardTileLayout,
+    rawSettings.dashboardLayout,
+    rawSettings.dashboardTileSizes
+  );
+  const dashboardHiddenTiles = normalizeDashboardHiddenTiles(rawSettings.dashboardHiddenTiles);
+  const dashboardPresetLayouts = normalizeDashboardPresetLayouts(
+    rawSettings.dashboardPresetLayouts,
+    dashboardTileLayout,
+    dashboardHiddenTiles
+  );
+  const selectedPreset = normalizeDashboardPresetKey(rawSettings.dashboardSelectedPreset);
+  return {
+    appearance: rawSettings.appearance || "light",
+    sidebarCollapsed: rawSettings.sidebarCollapsed || false,
+    dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
+    dashboardTileSizes: normalizeDashboardTileSizes(rawSettings.dashboardTileSizes),
+    dashboardTileLayout,
+    dashboardHiddenTiles,
+    dashboardSelectedPreset: selectedPreset,
+    dashboardPresetLayouts,
+    deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
+  };
+}
+
 function normalizeTaskType(task) {
   return TASK_TYPES.includes(task?.type) ? task.type : "task";
 }
@@ -493,7 +611,7 @@ function importDataFromJSON(jsonString, existingData) {
       tasks: imported.data.tasks || existingData.tasks,
       studySessions: imported.data.studySessions || existingData.studySessions,
       exams: imported.data.exams || existingData.exams || [],
-      settings: { ...existingData.settings, ...(imported.data.settings || {}) },
+      settings: normalizeAppSettings({ ...existingData.settings, ...(imported.data.settings || {}) }),
       seeds: existingData.seeds,
     };
   } catch (error) {
@@ -909,15 +1027,7 @@ function usePersistentState() {
           studySessions: [],
           exams: [],
           todayFocus: [],
-          settings: {
-            appearance: "light",
-            sidebarCollapsed: false,
-            dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
-            dashboardTileSizes: normalizeDashboardTileSizes(),
-            dashboardTileLayout: normalizeDashboardTileLayout(),
-            dashboardHiddenTiles: [],
-            deadlineWidget: normalizeDeadlineWidgetSettings(),
-          },
+          settings: normalizeAppSettings(),
           seeds: { tasks: false, sessions: false },
         };
       }
@@ -929,15 +1039,7 @@ function usePersistentState() {
         studySessions: parsed.studySessions || [],
         exams: parsed.exams || [],
         todayFocus: parsed.todayFocus || [],
-        settings: {
-          appearance: parsed.settings?.appearance || "light",
-          sidebarCollapsed: parsed.settings?.sidebarCollapsed || false,
-          dashboardLayout: normalizeDashboardLayout(parsed.settings?.dashboardLayout),
-          dashboardTileSizes: normalizeDashboardTileSizes(parsed.settings?.dashboardTileSizes),
-          dashboardTileLayout: normalizeDashboardTileLayout(parsed.settings?.dashboardTileLayout, parsed.settings?.dashboardLayout, parsed.settings?.dashboardTileSizes),
-          dashboardHiddenTiles: normalizeDashboardHiddenTiles(parsed.settings?.dashboardHiddenTiles),
-          deadlineWidget: normalizeDeadlineWidgetSettings(parsed.settings?.deadlineWidget),
-        },
+        settings: normalizeAppSettings(parsed.settings),
         seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
       };
     } catch {
@@ -948,15 +1050,7 @@ function usePersistentState() {
         studySessions: [],
         exams: [],
         todayFocus: [],
-        settings: {
-          appearance: "light",
-          sidebarCollapsed: false,
-            dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
-            dashboardTileSizes: normalizeDashboardTileSizes(),
-            dashboardTileLayout: normalizeDashboardTileLayout(),
-            dashboardHiddenTiles: [],
-            deadlineWidget: normalizeDeadlineWidgetSettings(),
-        },
+        settings: normalizeAppSettings(),
         seeds: { tasks: false, sessions: false },
       };
     }
@@ -974,13 +1068,9 @@ function createLoggedOutData() {
     ...normalizeDefaultData(),
     settings: {
       ...normalizeDefaultData().settings,
+      ...normalizeAppSettings(),
       appearance: "light",
       sidebarCollapsed: false,
-      dashboardLayout: [...DEFAULT_DASHBOARD_LAYOUT],
-      dashboardTileSizes: normalizeDashboardTileSizes(),
-      dashboardTileLayout: normalizeDashboardTileLayout(),
-      dashboardHiddenTiles: [],
-      deadlineWidget: normalizeDeadlineWidgetSettings(),
     },
   };
 }
@@ -2983,6 +3073,10 @@ function SettingsBackupPage({
   lastCloudSaveAt,
   data,
   onStartDashboardEdit,
+  dashboardSelectedPreset,
+  onDashboardPresetChange,
+  onSaveDashboardPreset,
+  onResetDashboardPreset,
 }) {
   return (
     <div className="grid gap-6">
@@ -3005,6 +3099,30 @@ function SettingsBackupPage({
             </div>
           </CardHeader>
           <CardContent>
+            <div className="grid gap-3 rounded-xl border border-border/70 p-3">
+              <div className="grid gap-2">
+                <Label>Dashboard-Layout</Label>
+                <Select value={dashboardSelectedPreset} onValueChange={onDashboardPresetChange}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Layout wÃ¤hlen" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DASHBOARD_PRESET_KEYS.map((presetKey) => (
+                      <SelectItem key={presetKey} value={presetKey}>{DASHBOARD_PRESET_LABELS[presetKey]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button type="button" variant="outline" className="rounded-xl" onClick={onSaveDashboardPreset}>
+                  Aktuelles Layout speichern
+                </Button>
+                <Button type="button" variant="outline" className="rounded-xl" onClick={onResetDashboardPreset}>
+                  Preset zurÃ¼cksetzen
+                </Button>
+              </div>
+            </div>
+
             <div className={cn("rounded-xl border p-3", darkMode ? "border-slate-700 bg-slate-900/60" : "border-slate-200 bg-slate-50") }>
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold">Sync-Health</p>
@@ -3816,10 +3934,15 @@ export default function StudyPlannerApp() {
       xs: mobileLayout,
     };
   }, [reactGridLayout]);
-  const [isEditingDashboard, setIsEditingDashboard] = useState(false);
+  const [isDashboardEditMode, setIsDashboardEditMode] = useState(false);
   const [dashboardBreakpoint, setDashboardBreakpoint] = useState("lg");
   const { width: dashboardGridWidth, containerRef: dashboardGridRef } = useContainerWidth({ initialWidth: 1200 });
-  const canEditDashboardGrid = isEditingDashboard && dashboardBreakpoint !== "sm" && dashboardBreakpoint !== "xs";
+  const canEditDashboardGrid = isDashboardEditMode && dashboardBreakpoint !== "sm" && dashboardBreakpoint !== "xs";
+  const dashboardSelectedPreset = normalizeDashboardPresetKey(data.settings?.dashboardSelectedPreset);
+  const dashboardPresetLayouts = useMemo(
+    () => normalizeDashboardPresetLayouts(data.settings?.dashboardPresetLayouts, dashboardTileLayout, dashboardHiddenTiles),
+    [data.settings?.dashboardPresetLayouts, dashboardTileLayout, dashboardHiddenTiles]
+  );
 
   const persistDashboardTileLayout = (nextVisibleLayout) => {
     setData((prev) => {
@@ -3883,8 +4006,62 @@ export default function StudyPlannerApp() {
         dashboardTileSizes: normalizeDashboardTileSizes(),
         dashboardTileLayout: defaultTileLayout,
         dashboardHiddenTiles: [],
+        dashboardSelectedPreset: "standard",
+        dashboardPresetLayouts: {
+          ...normalizeDashboardPresetLayouts(prev.settings?.dashboardPresetLayouts, defaultTileLayout, []),
+          standard: makeDashboardPresetValue(defaultTileLayout, []),
+        },
       },
     }));
+  };
+
+  const applyDashboardPreset = (presetKey) => {
+    setIsDashboardEditMode(false);
+    setData((prev) => ({
+      ...prev,
+      settings: applyDashboardPresetToSettings(prev.settings, presetKey, prev.settings?.dashboardPresetLayouts),
+    }));
+  };
+
+  const saveCurrentDashboardLayoutAsPreset = () => {
+    setData((prev) => {
+      const currentLayout = normalizeDashboardTileLayout(
+        prev.settings?.dashboardTileLayout,
+        prev.settings?.dashboardLayout,
+        prev.settings?.dashboardTileSizes
+      );
+      const hiddenTiles = normalizeDashboardHiddenTiles(prev.settings?.dashboardHiddenTiles);
+      const presetLayouts = {
+        ...normalizeDashboardPresetLayouts(prev.settings?.dashboardPresetLayouts, currentLayout, hiddenTiles),
+        custom: makeDashboardPresetValue(currentLayout, hiddenTiles),
+      };
+      return {
+        ...prev,
+        settings: applyDashboardPresetToSettings(prev.settings, "custom", presetLayouts),
+      };
+    });
+  };
+
+  const resetDashboardPreset = () => {
+    setIsDashboardEditMode(false);
+    setData((prev) => {
+      const selectedPreset = normalizeDashboardPresetKey(prev.settings?.dashboardSelectedPreset);
+      const activeLayout = normalizeDashboardTileLayout(
+        prev.settings?.dashboardTileLayout,
+        prev.settings?.dashboardLayout,
+        prev.settings?.dashboardTileSizes
+      );
+      const activeHiddenTiles = normalizeDashboardHiddenTiles(prev.settings?.dashboardHiddenTiles);
+      const presetLayouts = normalizeDashboardPresetLayouts(prev.settings?.dashboardPresetLayouts, activeLayout, activeHiddenTiles);
+      presetLayouts[selectedPreset] = makeDashboardPresetValue(
+        DASHBOARD_PRESET_DEFAULT_LAYOUTS[selectedPreset] || DASHBOARD_PRESET_DEFAULT_LAYOUTS.standard,
+        []
+      );
+      return {
+        ...prev,
+        settings: applyDashboardPresetToSettings(prev.settings, selectedPreset, presetLayouts),
+      };
+    });
   };
 
   const flushCloudSaveNow = async (snapshot = data) => {
@@ -4031,11 +4208,7 @@ export default function StudyPlannerApp() {
               tasks: normalizeTasks(cloudData.tasks),
               settings: {
                 ...cloudData.settings,
-                dashboardLayout: normalizeDashboardLayout(cloudData.settings?.dashboardLayout),
-                dashboardTileSizes: normalizeDashboardTileSizes(cloudData.settings?.dashboardTileSizes),
-                dashboardTileLayout: normalizeDashboardTileLayout(cloudData.settings?.dashboardTileLayout, cloudData.settings?.dashboardLayout, cloudData.settings?.dashboardTileSizes),
-                dashboardHiddenTiles: normalizeDashboardHiddenTiles(cloudData.settings?.dashboardHiddenTiles),
-                deadlineWidget: normalizeDeadlineWidgetSettings(cloudData.settings?.deadlineWidget),
+                ...normalizeAppSettings(cloudData.settings),
               },
               subjects: prev.subjects,
               topics: prev.topics,
@@ -4057,7 +4230,11 @@ export default function StudyPlannerApp() {
         if (!cancelled) {
           const cached = readUserCache(session.user.id);
           if (cached) {
-            setData(cached);
+            setData((prev) => ({
+              ...prev,
+              ...cached,
+              settings: normalizeAppSettings(cached.settings),
+            }));
             setIsCloudHydrated(true);
             setCloudSyncError("Cloud nicht erreichbar, lokale Kopie geladen.");
             setIsLoadingSession(false);
@@ -6008,7 +6185,7 @@ export default function StudyPlannerApp() {
 
   const handleStartDashboardEdit = () => {
     runOrConfirmEditDiscard(() => {
-      setIsEditingDashboard(true);
+      setIsDashboardEditMode(true);
       if (page !== "dashboard") {
         setPage("dashboard");
       }
@@ -6169,7 +6346,7 @@ export default function StudyPlannerApp() {
           </Dialog>
 
           <main className="p-4 md:p-6 lg:p-8">
-          {isEditingDashboard ? (
+          {isDashboardEditMode ? (
             <div className="sticky top-4 z-40 mb-5">
               <div className={cn("flex flex-col gap-3 rounded-[1.35rem] border px-4 py-3 shadow-[var(--shadow-medium)] backdrop-blur-xl md:flex-row md:items-center md:justify-between", darkMode ? "border-slate-700 bg-slate-900/95" : "border-slate-200 bg-white/95")}>
                 <div>
@@ -6190,10 +6367,10 @@ export default function StudyPlannerApp() {
                   <Button variant="outline" className="rounded-[1rem]" onClick={resetDashboardLayout}>
                     Layout zurücksetzen
                   </Button>
-                  <Button variant="outline" className="rounded-[1rem]" onClick={() => setIsEditingDashboard(false)}>
+                  <Button variant="outline" className="rounded-[1rem]" onClick={() => setIsDashboardEditMode(false)}>
                     Abbrechen
                   </Button>
-                  <Button className="rounded-[1rem] bg-blue-600 hover:bg-blue-500" onClick={() => setIsEditingDashboard(false)}>
+                  <Button className="rounded-[1rem] bg-blue-600 hover:bg-blue-500" onClick={() => setIsDashboardEditMode(false)}>
                     Fertig
                   </Button>
                 </div>
@@ -6260,7 +6437,7 @@ export default function StudyPlannerApp() {
           {page === "dashboard" ? (
                 <div ref={dashboardGridRef} className="min-w-0 w-full max-w-full">
                 <Responsive
-                  className="dashboard-grid"
+                  className={cn("dashboard-grid", isDashboardEditMode ? "dashboard-grid-editing" : "dashboard-grid-locked")}
                   width={dashboardGridWidth}
                   layouts={responsiveDashboardLayouts}
                   breakpoints={DASHBOARD_BREAKPOINTS}
@@ -6270,9 +6447,9 @@ export default function StudyPlannerApp() {
                   containerPadding={[0, 0]}
                   isDraggable={canEditDashboardGrid}
                   isResizable={canEditDashboardGrid}
-                  draggableHandle=".dashboard-drag-handle"
+                  draggableHandle={canEditDashboardGrid ? ".dashboard-drag-handle" : undefined}
                   draggableCancel=".dashboard-scroll-area, button, a, input, textarea, select, option"
-                  resizeHandles={["n", "s", "e", "w", "ne", "nw", "se", "sw"]}
+                  resizeHandles={canEditDashboardGrid ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : []}
                   onBreakpointChange={setDashboardBreakpoint}
                   onDragStop={persistDashboardTileLayout}
                   onResizeStop={persistDashboardTileLayout}
@@ -6281,7 +6458,7 @@ export default function StudyPlannerApp() {
                     const widgetId = tile.id;
                     if (widgetId === "stats") {
                       return (
-                        <SortableTile key="stats" id="stats" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="stats" id="stats" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <div className="flex flex-col h-full overflow-hidden p-1">
                             <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
                               <StatCard darkMode={darkMode} title="Offene Aufgaben" value={taskSummary.open} sub="Noch nicht erledigt" icon={ListTodo} />
@@ -6295,7 +6472,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "deadlines") {
                       return (
-                        <SortableTile key="deadlines" id="deadlines" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="deadlines" id="deadlines" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader>
                               <div className="flex items-start justify-between gap-3">
@@ -6350,7 +6527,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "projects") {
                       return (
-                        <SortableTile key="projects" id="projects" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="projects" id="projects" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <ProjectOverviewCard
                             projects={projectTasks}
                             topics={data.topics}
@@ -6365,7 +6542,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "hours") {
                       return (
-                        <SortableTile key="hours" id="hours" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="hours" id="hours" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Gesamte Lernzeit pro Fach</CardTitle></CardHeader>
                             <CardContent className="grid gap-5 px-3 pb-5 sm:px-5"><StudyOverviewStrip studyStats={studyStats} darkMode={darkMode} /><SubjectHoursChart data={studyStats.bySubject} darkMode={darkMode} onEditSubject={setEditingSubject} onDeleteSubject={deleteSubject} /></CardContent>
@@ -6375,7 +6552,7 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "task-time") {
                       return (
-                        <SortableTile key="task-time" id="task-time" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="task-time" id="task-time" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <Card className={cn("h-full rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
                             <CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Investierte Zeit für einzelne Lernaufgaben</CardDescription></CardHeader>
                             <CardContent className="px-3 pb-5 sm:px-5">
@@ -6393,21 +6570,21 @@ export default function StudyPlannerApp() {
                     }
                     if (widgetId === "today") {
                       return (
-                        <SortableTile key="today" id="today" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="today" id="today" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Heute lernen</CardTitle><CardDescription>Fächer und Aufgaben für den heutigen Fokus</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{todayFocusEntries.length === 0 && todayPlannerTasks.length === 0 ? <p className="text-sm text-muted-foreground">Keine Aufgaben für heute markiert.</p> : <>{todayFocusEntries.map((entry) => <div key={entry.id} className="rounded-2xl border p-4"><div className="flex items-center gap-2"><div className="h-3 w-3 rounded-full" style={{ backgroundColor: entry.subject?.color || "#94a3b8" }} /><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p></div><p className="mt-1 text-sm text-muted-foreground">{entry.note || "Ohne Zusatznotiz"}</p></div>)}{todayPlannerTasks.slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</>}</div></CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "recent") {
                       return (
-                        <SortableTile key="recent" id="recent" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                        <SortableTile key="recent" id="recent" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Zuletzt gelernte Fächer</CardTitle><CardDescription>Die letzten Lernzeiteinträge</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{studyStats.recentSubjects.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Lernzeit erfasst.</p> : studyStats.recentSubjects.map((entry) => <div key={entry.id} className="flex items-center justify-between rounded-2xl border p-4"><div><p className="font-medium">{entry.subject?.name || "Unbekanntes Fach"}</p><p className="text-sm text-muted-foreground">{formatDateTimeDisplay(entry.createdAt)}</p></div><Badge variant="secondary">{formatMinutes(entry.durationMinutes)}</Badge></div>)}</div></CardContent></Card>
                         </SortableTile>
                       );
                     }
                     if (widgetId === "done") {
                       return (
-                      <SortableTile key="done" id="done" isEditing={isEditingDashboard} layout={tile} onHide={hideDashboardTile}>
+                      <SortableTile key="done" id="done" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                         <Card className={cn("flex h-full flex-col overflow-hidden rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Erledigte Aufgaben</CardTitle><CardDescription>Bereits abgeschlossene Aufgaben</CardDescription></CardHeader><CardContent className="flex-1 min-h-0 overflow-hidden pr-2"><div className="dashboard-scroll-area grid gap-3 overflow-y-auto">{donePlannerTasks.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine erledigten Aufgaben.</p> : donePlannerTasks.slice(0, 6).map((task) => <div key={task.id} className="rounded-2xl border p-4"><p className="font-medium">{task.title}</p><p className="text-sm text-muted-foreground">{task.subject?.name}</p></div>)}</div></CardContent></Card>
                       </SortableTile>
                       );
@@ -7010,6 +7187,10 @@ export default function StudyPlannerApp() {
               lastCloudSaveAt={lastCloudSaveAt}
               data={data}
               onStartDashboardEdit={handleStartDashboardEdit}
+              dashboardSelectedPreset={dashboardSelectedPreset}
+              onDashboardPresetChange={applyDashboardPreset}
+              onSaveDashboardPreset={saveCurrentDashboardLayoutAsPreset}
+              onResetDashboardPreset={resetDashboardPreset}
             />
           ) : null}
 

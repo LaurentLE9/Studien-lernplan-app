@@ -42,6 +42,30 @@ const DEFAULT_DASHBOARD_TILE_LAYOUT = [
   { id: "recent", x: 6, y: 10, colSpan: 6, rowSpan: 3 },
   { id: "done", x: 0, y: 13, colSpan: 6, rowSpan: 3 },
 ];
+const DASHBOARD_PRESET_KEYS = ["standard", "compact", "focus", "custom"];
+const DASHBOARD_PRESET_DEFAULT_LAYOUTS = {
+  standard: DEFAULT_DASHBOARD_TILE_LAYOUT,
+  compact: [
+    { id: "stats", x: 0, y: 0, colSpan: 12, rowSpan: 1 },
+    { id: "deadlines", x: 0, y: 1, colSpan: 6, rowSpan: 2 },
+    { id: "projects", x: 6, y: 1, colSpan: 6, rowSpan: 2 },
+    { id: "today", x: 0, y: 3, colSpan: 6, rowSpan: 2 },
+    { id: "recent", x: 6, y: 3, colSpan: 6, rowSpan: 2 },
+    { id: "hours", x: 0, y: 5, colSpan: 6, rowSpan: 2 },
+    { id: "task-time", x: 6, y: 5, colSpan: 6, rowSpan: 2 },
+    { id: "done", x: 0, y: 7, colSpan: 6, rowSpan: 2 },
+  ],
+  focus: [
+    { id: "today", x: 0, y: 0, colSpan: 8, rowSpan: 3 },
+    { id: "deadlines", x: 8, y: 0, colSpan: 4, rowSpan: 3 },
+    { id: "projects", x: 0, y: 3, colSpan: 4, rowSpan: 3 },
+    { id: "stats", x: 4, y: 3, colSpan: 8, rowSpan: 1 },
+    { id: "hours", x: 4, y: 4, colSpan: 8, rowSpan: 2 },
+    { id: "task-time", x: 0, y: 6, colSpan: 12, rowSpan: 2 },
+    { id: "recent", x: 0, y: 8, colSpan: 6, rowSpan: 2 },
+    { id: "done", x: 6, y: 8, colSpan: 6, rowSpan: 2 },
+  ],
+};
 const DEADLINE_FILTER_OPTIONS = ["all", "open", "urgent", "today", "next3"];
 const DEBUG_SYNC = String(import.meta.env.VITE_DEBUG_SYNC || "true").toLowerCase() !== "false";
 
@@ -477,6 +501,68 @@ function normalizeDashboardTileLayout(inputLayout, legacyLayout, legacySizes) {
   ]
     .sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.order - b.order))
     .map(({ order, ...item }, index) => ({ ...item, order: index }));
+}
+
+function normalizeDashboardPresetKey(value) {
+  return DASHBOARD_PRESET_KEYS.includes(value) ? value : "standard";
+}
+
+function makeDashboardPresetValue(tileLayout = DEFAULT_DASHBOARD_TILE_LAYOUT, hiddenTiles = []) {
+  return {
+    tileLayout: normalizeDashboardTileLayout(tileLayout),
+    hiddenTiles: normalizeDashboardHiddenTiles(hiddenTiles),
+  };
+}
+
+function makeDefaultDashboardPresetLayouts(customSource) {
+  const customLayout = customSource?.tileLayout || customSource?.dashboardTileLayout || DEFAULT_DASHBOARD_TILE_LAYOUT;
+  const customHiddenTiles = customSource?.hiddenTiles || customSource?.dashboardHiddenTiles || [];
+  return {
+    standard: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.standard, []),
+    compact: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.compact, []),
+    focus: makeDashboardPresetValue(DASHBOARD_PRESET_DEFAULT_LAYOUTS.focus, []),
+    custom: makeDashboardPresetValue(customLayout, customHiddenTiles),
+  };
+}
+
+function normalizeDashboardPresetLayouts(inputLayouts, activeLayout, activeHiddenTiles) {
+  const defaults = makeDefaultDashboardPresetLayouts({
+    tileLayout: activeLayout,
+    hiddenTiles: activeHiddenTiles,
+  });
+  const safeInput = inputLayouts && typeof inputLayouts === "object" ? inputLayouts : {};
+  return Object.fromEntries(DASHBOARD_PRESET_KEYS.map((presetKey) => {
+    const savedPreset = safeInput[presetKey];
+    return [
+      presetKey,
+      makeDashboardPresetValue(
+        savedPreset?.tileLayout || savedPreset?.dashboardTileLayout || defaults[presetKey].tileLayout,
+        savedPreset?.hiddenTiles || savedPreset?.dashboardHiddenTiles || defaults[presetKey].hiddenTiles
+      ),
+    ];
+  }));
+}
+
+function normalizePlannerSettings(rawSettings = {}) {
+  const appearance = rawSettings.appearance || (typeof rawSettings.darkMode === "boolean" ? (rawSettings.darkMode ? "dark" : "light") : "light");
+  const dashboardTileLayout = normalizeDashboardTileLayout(
+    rawSettings.dashboardTileLayout,
+    rawSettings.dashboardLayout,
+    rawSettings.dashboardTileSizes
+  );
+  const dashboardHiddenTiles = normalizeDashboardHiddenTiles(rawSettings.dashboardHiddenTiles);
+  return {
+    ...rawSettings,
+    appearance,
+    sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
+    dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
+    dashboardTileSizes: normalizeDashboardTileSizes(rawSettings.dashboardTileSizes),
+    dashboardTileLayout,
+    dashboardHiddenTiles,
+    dashboardSelectedPreset: normalizeDashboardPresetKey(rawSettings.dashboardSelectedPreset),
+    dashboardPresetLayouts: normalizeDashboardPresetLayouts(rawSettings.dashboardPresetLayouts, dashboardTileLayout, dashboardHiddenTiles),
+    deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
+  };
 }
 
 function normalizeDeadlineWidgetSettings(value) {
@@ -962,17 +1048,7 @@ export async function loadUserPlannerData(userId) {
         ...normalizeDefaultData(),
         ...rawData,
         tasks: normalizeTasks(rawData.tasks),
-        settings: {
-          ...normalizeDefaultData().settings,
-          ...rawSettings,
-          appearance,
-          sidebarCollapsed: Boolean(rawSettings.sidebarCollapsed),
-          dashboardLayout: normalizeDashboardLayout(rawSettings.dashboardLayout),
-          dashboardTileSizes: normalizeDashboardTileSizes(rawSettings.dashboardTileSizes),
-          dashboardTileLayout: normalizeDashboardTileLayout(rawSettings.dashboardTileLayout, rawSettings.dashboardLayout, rawSettings.dashboardTileSizes),
-          dashboardHiddenTiles: normalizeDashboardHiddenTiles(rawSettings.dashboardHiddenTiles),
-          deadlineWidget: normalizeDeadlineWidgetSettings(rawSettings.deadlineWidget),
-        },
+        settings: normalizePlannerSettings({ ...rawSettings, appearance }),
         seeds: {
           ...normalizeDefaultData().seeds,
           ...(rawData.seeds || {}),
@@ -1057,6 +1133,8 @@ export function normalizeDefaultData() {
       dashboardTileSizes: normalizeDashboardTileSizes(),
       dashboardTileLayout: normalizeDashboardTileLayout(),
       dashboardHiddenTiles: [],
+      dashboardSelectedPreset: "standard",
+      dashboardPresetLayouts: normalizeDashboardPresetLayouts(),
       deadlineWidget: { activeFilter: "all", defaultFilter: "all" },
     },
     seeds: { tasks: false, sessions: false },

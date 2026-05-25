@@ -162,6 +162,15 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.8;
 }
 
+.dashboard-grid-locked .react-resizable-handle {
+  display: none;
+  pointer-events: none;
+}
+
+.dashboard-grid-locked > [data-dashboard-tile] {
+  cursor: default;
+}
+
 .dashboard-grid > [data-dashboard-tile] [data-slot="card"] {
   min-width: 0;
   height: 100%;
@@ -188,4 +197,3 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     overflow-x: hidden;
   }
 }
-
