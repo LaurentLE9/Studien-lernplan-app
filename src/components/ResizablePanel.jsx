@@ -19,6 +19,7 @@ export default function ResizablePanel({
   darkMode,
   badgeText,
   color,
+  headerAction,
   children,
   defaultWidth = 600,
   storageKey = "genericPanelWidth"
@@ -96,9 +97,12 @@ export default function ResizablePanel({
                 )}
               </DialogHeader>
 
-              <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => onOpenChange(false)}>
-                <X className="h-4 w-4" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {headerAction || null}
+                <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => onOpenChange(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
 

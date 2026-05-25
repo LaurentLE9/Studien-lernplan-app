@@ -5702,17 +5702,25 @@ export default function StudyPlannerApp() {
 
   function toggleProjectPinned(projectId) {
     if (!projectId) return;
+    let nextPinnedValue = false;
+    const updatedAt = new Date().toISOString();
     setData((prev) => ({
       ...prev,
       tasks: prev.tasks.map((task) => {
         if (task.id !== projectId || normalizeTaskType(task) !== "project") return task;
+        nextPinnedValue = !Boolean(task.isPinned);
         return {
           ...task,
-          isPinned: !Boolean(task.isPinned),
-          updatedAt: new Date().toISOString(),
+          isPinned: nextPinnedValue,
+          updatedAt,
         };
       }),
     }));
+    setEditingTask((prev) => (
+      prev?.id === projectId && normalizeTaskType(prev) === "project"
+        ? { ...prev, isPinned: nextPinnedValue, updatedAt }
+        : prev
+    ));
   }
 
   function runOrConfirmEditDiscard(action) {
@@ -7279,6 +7287,22 @@ export default function StudyPlannerApp() {
             title="Eintrag bearbeiten"
             description="Passe Typ, Fach und Eigenschaften dieses Eintrags an."
             badgeText="Bearbeiten"
+            headerAction={editingTask && normalizeTaskType(editingTask) === "project" ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-no-drag
+                className="rounded-[1rem]"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  toggleProjectPinned(editingTask.id);
+                }}
+              >
+                {editingTask.isPinned === true ? "Pin entfernen" : "Anpinnen"}
+              </Button>
+            ) : null}
           >
             {editingTask ? (
               <TaskForm
