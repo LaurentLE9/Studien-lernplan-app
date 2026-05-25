@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -492,6 +493,8 @@ function normalizeTask(rawTask) {
   const normalized = { ...(rawTask || {}), type };
   if (type === "project") {
     normalized.deletedAt = normalized.deletedAt || normalized.archivedAt || null;
+    normalized.isPinned = Boolean(normalized.isPinned ?? normalized.pinned);
+    delete normalized.pinned;
   }
   return normalized;
 }
@@ -5697,6 +5700,21 @@ export default function StudyPlannerApp() {
     });
   }
 
+  function toggleProjectPinned(projectId) {
+    if (!projectId) return;
+    setData((prev) => ({
+      ...prev,
+      tasks: prev.tasks.map((task) => {
+        if (task.id !== projectId || normalizeTaskType(task) !== "project") return task;
+        return {
+          ...task,
+          isPinned: !Boolean(task.isPinned),
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    }));
+  }
+
   function runOrConfirmEditDiscard(action) {
     if (editingTask && isEditingTaskDirty) {
       setPendingEditDiscardAction(() => action);
@@ -6456,7 +6474,7 @@ export default function StudyPlannerApp() {
                   isDraggable={isDashboardEditMode}
                   isResizable={isDashboardEditMode}
                   draggableHandle={isDashboardEditMode ? ".dashboard-drag-handle" : undefined}
-                  draggableCancel=".dashboard-scroll-area, button, a, input, textarea, select, option"
+                  draggableCancel=".dashboard-scroll-area, [data-no-drag], button, a, input, textarea, select, option"
                   resizeHandles={isDashboardEditMode ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : []}
                   onBreakpointChange={setDashboardBreakpoint}
                   onDragStop={persistDashboardTileLayout}
@@ -6543,6 +6561,7 @@ export default function StudyPlannerApp() {
                             darkMode={darkMode}
                             onEditProject={startTaskEdit}
                             onStartProjectTimer={handleTaskTimerStart}
+                            onTogglePinned={toggleProjectPinned}
                             onOpenProjects={() => handlePageChange("projects")}
                           />
                         </SortableTile>
@@ -7417,18 +7436,53 @@ function DeadlineListItem({ task, darkMode, done = false, onToggleDone, onStartT
   );
 }
 
-function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, onStartTimer, compact = false, darkMode }) {
+function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, onStartTimer, onTogglePinned, compact = false, darkMode }) {
   const progress = getProjectProgress(project, allTasks);
   const workSummary = getProjectWorkSummary(project, allTasks);
   const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
   const dueText = displayDate ? deadlineLabel(displayDate, project.status) : "Kein Abgabedatum";
   const statusText = project.status || "offen";
+  const [pinMenu, setPinMenu] = useState(null);
+  const canTogglePinned = typeof onTogglePinned === "function";
+
+  useEffect(() => {
+    if (!pinMenu) return undefined;
+    const closeMenu = () => setPinMenu(null);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") closeMenu();
+    };
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [pinMenu]);
+
+  const openPinMenu = (event) => {
+    if (!canTogglePinned) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPinMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 184)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 48)),
+    });
+  };
+
+  const handleTogglePinned = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onTogglePinned?.(project.id);
+    setPinMenu(null);
+  };
 
   return (
     <TooltipPrimitive.Provider delayDuration={250}>
       <TooltipPrimitive.Root>
         <TooltipPrimitive.Trigger asChild>
-          <div className={cn("relative min-w-0 overflow-hidden rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
+          <div data-no-drag={canTogglePinned ? "" : undefined} onContextMenu={openPinMenu} className={cn("relative min-w-0 overflow-hidden rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
             <div className="flex min-w-0 flex-col gap-3">
               <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1 overflow-hidden">
@@ -7476,13 +7530,37 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
           </TooltipPrimitive.Content>
         </TooltipPrimitive.Portal>
       </TooltipPrimitive.Root>
+      {canTogglePinned && pinMenu ? createPortal(
+        <div
+          data-no-drag
+          className={cn("fixed z-[120] min-w-[168px] rounded-md border p-1 shadow-lg", darkMode ? "border-slate-700 bg-slate-950 text-slate-100" : "border-slate-200 bg-white text-slate-900")}
+          style={{ left: pinMenu.x, top: pinMenu.y }}
+          onClick={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          <button
+            type="button"
+            data-no-drag
+            className={cn("flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors", darkMode ? "hover:bg-slate-800 focus:bg-slate-800" : "hover:bg-slate-100 focus:bg-slate-100")}
+            onClick={handleTogglePinned}
+          >
+            {project.isPinned ? "Pin entfernen" : "Projekt anpinnen"}
+          </button>
+        </div>,
+        document.body
+      ) : null}
     </TooltipPrimitive.Provider>
   );
 }
 
-function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onStartProjectTimer, onOpenProjects }) {
+function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onStartProjectTimer, onTogglePinned, onOpenProjects }) {
   const sortedProjects = useMemo(() => {
     return [...projects].sort((a, b) => {
+      const pinDiff = Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned));
+      if (pinDiff !== 0) return pinDiff;
       const dateDiff = getDeadlineDateTimestamp(a) - getDeadlineDateTimestamp(b);
       if (dateDiff !== 0) return dateDiff;
       return (a.title || "").localeCompare(b.title || "", "de");
@@ -7506,7 +7584,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
         ) : (
           <div className="grid gap-3">
             {sortedProjects.map((project) => (
-              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} onStartTimer={onStartProjectTimer} compact darkMode={darkMode} />
+              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} onStartTimer={onStartProjectTimer} onTogglePinned={onTogglePinned} compact darkMode={darkMode} />
             ))}
           </div>
         )}

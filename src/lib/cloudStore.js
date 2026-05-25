@@ -405,6 +405,8 @@ function normalizeTask(rawTask) {
   };
   if (type === "project") {
     normalized.deletedAt = normalized.deletedAt || normalized.archivedAt || null;
+    normalized.isPinned = Boolean(normalized.isPinned ?? normalized.pinned);
+    delete normalized.pinned;
   }
   return {
     ...normalized,
