@@ -3917,7 +3917,14 @@ export default function StudyPlannerApp() {
     () => DASHBOARD_WIDGET_IDS.filter((id) => dashboardHiddenTiles.includes(id)),
     [dashboardHiddenTiles]
   );
-  const reactGridLayout = useMemo(() => toReactGridLayout(visibleDashboardTileLayout), [visibleDashboardTileLayout]);
+  const [isDashboardEditMode, setIsDashboardEditMode] = useState(false);
+  const reactGridLayout = useMemo(
+    () => toReactGridLayout(visibleDashboardTileLayout).map((item) => ({
+      ...item,
+      static: !isDashboardEditMode,
+    })),
+    [visibleDashboardTileLayout, isDashboardEditMode]
+  );
   const responsiveDashboardLayouts = useMemo(() => {
     const mobileLayout = reactGridLayout.map((item, index) => ({
       ...item,
@@ -3934,10 +3941,8 @@ export default function StudyPlannerApp() {
       xs: mobileLayout,
     };
   }, [reactGridLayout]);
-  const [isDashboardEditMode, setIsDashboardEditMode] = useState(false);
   const [dashboardBreakpoint, setDashboardBreakpoint] = useState("lg");
   const { width: dashboardGridWidth, containerRef: dashboardGridRef } = useContainerWidth({ initialWidth: 1200 });
-  const canEditDashboardGrid = isDashboardEditMode && dashboardBreakpoint !== "sm" && dashboardBreakpoint !== "xs";
   const dashboardSelectedPreset = normalizeDashboardPresetKey(data.settings?.dashboardSelectedPreset);
   const dashboardPresetLayouts = useMemo(
     () => normalizeDashboardPresetLayouts(data.settings?.dashboardPresetLayouts, dashboardTileLayout, dashboardHiddenTiles),
@@ -3945,6 +3950,8 @@ export default function StudyPlannerApp() {
   );
 
   const persistDashboardTileLayout = (nextVisibleLayout) => {
+    if (!isDashboardEditMode) return;
+
     setData((prev) => {
       const currentLayout = normalizeDashboardTileLayout(
         prev.settings?.dashboardTileLayout,
@@ -6437,6 +6444,7 @@ export default function StudyPlannerApp() {
           {page === "dashboard" ? (
                 <div ref={dashboardGridRef} className="min-w-0 w-full max-w-full">
                 <Responsive
+                  key={isDashboardEditMode ? "dashboard-edit" : "dashboard-locked"}
                   className={cn("dashboard-grid", isDashboardEditMode ? "dashboard-grid-editing" : "dashboard-grid-locked")}
                   width={dashboardGridWidth}
                   layouts={responsiveDashboardLayouts}
@@ -6445,11 +6453,11 @@ export default function StudyPlannerApp() {
                   rowHeight={140}
                   margin={[24, 24]}
                   containerPadding={[0, 0]}
-                  isDraggable={canEditDashboardGrid}
-                  isResizable={canEditDashboardGrid}
-                  draggableHandle={canEditDashboardGrid ? ".dashboard-drag-handle" : undefined}
+                  isDraggable={isDashboardEditMode}
+                  isResizable={isDashboardEditMode}
+                  draggableHandle={isDashboardEditMode ? ".dashboard-drag-handle" : undefined}
                   draggableCancel=".dashboard-scroll-area, button, a, input, textarea, select, option"
-                  resizeHandles={canEditDashboardGrid ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : []}
+                  resizeHandles={isDashboardEditMode ? ["n", "s", "e", "w", "ne", "nw", "se", "sw"] : []}
                   onBreakpointChange={setDashboardBreakpoint}
                   onDragStop={persistDashboardTileLayout}
                   onResizeStop={persistDashboardTileLayout}
