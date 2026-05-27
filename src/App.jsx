@@ -526,7 +526,11 @@ function isProjectDeleted(project) {
 }
 
 function isProjectTask(task) {
-  return normalizeTaskType(task) === "project" && !isProjectDeleted(task);
+  return normalizeTaskType(task) === "project" && !isProjectDeleted(task) && !isTaskDone(task);
+}
+
+function isCompletedProjectTask(task) {
+  return normalizeTaskType(task) === "project" && !isProjectDeleted(task) && isTaskDone(task);
 }
 
 function isDeletedProjectTask(task) {
@@ -4621,6 +4625,7 @@ export default function StudyPlannerApp() {
   }), [data.tasks, subjectsById]);
 
   const projectTasks = useMemo(() => enhancedTasks.filter(isProjectTask), [enhancedTasks]);
+  const completedProjectTasks = useMemo(() => enhancedTasks.filter(isCompletedProjectTask), [enhancedTasks]);
   const deletedProjectTasks = useMemo(() => enhancedTasks.filter(isDeletedProjectTask), [enhancedTasks]);
 
   const filteredTasks = useMemo(() => {
@@ -6570,6 +6575,7 @@ export default function StudyPlannerApp() {
                             onEditProject={startTaskEdit}
                             onStartProjectTimer={handleTaskTimerStart}
                             onTogglePinned={toggleProjectPinned}
+                            onToggleProjectDone={toggleTaskDone}
                             onOpenProjects={() => handlePageChange("projects")}
                           />
                         </SortableTile>
@@ -6853,6 +6859,7 @@ export default function StudyPlannerApp() {
           {page === "projects" ? (
             <ProjectsPage
               projects={projectTasks}
+              completedProjects={completedProjectTasks}
               deletedProjects={deletedProjectTasks}
               topics={data.topics}
               allTasks={enhancedTasks}
@@ -6862,6 +6869,7 @@ export default function StudyPlannerApp() {
               onDeleteProject={deleteTask}
               onRestoreProject={restoreProject}
               onStartProjectTimer={handleTaskTimerStart}
+              onToggleProjectDone={toggleTaskDone}
             />
           ) : null}
 
@@ -7460,14 +7468,17 @@ function DeadlineListItem({ task, darkMode, done = false, onToggleDone, onStartT
   );
 }
 
-function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, onStartTimer, onTogglePinned, compact = false, darkMode }) {
+function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestore, onStartTimer, onTogglePinned, onToggleDone, compact = false, darkMode, done = false }) {
   const progress = getProjectProgress(project, allTasks);
   const workSummary = getProjectWorkSummary(project, allTasks);
   const displayDate = project.projectDisplayDate || project.dueDate || project.acceptanceDate || null;
   const dueText = displayDate ? deadlineLabel(displayDate, project.status) : "Kein Abgabedatum";
-  const statusText = project.status || "offen";
+  const statusText = project.status || (done ? "erledigt" : "offen");
   const [pinMenu, setPinMenu] = useState(null);
   const canTogglePinned = typeof onTogglePinned === "function";
+  const rowClassName = done
+    ? "relative min-w-0 overflow-hidden rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-4"
+    : cn("relative min-w-0 overflow-hidden rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white");
 
   useEffect(() => {
     if (!pinMenu) return undefined;
@@ -7506,7 +7517,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
     <TooltipPrimitive.Provider delayDuration={250}>
       <TooltipPrimitive.Root>
         <TooltipPrimitive.Trigger asChild>
-          <div data-no-drag={canTogglePinned ? "" : undefined} onContextMenu={openPinMenu} className={cn("relative min-w-0 overflow-hidden rounded-2xl border p-4", darkMode ? "border-slate-700/80 bg-slate-900/45" : "border-slate-200 bg-white")}>
+          <div data-no-drag={canTogglePinned ? "" : undefined} onContextMenu={openPinMenu} className={rowClassName}>
             <div className="flex min-w-0 flex-col gap-3">
               <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1 overflow-hidden">
@@ -7517,9 +7528,10 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
                   <p className="mt-1 min-w-0 truncate overflow-hidden whitespace-nowrap text-sm text-muted-foreground">{project.subject?.name || "Ohne Fach"}</p>
                 </div>
                 <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 md:w-auto md:max-w-[11.5rem] md:justify-end">
-                  {displayDate ? <span className={cn("inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border-0 px-2.5 text-xs font-medium leading-none whitespace-nowrap", deadlineTone(displayDate, project.status))}>{dueText}</span> : <span className="inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border border-border/80 px-2.5 text-xs font-medium leading-none whitespace-nowrap text-foreground">Kein Datum</span>}
+                  {done ? <Badge className="shrink-0 whitespace-nowrap border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge> : displayDate ? <span className={cn("inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border-0 px-2.5 text-xs font-medium leading-none whitespace-nowrap", deadlineTone(displayDate, project.status))}>{dueText}</span> : <span className="inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border border-border/80 px-2.5 text-xs font-medium leading-none whitespace-nowrap text-foreground">Kein Datum</span>}
+                  {onToggleDone ? <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-lg px-2 text-xs" onClick={() => onToggleDone(project)}>{done ? "Öffnen" : "Erledigt"}</Button> : null}
                   {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
-                  {onStartTimer ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
+                  {onStartTimer && !done ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
                   {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
                   {onDelete ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg text-red-500 hover:text-red-600" onClick={() => onDelete(project)}><Trash2 className="h-4 w-4" /></Button> : null}
                 </div>
@@ -7580,7 +7592,7 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
   );
 }
 
-function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onStartProjectTimer, onTogglePinned, onOpenProjects }) {
+function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProject, onStartProjectTimer, onTogglePinned, onToggleProjectDone, onOpenProjects }) {
   const sortedProjects = useMemo(() => {
     return [...projects].sort((a, b) => {
       const pinDiff = Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned));
@@ -7608,7 +7620,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
         ) : (
           <div className="grid gap-3">
             {sortedProjects.map((project) => (
-              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} onStartTimer={onStartProjectTimer} onTogglePinned={onTogglePinned} compact darkMode={darkMode} />
+              <ProjectListItem key={project.id} project={project} topics={topics} allTasks={allTasks} onEdit={onEditProject} onStartTimer={onStartProjectTimer} onTogglePinned={onTogglePinned} onToggleDone={onToggleProjectDone} compact darkMode={darkMode} />
             ))}
           </div>
         )}
@@ -7617,7 +7629,7 @@ function ProjectOverviewCard({ projects, topics, allTasks, darkMode, onEditProje
   );
 }
 
-function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjects, darkMode, onEditProject, onDeleteProject, onRestoreProject, onStartProjectTimer }) {
+function ProjectsPage({ projects, completedProjects = [], deletedProjects = [], topics, allTasks, subjects, darkMode, onEditProject, onDeleteProject, onRestoreProject, onStartProjectTimer, onToggleProjectDone }) {
   const [filters, setFilters] = useState({ subjectId: "all", status: "all", sort: "due" });
   const visibleProjects = useMemo(() => {
     let list = [...projects];
@@ -7631,6 +7643,17 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
     });
     return list;
   }, [projects, filters, topics, allTasks]);
+  const visibleCompletedProjects = useMemo(() => {
+    let list = [...completedProjects];
+    if (filters.subjectId !== "all") list = list.filter((project) => project.subjectId === filters.subjectId);
+    list.sort((a, b) => {
+      if (filters.sort === "progress") return getProjectProgress(a, allTasks) - getProjectProgress(b, allTasks);
+      if (filters.sort === "subject") return (a.subject?.name || "").localeCompare(b.subject?.name || "", "de");
+      if (filters.sort === "status") return (a.status || "").localeCompare(b.status || "", "de");
+      return compareDeadlineTasks(a, b, "due");
+    });
+    return list;
+  }, [completedProjects, filters.subjectId, filters.sort, allTasks]);
 
   return (
     <div className="grid gap-6">
@@ -7647,7 +7670,7 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
             <Label>Status</Label>
             <Select value={filters.status} onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Alle Status</SelectItem><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem><SelectItem value="erledigt">Erledigt</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="all">Alle Status</SelectItem><SelectItem value="offen">Offen</SelectItem><SelectItem value="in Bearbeitung">In Bearbeitung</SelectItem></SelectContent>
             </Select>
           </div>
           <div className="grid gap-2">
@@ -7668,7 +7691,7 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+        <div className="grid gap-3">
           {visibleProjects.map((project) => (
             <ProjectListItem
               key={project.id}
@@ -7678,11 +7701,41 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
               onEdit={onEditProject}
               onDelete={(entry) => onDeleteProject?.(entry.id)}
               onStartTimer={onStartProjectTimer}
+              onToggleDone={onToggleProjectDone}
               darkMode={darkMode}
             />
           ))}
         </div>
       )}
+
+      <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+        <CardHeader>
+          <CardTitle>Erledigt</CardTitle>
+          <CardDescription>Abgeschlossene Projekte werden aus der aktiven Projektliste ausgeblendet.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {visibleCompletedProjects.length === 0 ? (
+            <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
+              Noch keine erledigten Projekte.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {visibleCompletedProjects.map((project) => (
+                <ProjectListItem
+                  key={project.id}
+                  project={project}
+                  topics={topics}
+                  allTasks={allTasks}
+                  onEdit={onEditProject}
+                  onToggleDone={onToggleProjectDone}
+                  darkMode={darkMode}
+                  done
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
         <CardHeader>
@@ -7695,7 +7748,7 @@ function ProjectsPage({ projects, deletedProjects = [], topics, allTasks, subjec
               Keine gelöschten Projekte vorhanden.
             </div>
           ) : (
-            <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(280px,1fr))]">
+            <div className="grid gap-3">
               {deletedProjects.map((project) => (
                 <ProjectListItem
                   key={project.id}
