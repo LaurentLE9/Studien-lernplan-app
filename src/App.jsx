@@ -7522,6 +7522,16 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
               <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                    {onToggleDone ? (
+                      <button
+                        type="button"
+                        onClick={() => onToggleDone(project)}
+                        aria-label={done ? "Als offen markieren" : "Als erledigt markieren"}
+                        className={done ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-emerald-500 bg-emerald-500 text-white transition-colors" : cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-md border transition-colors", darkMode ? "border-slate-600 bg-slate-800 hover:bg-slate-700" : "border-slate-300 bg-white hover:bg-slate-100")}
+                      >
+                        {done ? <Check className="h-4 w-4" /> : null}
+                      </button>
+                    ) : null}
                     <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: project.subject?.color || "#94a3b8" }} />
                     <p className="min-w-0 truncate overflow-hidden whitespace-nowrap font-semibold" title={project.title}>{project.title}</p>
                   </div>
@@ -7529,7 +7539,6 @@ function ProjectListItem({ project, topics, allTasks, onEdit, onDelete, onRestor
                 </div>
                 <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 md:w-auto md:max-w-[11.5rem] md:justify-end">
                   {done ? <Badge className="shrink-0 whitespace-nowrap border-0 bg-emerald-200 text-slate-950 ring-1 ring-emerald-300">Erledigt</Badge> : displayDate ? <span className={cn("inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border-0 px-2.5 text-xs font-medium leading-none whitespace-nowrap", deadlineTone(displayDate, project.status))}>{dueText}</span> : <span className="inline-flex h-6 shrink-0 items-center overflow-visible rounded-full border border-border/80 px-2.5 text-xs font-medium leading-none whitespace-nowrap text-foreground">Kein Datum</span>}
-                  {onToggleDone ? <Button variant="outline" size="sm" className="h-8 shrink-0 rounded-lg px-2 text-xs" onClick={() => onToggleDone(project)}>{done ? "Öffnen" : "Erledigt"}</Button> : null}
                   {onRestore ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onRestore(project)}><RotateCcw className="h-4 w-4" /></Button> : null}
                   {onStartTimer && !done ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onStartTimer(project)} disabled={!project.subjectId} aria-label={`Timer für ${project.title} starten`}><Play className="h-4 w-4" /></Button> : null}
                   {onEdit ? <Button variant="outline" size="icon" className="h-8 w-8 shrink-0 rounded-lg" onClick={() => onEdit(project)}><Pencil className="h-4 w-4" /></Button> : null}
@@ -7683,44 +7692,48 @@ function ProjectsPage({ projects, completedProjects = [], deletedProjects = [], 
         </CardContent>
       </Card>
 
-      {visibleProjects.length === 0 ? (
+      <div className="grid gap-6 xl:grid-cols-2">
         <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Noch keine Projekte angelegt.</p>
-            <p className="mt-1">Lege über „Eintrag anlegen“ einen Eintrag vom Typ „Projekt“ an.</p>
+          <CardHeader>
+            <CardTitle>Offene Projekte</CardTitle>
+            <CardDescription>Offen und in Bearbeitung</CardDescription>
+          </CardHeader>
+          <CardContent className="grid max-h-[780px] gap-4 overflow-y-auto pr-2">
+            {visibleProjects.length === 0 ? (
+              <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">Noch keine Projekte angelegt.</p>
+                <p className="mt-1">Lege über „Eintrag anlegen“ einen Eintrag vom Typ „Projekt“ an.</p>
+              </div>
+            ) : (
+              visibleProjects.map((project) => (
+                <ProjectListItem
+                  key={project.id}
+                  project={project}
+                  topics={topics}
+                  allTasks={allTasks}
+                  onEdit={onEditProject}
+                  onDelete={(entry) => onDeleteProject?.(entry.id)}
+                  onStartTimer={onStartProjectTimer}
+                  onToggleDone={onToggleProjectDone}
+                  darkMode={darkMode}
+                />
+              ))
+            )}
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-3">
-          {visibleProjects.map((project) => (
-            <ProjectListItem
-              key={project.id}
-              project={project}
-              topics={topics}
-              allTasks={allTasks}
-              onEdit={onEditProject}
-              onDelete={(entry) => onDeleteProject?.(entry.id)}
-              onStartTimer={onStartProjectTimer}
-              onToggleDone={onToggleProjectDone}
-              darkMode={darkMode}
-            />
-          ))}
-        </div>
-      )}
 
-      <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
-        <CardHeader>
-          <CardTitle>Erledigt</CardTitle>
-          <CardDescription>Abgeschlossene Projekte werden aus der aktiven Projektliste ausgeblendet.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {visibleCompletedProjects.length === 0 ? (
-            <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
-              Noch keine erledigten Projekte.
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {visibleCompletedProjects.map((project) => (
+        <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+          <CardHeader>
+            <CardTitle>Erledigt</CardTitle>
+            <CardDescription>Abgeschlossene Projekte werden aus der aktiven Projektliste ausgeblendet.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid max-h-[780px] gap-4 overflow-y-auto pr-2">
+            {visibleCompletedProjects.length === 0 ? (
+              <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
+                Noch keine erledigten Projekte.
+              </div>
+            ) : (
+              visibleCompletedProjects.map((project) => (
                 <ProjectListItem
                   key={project.id}
                   project={project}
@@ -7731,35 +7744,33 @@ function ProjectsPage({ projects, completedProjects = [], deletedProjects = [], 
                   darkMode={darkMode}
                   done
                 />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
         <CardHeader>
           <CardTitle>Gelöschte Projekte</CardTitle>
           <CardDescription>Archivierte Projekte bleiben mit Aufgaben, Zuordnungen und Fortschritt erhalten.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="grid max-h-[520px] gap-4 overflow-y-auto pr-2">
           {deletedProjects.length === 0 ? (
             <div className="rounded-2xl border p-6 text-center text-sm text-muted-foreground">
               Keine gelöschten Projekte vorhanden.
             </div>
           ) : (
-            <div className="grid gap-3">
-              {deletedProjects.map((project) => (
-                <ProjectListItem
-                  key={project.id}
-                  project={project}
-                  topics={topics}
-                  allTasks={allTasks}
-                  onRestore={(entry) => onRestoreProject?.(entry.id)}
-                  darkMode={darkMode}
-                />
-              ))}
-            </div>
+            deletedProjects.map((project) => (
+              <ProjectListItem
+                key={project.id}
+                project={project}
+                topics={topics}
+                allTasks={allTasks}
+                onRestore={(entry) => onRestoreProject?.(entry.id)}
+                darkMode={darkMode}
+              />
+            ))
           )}
         </CardContent>
       </Card>
