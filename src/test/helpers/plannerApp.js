@@ -8,14 +8,15 @@ export function readStoredPlannerData() {
 }
 
 export async function openNavigationPage(name) {
-  const navigationButtons = await screen.findAllByRole("button", { name });
-  fireEvent.click(navigationButtons[0]);
+  const sidebar = await screen.findByRole("complementary");
+  const navigation = within(sidebar).getByRole("navigation");
+  fireEvent.click(within(navigation).getByRole("button", { name }));
   await screen.findByRole("heading", { name, level: 2 });
 }
 
 export function openEntryEditor(entryTitle, buttonIndex) {
-  const entryText = screen.getByText(entryTitle);
-  const card = entryText.closest('[data-slot="card"]');
+  const entryHeading = screen.getByRole("heading", { name: entryTitle, level: 3 });
+  const card = entryHeading.closest('[data-slot="card"]');
   if (!card) throw new Error(`Keine Karte für ${entryTitle} gefunden`);
   fireEvent.click(within(card).getAllByRole("button")[buttonIndex]);
 }
