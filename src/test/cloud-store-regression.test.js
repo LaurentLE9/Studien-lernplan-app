@@ -134,11 +134,19 @@ describe("Supabase-Planner-Transformationen", () => {
   });
 
   it("reicht einen nicht erfolgreichen Supabase-Status als Fehler weiter", async () => {
+    const originalConsoleError = console.error;
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Cloud nicht erreichbar" }, 500)));
-    const { loadUserPlannerData } = await importCloudStore();
 
-    await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toThrow("Cloud nicht erreichbar");
-    expect(consoleError).toHaveBeenCalledWith("Load planner data error:", expect.any(Error));
+    try {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Cloud nicht erreichbar" }, 500)));
+      const { loadUserPlannerData } = await importCloudStore();
+
+      await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toThrow("Cloud nicht erreichbar");
+      expect(consoleError).toHaveBeenCalledWith("Load planner data error:", expect.any(Error));
+    } finally {
+      consoleError.mockRestore();
+    }
+
+    expect(console.error).toBe(originalConsoleError);
   });
 });
