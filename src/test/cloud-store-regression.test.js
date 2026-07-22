@@ -10,6 +10,7 @@ function jsonResponse(payload, status = 200) {
   return {
     ok: status >= 200 && status < 300,
     status,
+    statusText: "",
     headers: { get: () => "application/json" },
     json: async () => payload,
     text: async () => JSON.stringify(payload),
@@ -18,8 +19,9 @@ function jsonResponse(payload, status = 200) {
 
 function emptyResponse(status = 204) {
   return {
-    ok: true,
+    ok: status >= 200 && status < 300,
     status,
+    statusText: "",
     headers: { get: () => "" },
     json: async () => null,
     text: async () => "",
@@ -38,6 +40,16 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-07-22T12:00:00.000Z"));
   localStorage.setItem("sb-auth-session", JSON.stringify(futureSession));
+});
+
+describe("Fetch-Response-Mock", () => {
+  it.each([200, 204, 299])("markiert den 2xx-Status %i als erfolgreich", (status) => {
+    expect(emptyResponse(status).ok).toBe(true);
+  });
+
+  it.each([400, 404, 500])("markiert den Fehlerstatus %i als nicht erfolgreich", (status) => {
+    expect(emptyResponse(status).ok).toBe(false);
+  });
 });
 
 describe("Supabase-Planner-Transformationen", () => {
@@ -119,5 +131,14 @@ describe("Supabase-Planner-Transformationen", () => {
       user_id: TEST_USER_ID,
       data: plannerData,
     });
+  });
+
+  it("reicht einen nicht erfolgreichen Supabase-Status als Fehler weiter", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Cloud nicht erreichbar" }, 500)));
+    const { loadUserPlannerData } = await importCloudStore();
+
+    await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toThrow("Cloud nicht erreichbar");
+    expect(consoleError).toHaveBeenCalledWith("Load planner data error:", expect.any(Error));
   });
 });
