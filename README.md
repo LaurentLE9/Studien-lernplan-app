@@ -20,6 +20,12 @@ React/Vite App für Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro
 
 	npm run preview
 
+## Tests
+
+- Einmalige Testausführung: `npm test`
+- Watch-Modus: `npm run test:watch`
+- Testausführung mit Coverage: `npm run test:coverage`
+
 ## Supabase Setup für Cloud-Sync & Authentifizierung
 
 ### 1. Supabase Projekt erstellen
