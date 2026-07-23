@@ -3,11 +3,10 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
 
 export class SupabaseRequestError extends Error {
-  constructor(message, { status, payload } = {}) {
+  constructor(message, { status } = {}) {
     super(message);
     this.name = "SupabaseRequestError";
     this.status = status;
-    this.payload = payload;
   }
 }
 
@@ -43,9 +42,9 @@ export function ensureSupabaseConfig() {
 function buildSupabaseHeaders(accessToken, headers = {}) {
   return {
     "Content-Type": "application/json",
+    ...headers,
     apikey: SUPABASE_ANON_KEY,
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    ...headers,
   };
 }
 
@@ -82,7 +81,7 @@ export async function readSupabaseResponse(response, fallbackMessage = "Supabase
       || payload?.msg
       || payload?.error
       || `${fallbackMessage} (${response.status})`;
-    throw new SupabaseRequestError(message, { status: response.status, payload });
+    throw new SupabaseRequestError(message, { status: response.status });
   }
 
   return payload;

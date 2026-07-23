@@ -29,6 +29,14 @@ async function importAuthRepository() {
   return import("@/infrastructure/supabase/authRepository");
 }
 
+async function importSupabaseClient() {
+  vi.resetModules();
+  vi.stubEnv("VITE_SUPABASE_URL", TEST_URL);
+  vi.stubEnv("VITE_SUPABASE_ANON_KEY", TEST_ANON_KEY);
+  vi.stubEnv("VITE_PUBLIC_APP_URL", TEST_APP_URL);
+  return import("@/infrastructure/supabase/client");
+}
+
 describe("Supabase Auth Repository", () => {
   it("meldet Benutzer an und persistiert die normalisierte Session", async () => {
     const payload = {
@@ -143,6 +151,55 @@ describe("Supabase Auth Repository", () => {
     expect(loggedText).not.toContain("secret-password");
     expect(loggedText).not.toContain("access-token");
     consoleError.mockRestore();
+  });
+
+  it("schützt API-Key und Session-Token vor überschreibenden Caller-Headern", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const { fetchSupabase } = await importSupabaseClient();
+
+    await fetchSupabase("/rest/v1/user_plans", {
+      accessToken: "trusted-access-token",
+      headers: {
+        apikey: "caller-api-key",
+        Authorization: "Bearer caller-token",
+        "X-Request-Source": "kan-68-test",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${TEST_URL}/rest/v1/user_plans`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          apikey: TEST_ANON_KEY,
+          Authorization: "Bearer trusted-access-token",
+          "X-Request-Source": "kan-68-test",
+        }),
+      }),
+    );
+  });
+
+  it("gibt typisierte Fehler ohne rohes Response-Payload weiter", async () => {
+    const {
+      readSupabaseResponse,
+      SupabaseRequestError,
+    } = await importSupabaseClient();
+    const response = jsonResponse({
+      message: "Request rejected",
+      email: "private@example.test",
+      access_token: "private-access-token",
+    }, 400);
+
+    const error = await readSupabaseResponse(response).catch((caughtError) => caughtError);
+
+    expect(error).toBeInstanceOf(SupabaseRequestError);
+    expect(error).toMatchObject({
+      message: "Request rejected",
+      status: 400,
+    });
+    expect(error).not.toHaveProperty("payload");
+    expect(JSON.stringify(error)).not.toContain("private@example.test");
+    expect(JSON.stringify(error)).not.toContain("private-access-token");
   });
 
   it("entfernt die lokale Session auch dann, wenn der Logout-Request fehlschlägt", async () => {
