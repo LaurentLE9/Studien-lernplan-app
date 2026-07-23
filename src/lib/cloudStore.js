@@ -3,10 +3,23 @@
  * Handles user registration, login, logout, and planner data persistence
  */
 
-// Supabase URL and Key from environment variables
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const PUBLIC_APP_URL = import.meta.env.VITE_PUBLIC_APP_URL;
+import {
+  fetchSupabase,
+  getSupabaseAnonKey,
+  readSupabaseResponse,
+  SupabaseRequestError,
+} from "@/infrastructure/supabase/client";
+import {
+  getActiveSession as getActiveSessionFromRepository,
+  refreshAuthSession,
+  requestPasswordReset as requestPasswordResetFromRepository,
+  resendSignupConfirmation as resendSignupConfirmationFromRepository,
+  signInWithEmail as signInWithEmailFromRepository,
+  signOutCurrentSession as signOutCurrentSessionFromRepository,
+  signUpWithEmail as signUpWithEmailFromRepository,
+} from "@/infrastructure/supabase/authRepository";
+
+const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 const DASHBOARD_WIDGET_IDS = ["stats", "deadlines", "projects", "hours", "task-time", "today", "recent", "done"];
 const DEFAULT_DASHBOARD_LAYOUT = [...DASHBOARD_WIDGET_IDS];
 const TASK_TYPES = ["task", "deadline", "project"];
@@ -573,81 +586,20 @@ function normalizeDeadlineWidgetSettings(value) {
   return { activeFilter, defaultFilter };
 }
 
-function getAuthRedirectUrl() {
-  const configured = String(PUBLIC_APP_URL || "").trim();
-  if (configured) return configured;
-  if (typeof window !== "undefined") return window.location.origin;
-  return undefined;
-}
-
-function hasPlaceholderConfig() {
-  const url = String(SUPABASE_URL || "").trim();
-  const key = String(SUPABASE_ANON_KEY || "").trim();
-  return (
-    !url ||
-    !key ||
-    url.includes("your-project") ||
-    key.includes("your-anon-key") ||
-    key.endsWith("...")
-  );
-}
-
-function ensureSupabaseConfig() {
-  if (hasPlaceholderConfig()) {
-    throw new Error("Supabase nicht konfiguriert: Bitte echte VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY in Vercel Project Settings -> Environment Variables setzen.");
-  }
-}
-
-function normalizeAuthSession(data) {
-  const session = data?.session || (data?.access_token ? {
-    access_token: data.access_token,
-    token_type: data.token_type,
-    expires_in: data.expires_in,
-    refresh_token: data.refresh_token,
-    user: data.user,
-    expires_at: data.expires_at || (data.expires_in ? Math.floor(Date.now() / 1000) + Number(data.expires_in) : undefined),
-  } : null);
-
-  if (session?.access_token && session?.user) {
-    localStorage.setItem("sb-auth-session", JSON.stringify(session));
-  }
-
-  return session;
-}
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.warn(
-    "⚠️ Supabase credentials missing. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env"
-  );
-}
-
 // Helper: Make authenticated requests to Supabase
 async function supabaseRequest(endpoint, options = {}) {
-  ensureSupabaseConfig();
-
   const session = await getActiveSession();
   const token = session?.access_token;
   const method = options.method || "GET";
-
-  const headers = {
-    "Content-Type": "application/json",
-    ...options.headers,
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const url = `${SUPABASE_URL}/rest/v1${endpoint}`;
   logSyncDebug("request:start", {
     method,
     endpoint,
     userId: session?.user?.id || null,
   });
 
-  let response = await fetch(url, {
+  let response = await fetchSupabase(`/rest/v1${endpoint}`, {
     ...options,
-    headers,
+    accessToken: token,
   });
 
   logSyncDebug("request:response", {
@@ -661,11 +613,8 @@ async function supabaseRequest(endpoint, options = {}) {
   // Handle 401 (Unauthorized) - token may have expired, try refresh and retry once
   if (response.status === 401 && session?.refresh_token) {
     try {
-      const refreshed = await refreshSession(session);
+      const refreshed = await refreshAuthSession(session);
       if (refreshed) {
-        localStorage.setItem("sb-auth-session", JSON.stringify(refreshed));
-        headers.Authorization = `Bearer ${refreshed.access_token}`;
-        
         logSyncDebug("request:retry", {
           method,
           endpoint,
@@ -673,9 +622,9 @@ async function supabaseRequest(endpoint, options = {}) {
         });
 
         // Retry the request with new token
-        response = await fetch(url, {
+        response = await fetchSupabase(`/rest/v1${endpoint}`, {
           ...options,
-          headers,
+          accessToken: refreshed.access_token,
         });
 
         logSyncDebug("request:response:retry", {
@@ -692,318 +641,60 @@ async function supabaseRequest(endpoint, options = {}) {
     }
   }
 
-  if (!response.ok) {
-    let errorMessage = `Request failed: ${response.status}`;
-    try {
-      const error = await response.json();
-      errorMessage = error.message || error.error_description || errorMessage;
-    } catch {
-      // Ignore non-JSON error bodies and use the fallback message.
-    }
-
+  try {
+    return await readSupabaseResponse(response, "Request failed");
+  } catch (error) {
     if (
-      response.status === 404 &&
-      (endpoint.includes("/user_plans") || errorMessage.toLowerCase().includes("schema cache") || errorMessage.toLowerCase().includes("public.user_plans"))
+      error instanceof SupabaseRequestError &&
+      error.status === 404 &&
+      (endpoint.includes("/user_plans") || error.message.toLowerCase().includes("schema cache") || error.message.toLowerCase().includes("public.user_plans"))
     ) {
-      errorMessage = "Supabase-Tabelle public.user_plans fehlt oder der Schema-Cache ist veraltet. Bitte supabase/schema.sql oder die neue Migration ausführen und danach den Supabase Schema-Cache neu laden (NOTIFY pgrst, 'reload schema').";
+      throw new Error("Supabase-Tabelle public.user_plans fehlt oder der Schema-Cache ist veraltet. Bitte supabase/schema.sql oder die neue Migration ausführen und danach den Supabase Schema-Cache neu laden (NOTIFY pgrst, 'reload schema').");
     }
-
-    throw new Error(errorMessage);
+    throw error;
   }
-
-  if (response.status === 204) {
-    return null;
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    return null;
-  }
-
-  const text = await response.text();
-  if (!text.trim()) {
-    return null;
-  }
-
-  return JSON.parse(text);
 }
 
 /**
  * Sign up a new user with email and password
  */
 export async function signUpWithEmail(email, password) {
-  ensureSupabaseConfig();
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        email,
-        password,
-        options: {
-          emailRedirectTo: getAuthRedirectUrl(),
-        },
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        data?.error_description ||
-        data?.msg ||
-        data?.error ||
-        `Signup failed (${response.status})`
-      );
-    }
-
-    const session = normalizeAuthSession(data);
-    return { user: session?.user || data.user, session };
-  } catch (error) {
-    console.error("Sign up error:", error);
-    throw error;
-  }
+  return signUpWithEmailFromRepository(email, password);
 }
 
 /**
  * Sign in with email and password
  */
 export async function signInWithEmail(email, password) {
-  ensureSupabaseConfig();
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error_description ||
-        data?.message ||
-        data?.msg ||
-        data?.error ||
-        `Login failed (${response.status})`
-      );
-    }
-
-    const session = normalizeAuthSession(data);
-
-    return { user: session?.user || data.user, session };
-  } catch (error) {
-    console.error("Sign in error:", error);
-    throw error;
-  }
+  return signInWithEmailFromRepository(email, password);
 }
 
 /**
  * Send password reset email
  */
 export async function requestPasswordReset(email) {
-  ensureSupabaseConfig();
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        email,
-        redirect_to: getAuthRedirectUrl(),
-      }),
-    });
-
-    let data = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        data?.error_description ||
-        data?.msg ||
-        data?.error ||
-        `Password reset failed (${response.status})`
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Password reset error:", error);
-    throw error;
-  }
+  return requestPasswordResetFromRepository(email);
 }
 
 /**
  * Resend signup confirmation email
  */
 export async function resendSignupConfirmation(email) {
-  ensureSupabaseConfig();
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({
-        type: "signup",
-        email,
-        options: {
-          emailRedirectTo: getAuthRedirectUrl(),
-        },
-      }),
-    });
-
-    let data = null;
-    try {
-      data = await response.json();
-    } catch {
-      data = null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        data?.error_description ||
-        data?.msg ||
-        data?.error ||
-        `Resend confirmation failed (${response.status})`
-      );
-    }
-
-    return true;
-  } catch (error) {
-    console.error("Resend confirmation error:", error);
-    throw error;
-  }
+  return resendSignupConfirmationFromRepository(email);
 }
 
 /**
  * Get active session from localStorage
  */
 export async function getActiveSession() {
-  try {
-    const sessionStr = localStorage.getItem("sb-auth-session");
-    if (!sessionStr) return null;
-
-    const session = JSON.parse(sessionStr);
-    
-    // Validate session structure
-    if (!session?.access_token || !session?.user) {
-      localStorage.removeItem("sb-auth-session");
-      return null;
-    }
-
-    // Check if token is expired
-    if (session.expires_at && session.expires_at * 1000 < Date.now()) {
-      // Token expired, try to refresh
-      if (!session.refresh_token) {
-        console.warn("Token expired but no refresh token available");
-        localStorage.removeItem("sb-auth-session");
-        return null;
-      }
-
-      try {
-        const refreshed = await refreshSession(session);
-        if (refreshed) {
-          localStorage.setItem("sb-auth-session", JSON.stringify(refreshed));
-          return refreshed;
-        }
-      } catch (err) {
-        console.warn("Token refresh failed:", err);
-        localStorage.removeItem("sb-auth-session");
-        return null;
-      }
-    }
-
-    return session;
-  } catch (error) {
-    console.error("Error getting active session:", error);
-    localStorage.removeItem("sb-auth-session");
-    return null;
-  }
-}
-
-/**
- * Refresh authentication token
- */
-async function refreshSession(session) {
-  ensureSupabaseConfig();
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ refresh_token: session.refresh_token }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error_description ||
-        data?.message ||
-        data?.error ||
-        "Token refresh failed"
-      );
-    }
-
-    // Normalize the response - Supabase returns token data directly, not nested under .session
-    const refreshedSession = normalizeAuthSession(data);
-    if (!refreshedSession) {
-      throw new Error("Invalid token response structure");
-    }
-
-    return refreshedSession;
-  } catch (error) {
-    console.error("Refresh token error:", error);
-    return null;
-  }
+  return getActiveSessionFromRepository();
 }
 
 /**
  * Sign out current session
  */
 export async function signOutCurrentSession() {
-  try {
-    const session = await getActiveSession();
-    if (session && SUPABASE_URL && SUPABASE_ANON_KEY) {
-      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-    }
-  } catch (error) {
-    console.error("Sign out error:", error);
-  } finally {
-    // Clear session from localStorage regardless of API response
-    localStorage.removeItem("sb-auth-session");
-  }
+  return signOutCurrentSessionFromRepository();
 }
 
 /**
