@@ -56,6 +56,14 @@ import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
+  getActiveSession,
+  loadUserPlannerData,
+  saveUserPlannerData,
+  signInWithEmail,
+  signOutCurrentSession,
+  signUpWithEmail,
+} from "@/lib/cloudStore";
+import {
   Area,
   AreaChart,
   Bar,
@@ -361,41 +369,41 @@ function getNextTaskMilestone(task) {
   return milestones[0] || null;
 }
 
-function usePersistentState() {
+function createDefaultPlannerData() {
+  return {
+    subjects: makeInitialSubjects(),
+    tasks: [],
+    studySessions: [],
+    settings: { darkMode: true },
+    seeds: { tasks: false, sessions: false },
+  };
+}
+
+function normalizePlannerData(parsed) {
+  if (!parsed || typeof parsed !== "object") return createDefaultPlannerData();
+  return {
+    subjects: parsed.subjects?.length ? parsed.subjects : makeInitialSubjects(),
+    tasks: parsed.tasks || [],
+    studySessions: parsed.studySessions || [],
+    settings: { darkMode: true, ...(parsed.settings || {}) },
+    seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
+  };
+}
+
+function usePersistentState(storageKey = STORAGE_KEY) {
   const [data, setData] = useState(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        return {
-          subjects: makeInitialSubjects(),
-          tasks: [],
-          studySessions: [],
-          settings: { darkMode: true },
-          seeds: { tasks: false, sessions: false },
-        };
-      }
-      const parsed = JSON.parse(raw);
-      return {
-        subjects: parsed.subjects?.length ? parsed.subjects : makeInitialSubjects(),
-        tasks: parsed.tasks || [],
-        studySessions: parsed.studySessions || [],
-        settings: { darkMode: true, ...(parsed.settings || {}) },
-        seeds: { tasks: false, sessions: false, ...(parsed.seeds || {}) },
-      };
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return createDefaultPlannerData();
+      return normalizePlannerData(JSON.parse(raw));
     } catch {
-      return {
-        subjects: makeInitialSubjects(),
-        tasks: [],
-        studySessions: [],
-        settings: { darkMode: true },
-        seeds: { tasks: false, sessions: false },
-      };
+      return createDefaultPlannerData();
     }
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data]);
+    localStorage.setItem(storageKey, JSON.stringify(data));
+  }, [data, storageKey]);
 
   return [data, setData];
 }
@@ -1018,8 +1026,10 @@ function TaskCard({ task, subject, onToggleDone, onDelete, onEdit, darkMode }) {
   );
 }
 
-export default function StudyPlannerApp() {
-  const [data, setData] = usePersistentState();
+function PlannerWorkspace({ session, onSignOut }) {
+  const [data, setData] = usePersistentState(`${STORAGE_KEY}:${session.user.id}`);
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudError, setCloudError] = useState("");
   const [page, setPage] = useState("dashboard");
   const [search, setSearch] = useState("");
   const [showCompletedDeadlines, setShowCompletedDeadlines] = useState(false);
@@ -1029,6 +1039,39 @@ export default function StudyPlannerApp() {
   const [editingSubject, setEditingSubject] = useState(null);
   const [editingTask, setEditingTask] = useState(null);
   const [editingSession, setEditingSession] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCloudState() {
+      try {
+        const cloudData = await loadUserPlannerData(session.user.id, session.access_token);
+        if (!active) return;
+        if (cloudData) setData(normalizePlannerData(cloudData));
+        setCloudReady(true);
+      } catch (error) {
+        if (!active) return;
+        setCloudError(error.message || "Cloud-Daten konnten nicht geladen werden.");
+        setCloudReady(true);
+      }
+    }
+    loadCloudState();
+    return () => {
+      active = false;
+    };
+  }, [session.access_token, session.user.id, setData]);
+
+  useEffect(() => {
+    if (!cloudReady) return;
+    const timeout = setTimeout(async () => {
+      try {
+        await saveUserPlannerData(session.user.id, data, session.access_token);
+        setCloudError("");
+      } catch (error) {
+        setCloudError(error.message || "Cloud-Daten konnten nicht gespeichert werden.");
+      }
+    }, 500);
+    return () => clearTimeout(timeout);
+  }, [cloudReady, data, session.access_token, session.user.id]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", data.settings.darkMode);
@@ -1321,12 +1364,18 @@ export default function StudyPlannerApp() {
 
             <div className="flex w-full max-w-[920px] flex-col gap-3 xl:items-end">
               <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
+                <div className={cn("w-full rounded-xl border px-3 py-2 text-xs lg:w-auto", data.settings.darkMode ? "border-slate-700 bg-slate-900/60 text-slate-300" : "border-slate-200 bg-white text-slate-600")}>
+                  Angemeldet als: <span className="font-medium">{session.user.email}</span>
+                  {cloudReady ? " • Cloud Sync aktiv" : " • Cloud Sync lädt"}
+                </div>
                 <div className="relative w-full lg:w-80 xl:w-96">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Suchen nach Aufgabe oder Fach" className="pl-9" />
                 </div>
                 <DashboardQuickActions subjects={data.subjects} onSaveSession={saveStudySession} darkMode={data.settings.darkMode} />
+                <Button variant="outline" onClick={onSignOut}>Logout</Button>
               </div>
+              {cloudError ? <p className="text-xs text-red-500">{cloudError}</p> : null}
 
               <div className="flex w-full flex-wrap gap-3 lg:justify-end">
                 <Dialog open={subjectDialogOpen} onOpenChange={setSubjectDialogOpen}>
@@ -1495,4 +1544,106 @@ export default function StudyPlannerApp() {
       </div>
     </div>
   );
+}
+
+export default function StudyPlannerApp() {
+  const [session, setSession] = useState(null);
+  const [booting, setBooting] = useState(true);
+  const [mode, setMode] = useState("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authInfo, setAuthInfo] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function boot() {
+      try {
+        const activeSession = await getActiveSession();
+        if (!active) return;
+        setSession(activeSession);
+      } catch (error) {
+        if (!active) return;
+        setAuthError(error.message || "Session konnte nicht geladen werden.");
+      } finally {
+        if (active) setBooting(false);
+      }
+    }
+    boot();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleAuthSubmit(e) {
+    e.preventDefault();
+    setAuthError("");
+    setAuthInfo("");
+    setSubmitting(true);
+    try {
+      if (mode === "signup") {
+        const payload = await signUpWithEmail(email, password);
+        if (payload?.session) {
+          setSession(payload.session);
+        } else {
+          setAuthInfo("Konto erstellt. Bitte E-Mail bestätigen und danach einloggen.");
+          setMode("signin");
+        }
+      } else {
+        const nextSession = await signInWithEmail(email, password);
+        setSession(nextSession);
+      }
+    } catch (error) {
+      setAuthError(error.message || "Authentifizierung fehlgeschlagen.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSignOut() {
+    await signOutCurrentSession(session?.access_token);
+    setSession(null);
+  }
+
+  if (booting) {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted-foreground">Lade Authentifizierung…</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-slate-100 p-4">
+        <Card className="w-full max-w-md rounded-2xl">
+          <CardHeader>
+            <CardTitle>{mode === "signin" ? "Anmelden" : "Konto erstellen"}</CardTitle>
+            <CardDescription>Cloud-Datenbank aktiv: Login ist erforderlich.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4" onSubmit={handleAuthSubmit}>
+              <div className="grid gap-2">
+                <Label htmlFor="email">E-Mail</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Passwort</Label>
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required />
+              </div>
+              {authError ? <p className="text-sm text-red-500">{authError}</p> : null}
+              {authInfo ? <p className="text-sm text-emerald-600">{authInfo}</p> : null}
+              <Button type="submit" disabled={submitting}>{submitting ? "Bitte warten…" : mode === "signin" ? "Anmelden" : "Konto anlegen"}</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setMode((prev) => (prev === "signin" ? "signup" : "signin"))}
+              >
+                {mode === "signin" ? "Noch kein Konto? Registrieren" : "Bereits ein Konto? Einloggen"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return <PlannerWorkspace key={session.user.id} session={session} onSignOut={handleSignOut} />;
 }
