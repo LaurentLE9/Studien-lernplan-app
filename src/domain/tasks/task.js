@@ -6,8 +6,12 @@ export const TASK_TYPE_LABELS = {
   project: "Projekt",
 };
 
+export function normalizeTaskTypeValue(type) {
+  return TASK_TYPES.includes(type) ? type : "task";
+}
+
 export function normalizeTaskType(task) {
-  return TASK_TYPES.includes(task?.type) ? task.type : "task";
+  return normalizeTaskTypeValue(task?.type);
 }
 
 export function normalizeTask(rawTask) {

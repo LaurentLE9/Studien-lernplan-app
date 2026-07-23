@@ -3,6 +3,7 @@ import {
   cleanTaskAfterTypeChange,
   isDeadlineListTask,
   normalizeTask,
+  normalizeTaskTypeValue,
 } from "@/domain/tasks/task";
 import {
   getProjectProgress,
@@ -21,6 +22,13 @@ import {
 } from "@/features/dashboard/config";
 
 describe("Task-, Deadline- und Projektmodule", () => {
+  it("normalisiert Formularwerte fÃ¼r alle unterstÃ¼tzten Aufgabentypen", () => {
+    expect(normalizeTaskTypeValue("task")).toBe("task");
+    expect(normalizeTaskTypeValue("deadline")).toBe("deadline");
+    expect(normalizeTaskTypeValue("project")).toBe("project");
+    expect(normalizeTaskTypeValue("unknown")).toBe("task");
+  });
+
   it("normalisiert Legacy-Projektfelder und entfernt Projektfelder beim Typwechsel", () => {
     expect(normalizeTask({ type: "project", archivedAt: "2026-07-20", pinned: 1 })).toMatchObject({
       type: "project",

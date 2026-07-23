@@ -64,6 +64,7 @@ import {
   normalizeTask,
   normalizeTasks,
   normalizeTaskType,
+  normalizeTaskTypeValue,
 } from "@/domain/tasks/task";
 import {
   getProjectProgress,
@@ -3005,7 +3006,7 @@ function TaskForm({ subjects, topics = [], projects = [], allTasks = [], onSave,
   }
 
   function handleTypeChange(value) {
-    const type = TASK_TYPES.includes(value) ? value : "task";
+    const type = normalizeTaskTypeValue(value);
     setForm((prev) => {
       const next = { ...prev, type };
       if (type === "project") {
