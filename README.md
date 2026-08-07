@@ -2,6 +2,31 @@
 
 React/Vite App für Aufgabenplanung, Lernzeiterfassung, Timer (Stoppuhr/Pomodoro) und Statistikansichten.
 
+## Entwicklungsprozess, Definition of Done und Loop Engineering
+
+Die Entwicklungsregeln dieses Repositories sind miteinander verknüpft:
+
+```text
+Jira → Confluence/Definition of Done → AGENTS.md → Loop Engineering
+     → GitHub/Codex/Copilot → Tests/Review/PR/Merge → Jira Erledigt
+```
+
+Verbindliche Repository-Dokumente:
+
+- [`AGENTS.md`](AGENTS.md) – Arbeits-, Sicherheits-, Test-, Branch- und Abschlussregeln für Entwicklungs-Agenten
+- [`docs/LOOP_ENGINEERING.md`](docs/LOOP_ENGINEERING.md) – kontrollierter Entwicklungs-Loop, Evaluator, Retry-/Stop-Regeln sowie Zielarchitektur für die spätere KI-Integration
+- [`.github/copilot-instructions.md`](.github/copilot-instructions.md) – GitHub-Copilot-spezifische Anweisungen
+
+Projektsteuerung und dauerhafte Prozessregeln:
+
+- Jira KAN-30 – Entwicklungs- und Jira-Workflow dokumentieren
+- Jira KAN-72 – Isolierten Testnutzer und Browser-End-to-End-Tests einführen
+- Jira KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
+- Jira KAN-74 – `AGENTS.md` erstellen und mit Definition of Done verknüpfen
+- Confluence – **Arbeitsprozess und Definition of Done**: https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/622593/Arbeitsprozess+und+Definition+of+Done
+
+Wichtig: Ein technisch erfolgreicher Agenten-Loop bedeutet nicht automatisch, dass ein Jira-Vorgang erledigt ist. `Erledigt` setzt weiterhin die vollständige Definition of Done einschließlich Review, erforderlicher Tests, Pull Request und bestätigtem Merge nach `main` voraus.
+
 ## Start
 
 1. Abhängigkeiten installieren:
