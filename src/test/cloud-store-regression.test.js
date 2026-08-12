@@ -1,4 +1,8 @@
 import { TEST_USER_ID } from "@/test/fixtures/plannerData";
+import {
+  buildPlannerSnapshotUpsert,
+  readPlannerSnapshotRow,
+} from "@/infrastructure/supabase/plannerSnapshotMapper";
 
 const futureSession = {
   access_token: "cloud-test-token",
@@ -56,6 +60,7 @@ describe("Supabase-Planner-Transformationen", () => {
   it("lädt Planner-Daten über die authentifizierte Grenze und normalisiert bestehende Projektdaten", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([{
       data: {
+        compatibleRootField: { futureVersion: 2 },
         subjects: [{ id: "subject-1", name: "Softwaretechnik" }],
         tasks: [{
           id: "legacy-project",
@@ -65,7 +70,12 @@ describe("Supabase-Planner-Transformationen", () => {
           pinned: 1,
           customMarker: "preserved",
         }],
-        settings: { darkMode: true, sidebarCollapsed: true },
+        settings: {
+          darkMode: true,
+          sidebarCollapsed: true,
+          compatibleSetting: "preserved",
+        },
+        seeds: { tasks: true, compatibleSeed: "preserved" },
       },
     }]));
     vi.stubGlobal("fetch", fetchMock);
@@ -95,8 +105,15 @@ describe("Supabase-Planner-Transformationen", () => {
     expect(result.settings).toEqual(expect.objectContaining({
       appearance: "dark",
       sidebarCollapsed: true,
+      compatibleSetting: "preserved",
       dashboardTileLayout: expect.any(Array),
     }));
+    expect(result.compatibleRootField).toEqual({ futureVersion: 2 });
+    expect(result.seeds).toEqual({
+      tasks: true,
+      sessions: false,
+      compatibleSeed: "preserved",
+    });
     expect(result.studySessions).toEqual([]);
     expect(result.exams).toEqual([]);
   });
@@ -112,6 +129,7 @@ describe("Supabase-Planner-Transformationen", () => {
       exams: [],
       todayFocus: [],
       settings: { appearance: "light" },
+      compatibleRootField: { futureVersion: 3 },
     };
 
     await expect(saveUserPlannerData(TEST_USER_ID, plannerData)).resolves.toBe(true);
@@ -139,14 +157,99 @@ describe("Supabase-Planner-Transformationen", () => {
 
     try {
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Cloud nicht erreichbar" }, 500)));
-      const { loadUserPlannerData } = await importCloudStore();
+      const {
+        loadUserPlannerData,
+        PLANNER_SNAPSHOT_ERROR_CODES,
+        PlannerSnapshotError,
+      } = await importCloudStore();
 
-      await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toThrow("Cloud nicht erreichbar");
+      const error = await loadUserPlannerData(TEST_USER_ID).catch((loadError) => loadError);
+      expect(error).toBeInstanceOf(PlannerSnapshotError);
+      expect(error).toEqual(expect.objectContaining({
+        name: "PlannerSnapshotError",
+        code: PLANNER_SNAPSHOT_ERROR_CODES.TRANSPORT_ERROR,
+        operation: "load",
+        message: "Cloud nicht erreichbar",
+        cause: expect.any(Error),
+      }));
       expect(consoleError).toHaveBeenCalledWith("Load planner data error:", expect.any(Error));
     } finally {
       consoleError.mockRestore();
     }
 
     expect(console.error).toBe(originalConsoleError);
+  });
+
+  it("kategorisiert eine fehlende Planner-Tabelle eindeutig als Schemafehler", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+        message: "Could not find the table 'public.user_plans' in the schema cache",
+      }, 404)));
+      const { loadUserPlannerData, PLANNER_SNAPSHOT_ERROR_CODES } = await importCloudStore();
+
+      await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toEqual(expect.objectContaining({
+        code: PLANNER_SNAPSHOT_ERROR_CODES.SCHEMA_ERROR,
+        operation: "load",
+      }));
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("kategorisiert Speicherfehler mit der betroffenen Operation", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    try {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Upsert fehlgeschlagen" }, 500)));
+      const { saveUserPlannerData, PLANNER_SNAPSHOT_ERROR_CODES } = await importCloudStore();
+
+      await expect(saveUserPlannerData(TEST_USER_ID, { tasks: [] })).rejects.toEqual(expect.objectContaining({
+        code: PLANNER_SNAPSHOT_ERROR_CODES.TRANSPORT_ERROR,
+        operation: "save",
+        message: "Upsert fehlgeschlagen",
+      }));
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("bricht ohne aktive Session kategorisiert und ohne Cloud-Aufruf ab", async () => {
+    localStorage.removeItem("sb-auth-session");
+    const fetchMock = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const { loadUserPlannerData, PLANNER_SNAPSHOT_ERROR_CODES } = await importCloudStore();
+
+      await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toEqual(expect.objectContaining({
+        code: PLANNER_SNAPSHOT_ERROR_CODES.AUTH_REQUIRED,
+        operation: "load",
+      }));
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+});
+
+describe("Planner-Snapshot-Schema-Mapping", () => {
+  it("trennt leere Abfragen von vorhandenen leeren Snapshots", () => {
+    expect(readPlannerSnapshotRow([])).toEqual({ found: false, snapshot: null });
+    expect(readPlannerSnapshotRow([{ data: null }])).toEqual({ found: true, snapshot: {} });
+  });
+
+  it("erstellt den Upsert-Payload ohne kompatible Felder zu entfernen", () => {
+    const plannerData = {
+      tasks: [],
+      compatibleRootField: { futureVersion: 4 },
+    };
+
+    expect(buildPlannerSnapshotUpsert(TEST_USER_ID, plannerData)).toEqual({
+      user_id: TEST_USER_ID,
+      data: plannerData,
+    });
   });
 });

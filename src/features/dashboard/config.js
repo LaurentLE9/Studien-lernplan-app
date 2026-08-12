@@ -68,7 +68,7 @@ export const DASHBOARD_PRESET_DEFAULT_LAYOUTS = {
 export const DASHBOARD_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 0 };
 export const DASHBOARD_COLS = { lg: 12, md: 12, sm: 1, xs: 1 };
 
-function normalizeDashboardLayout(layout) {
+export function normalizeDashboardLayout(layout) {
   if (!Array.isArray(layout)) return [...DEFAULT_DASHBOARD_LAYOUT];
   const filtered = layout.filter((id) => DASHBOARD_WIDGET_IDS.includes(id));
   const missing = DASHBOARD_WIDGET_IDS.filter((id) => !filtered.includes(id));
