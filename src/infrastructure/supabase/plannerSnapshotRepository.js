@@ -1,7 +1,7 @@
 import {
   normalizeDefaultData,
   normalizePlannerSnapshot,
-} from "@/domain/planner/plannerSnapshot";
+} from "@/app/state/plannerSnapshot";
 import { SupabaseRequestError } from "./client";
 import { getActiveSession } from "./authRepository";
 import {

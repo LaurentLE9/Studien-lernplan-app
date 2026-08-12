@@ -1,7 +1,5 @@
 import { normalizeTasks } from "@/domain/tasks/task";
-import {
-  normalizeAppSettings,
-} from "@/features/dashboard/config";
+import { normalizeAppSettings } from "@/features/dashboard/config";
 
 export function normalizePlannerSettings(rawSettings = {}) {
   const safeSettings = rawSettings && typeof rawSettings === "object" ? rawSettings : {};

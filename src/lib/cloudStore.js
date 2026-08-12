@@ -26,7 +26,7 @@ export {
   PlannerSnapshotError,
   saveUserPlannerData,
 } from "@/infrastructure/supabase/plannerSnapshotRepository";
-export { normalizeDefaultData } from "@/domain/planner/plannerSnapshot";
+export { normalizeDefaultData } from "@/app/state/plannerSnapshot";
 
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 
