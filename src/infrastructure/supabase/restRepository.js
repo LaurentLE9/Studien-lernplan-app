@@ -81,7 +81,9 @@ export async function supabaseRequest(endpoint, options = {}) {
         || error.message.toLowerCase().includes("schema cache")
         || error.message.toLowerCase().includes("public.user_plans"))
     ) {
-      throw new Error("Supabase-Tabelle public.user_plans fehlt oder der Schema-Cache ist veraltet. Bitte supabase/schema.sql oder die neue Migration ausführen und danach den Supabase Schema-Cache neu laden (NOTIFY pgrst, 'reload schema').");
+      throw new Error("Supabase-Tabelle public.user_plans fehlt oder der Schema-Cache ist veraltet. Bitte supabase/schema.sql oder die neue Migration ausführen und danach den Supabase Schema-Cache neu laden (NOTIFY pgrst, 'reload schema').", {
+        cause: error,
+      });
     }
     throw error;
   }

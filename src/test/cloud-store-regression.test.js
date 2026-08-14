@@ -189,13 +189,61 @@ describe("Supabase-Planner-Transformationen", () => {
       }, 404)));
       const { loadUserPlannerData, PLANNER_SNAPSHOT_ERROR_CODES } = await importCloudStore();
 
-      await expect(loadUserPlannerData(TEST_USER_ID)).rejects.toEqual(expect.objectContaining({
+      const error = await loadUserPlannerData(TEST_USER_ID).catch((loadError) => loadError);
+
+      expect(error).toEqual(expect.objectContaining({
         code: PLANNER_SNAPSHOT_ERROR_CODES.SCHEMA_ERROR,
         operation: "load",
+      }));
+      expect(error.cause).toEqual(expect.objectContaining({
+        message: expect.stringContaining("public.user_plans"),
+        cause: expect.objectContaining({
+          name: "SupabaseRequestError",
+          status: 404,
+          message: "Could not find the table 'public.user_plans' in the schema cache",
+        }),
       }));
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it("erneuert bei einem 401 die Session zentral und wiederholt auch CloudStore-Abfragen", async () => {
+    localStorage.setItem("sb-auth-session", JSON.stringify({
+      ...futureSession,
+      access_token: "expired-cloud-test-token",
+      refresh_token: "cloud-test-refresh-token",
+    }));
+    const refreshedSession = {
+      access_token: "refreshed-cloud-test-token",
+      refresh_token: "refreshed-cloud-test-refresh-token",
+      expires_in: 3600,
+      user: futureSession.user,
+    };
+    const subjectRows = [{ id: "subject-1", user_id: TEST_USER_ID, name: "Softwaretechnik" }];
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ message: "JWT expired" }, 401))
+      .mockResolvedValueOnce(jsonResponse(refreshedSession))
+      .mockResolvedValueOnce(jsonResponse(subjectRows));
+    vi.stubGlobal("fetch", fetchMock);
+    const { loadSubjects } = await importCloudStore();
+
+    await expect(loadSubjects(TEST_USER_ID)).resolves.toEqual(subjectRows);
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[0][0]).toContain("/rest/v1/subjects?");
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer expired-cloud-test-token");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://kan35.supabase.test/auth/v1/token?grant_type=refresh_token");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      refresh_token: "cloud-test-refresh-token",
+    });
+    expect(fetchMock.mock.calls[2][0]).toBe(fetchMock.mock.calls[0][0]);
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer refreshed-cloud-test-token");
+    expect(JSON.parse(localStorage.getItem("sb-auth-session"))).toEqual(expect.objectContaining({
+      access_token: "refreshed-cloud-test-token",
+      refresh_token: "refreshed-cloud-test-refresh-token",
+      expires_at: 1784725200,
+    }));
   });
 
   it("kategorisiert Speicherfehler mit der betroffenen Operation", async () => {
