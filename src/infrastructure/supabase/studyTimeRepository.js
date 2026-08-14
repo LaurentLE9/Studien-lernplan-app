@@ -9,6 +9,12 @@ export const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,task_id,d
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
+function assertValidDurationMinutes(value) {
+  if (!Number.isFinite(Number(value)) || Number(value) <= 0) {
+    throw new Error("durationMinutes muss größer als 0 sein");
+  }
+}
+
 export function mapStudyTimeEntryRow(row) {
   if (!row) return null;
   return {
@@ -31,9 +37,7 @@ export function mapStudyTimeEntryRow(row) {
 
 export function mapStudyTimeEntryCreate(userId, entry, nowIso = new Date().toISOString()) {
   if (!entry.subjectId) throw new Error("subjectId ist erforderlich");
-  if (!Number.isFinite(Number(entry.durationMinutes)) || Number(entry.durationMinutes) <= 0) {
-    throw new Error("durationMinutes muss größer als 0 sein");
-  }
+  assertValidDurationMinutes(entry.durationMinutes);
 
   return {
     id: entry.id || crypto.randomUUID(),
@@ -53,7 +57,10 @@ export function mapStudyTimeEntryCreate(userId, entry, nowIso = new Date().toISO
 
 export function mapStudyTimeEntryPatch(patch) {
   const row = {};
-  if ("durationMinutes" in patch) row.duration_minutes = clampPostgresDurationMinutes(patch.durationMinutes);
+  if ("durationMinutes" in patch) {
+    assertValidDurationMinutes(patch.durationMinutes);
+    row.duration_minutes = clampPostgresDurationMinutes(patch.durationMinutes);
+  }
   if ("notes" in patch) row.notes = patch.notes || "";
   if ("taskId" in patch) row.task_id = patch.taskId || null;
   if ("topicId" in patch) row.topic_id = patch.topicId || null;

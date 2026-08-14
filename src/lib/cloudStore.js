@@ -79,10 +79,7 @@ export {
   loadStudyTimeEntries,
   updateStudyTimeEntry,
 } from "@/infrastructure/supabase/studyTimeRepository";
-export {
-  ACTIVITY_TYPES,
-  normalizeActivityType,
-} from "@/domain/study/activity";
+export { ACTIVITY_TYPES, normalizeActivityType };
 
 export const REVIEW_INTERVAL_DAYS = [1, 3, 7];
 export const SUBJECT_REVIEW_INTERVAL_DAYS = [1, 2, 4, 7];

@@ -206,6 +206,12 @@ describe("Lernzeit-Repository-Mappings", () => {
       subjectId: "subject-1",
       durationMinutes: Number.NaN,
     })).toThrow("durationMinutes muss größer als 0 sein");
+
+    for (const durationMinutes of [undefined, Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+      expect(() => mapStudyTimeEntryPatch({ durationMinutes })).toThrow(
+        "durationMinutes muss größer als 0 sein",
+      );
+    }
   });
 });
 
