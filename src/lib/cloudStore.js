@@ -13,9 +13,16 @@ import {
   signUpWithEmail as signUpWithEmailFromRepository,
 } from "@/infrastructure/supabase/authRepository";
 import {
-  logSyncDebug,
   supabaseRequest,
 } from "@/infrastructure/supabase/restRepository";
+import {
+  CONFIDENCE_LEVELS,
+  normalizeConfidence,
+  normalizeTopicStatus,
+  TOPIC_STATUSES,
+} from "@/domain/academics/topic";
+import { updateSubjectRecord } from "@/infrastructure/supabase/subjectRepository";
+import { updateTopicRecord } from "@/infrastructure/supabase/topicRepository";
 
 export {
   loadUserPlannerData,
@@ -24,6 +31,38 @@ export {
   saveUserPlannerData,
 } from "@/infrastructure/supabase/plannerSnapshotRepository";
 export { normalizeDefaultData } from "@/app/state/plannerSnapshot";
+export {
+  CONFIDENCE_LEVELS,
+  normalizeConfidence,
+  normalizeTopicStatus,
+  TOPIC_STATUSES,
+} from "@/domain/academics/topic";
+export {
+  createSemester,
+  deleteSemester,
+  loadSemesters,
+  updateSemester,
+} from "@/infrastructure/supabase/semesterRepository";
+export {
+  archiveSubjectRecord,
+  createSubjectRecord,
+  deleteSubjectRecord,
+  loadSubjects,
+  unarchiveSubjectRecord,
+  updateSubjectRecord,
+} from "@/infrastructure/supabase/subjectRepository";
+export {
+  createTopicRecord,
+  deleteTopicRecord,
+  loadTopics,
+  updateTopicRecord,
+} from "@/infrastructure/supabase/topicRepository";
+export {
+  createExamRecord,
+  deleteExamRecord,
+  loadExams,
+  updateExamRecord,
+} from "@/infrastructure/supabase/examRepository";
 
 const SUPABASE_ANON_KEY = getSupabaseAnonKey();
 
@@ -48,14 +87,6 @@ export const ACTIVITY_TYPE_LABELS = {
   exam_exercise_practiced: "Klausuraufgabe geübt",
 };
 
-export const CONFIDENCE_LEVELS = [
-  "not_understood",
-  "unsure",
-  "okay",
-  "confident",
-  "very_confident",
-];
-
 export const CONFIDENCE_LABELS = {
   not_understood: "nicht verstanden",
   unsure: "unsicher",
@@ -63,8 +94,6 @@ export const CONFIDENCE_LABELS = {
   confident: "sicher",
   very_confident: "sehr sicher",
 };
-
-export const TOPIC_STATUSES = ["new", "active", "secure", "paused", "archived"];
 
 export const TOPIC_STATUS_LABELS = {
   new: "neu",
@@ -118,49 +147,6 @@ export function normalizeActivityType(value, fallback = "theory_read") {
     "klausuraufgabe geuebt": "exam_exercise_practiced",
   };
   return mapping[key] || (ACTIVITY_TYPES.includes(fallback) ? fallback : "theory_read");
-}
-
-export function normalizeConfidence(value, fallback = "unsure") {
-  const key = normalizeLookupKey(value);
-  const mapping = {
-    not_understood: "not_understood",
-    "not understood": "not_understood",
-    "nicht verstanden": "not_understood",
-    unsure: "unsure",
-    unsicher: "unsure",
-    okay: "okay",
-    ok: "okay",
-    confident: "confident",
-    sicher: "confident",
-    very_confident: "very_confident",
-    "very confident": "very_confident",
-    "sehr sicher": "very_confident",
-  };
-  return mapping[key] || (CONFIDENCE_LEVELS.includes(fallback) ? fallback : "unsure");
-}
-
-export function normalizeTopicStatus(value, fallback = "new") {
-  const key = normalizeLookupKey(value);
-  const mapping = {
-    new: "new",
-    neu: "new",
-    learning: "active",
-    lernen: "active",
-    active: "active",
-    aktiv: "active",
-    review: "active",
-    wiederholung: "active",
-    secure: "secure",
-    sicher: "secure",
-    paused: "paused",
-    pausiert: "paused",
-    postponed: "paused",
-    archived: "archived",
-    archiviert: "archived",
-    completed: "archived",
-    erledigt: "archived",
-  };
-  return mapping[key] || (TOPIC_STATUSES.includes(fallback) ? fallback : "new");
 }
 
 export function getActivityTypeLabel(value) {
@@ -394,388 +380,10 @@ export async function isAuthenticated() {
   return !!session;
 }
 
-/**
- * Semesters CRUD
- */
-export async function loadSemesters(userId) {
-  const rows = await supabaseRequest(
-    `/semesters?user_id=eq.${userId}&select=id,name,start_date,end_date,user_id,created_at&order=created_at.asc`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return Array.isArray(rows) ? rows : [];
-}
-
-export async function createSemester(userId, semester) {
-  const rows = await supabaseRequest(
-    "/semesters?select=id,name,start_date,end_date,user_id,created_at",
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        user_id: userId,
-        name: semester.name,
-        start_date: semester.startDate || null,
-        end_date: semester.endDate || null,
-      }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function updateSemester(userId, semesterId, patch) {
-  const rows = await supabaseRequest(
-    `/semesters?id=eq.${semesterId}&user_id=eq.${userId}&select=id,name,start_date,end_date,user_id,created_at`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        name: patch.name,
-        start_date: patch.startDate || null,
-        end_date: patch.endDate || null,
-      }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function deleteSemester(userId, semesterId) {
-  await supabaseRequest(
-    `/semesters?id=eq.${semesterId}&user_id=eq.${userId}`,
-    {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-}
-
-/**
- * Subjects CRUD (soft-delete via is_archived)
- */
-const SUBJECT_SELECT = "id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,last_studied_at,next_review_at,review_step,last_studied_minutes,study_count,created_at,updated_at";
-
-export async function loadSubjects(userId) {
-  const rows = await supabaseRequest(
-    `/subjects?user_id=eq.${userId}&select=${SUBJECT_SELECT}&order=created_at.asc`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return Array.isArray(rows) ? rows : [];
-}
-
-export async function createSubjectRecord(userId, subject) {
-  const rows = await supabaseRequest(
-    `/subjects?select=${SUBJECT_SELECT}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        id: subject.id,
-        user_id: userId,
-        semester_id: subject.semesterId || subject.groupId || null,
-        name: subject.name,
-        color: subject.color,
-        description: subject.description || "",
-        goal: subject.goal || "",
-        target_hours: Number(subject.targetHours || 0),
-        include_in_learning_plan: subject.includeInLearningPlan ?? true,
-        priority: Number.isFinite(Number(subject.priority)) ? Number(subject.priority) : null,
-        new_topic_every_days: Math.max(1, Number(subject.newTopicEveryDays || 3)),
-        next_new_topic_due_at: toIsoDateTimeOrNull(subject.nextNewTopicDueAt),
-        paused: Boolean(subject.paused),
-        last_studied_at: toIsoDateTimeOrNull(subject.lastStudiedAt),
-        next_review_at: toIsoDateTimeOrNull(subject.nextReviewAt),
-        review_step: Math.max(0, Number(subject.reviewStep || 0)),
-        last_studied_minutes: Math.max(0, Math.round(Number(subject.lastStudiedMinutes || 0))),
-        study_count: Math.max(0, Math.round(Number(subject.studyCount || 0))),
-        is_archived: false,
-      }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function updateSubjectRecord(userId, subjectId, patch) {
-  const body = {};
-
-  if ("semesterId" in patch || "groupId" in patch) {
-    body.semester_id = patch.semesterId || patch.groupId || null;
-  }
-  if ("name" in patch) body.name = patch.name;
-  if ("color" in patch) body.color = patch.color;
-  if ("description" in patch) body.description = patch.description || "";
-  if ("goal" in patch) body.goal = patch.goal || "";
-  if ("targetHours" in patch) body.target_hours = Number(patch.targetHours || 0);
-  if ("includeInLearningPlan" in patch) body.include_in_learning_plan = Boolean(patch.includeInLearningPlan);
-  if ("priority" in patch) body.priority = Number.isFinite(Number(patch.priority)) ? Number(patch.priority) : null;
-  if ("newTopicEveryDays" in patch) body.new_topic_every_days = Math.max(1, Number(patch.newTopicEveryDays || 3));
-  if ("nextNewTopicDueAt" in patch) body.next_new_topic_due_at = toIsoDateTimeOrNull(patch.nextNewTopicDueAt);
-  if ("paused" in patch) body.paused = Boolean(patch.paused);
-  if ("lastStudiedAt" in patch) body.last_studied_at = toIsoDateTimeOrNull(patch.lastStudiedAt);
-  if ("nextReviewAt" in patch) body.next_review_at = toIsoDateTimeOrNull(patch.nextReviewAt);
-  if ("reviewStep" in patch) body.review_step = Math.max(0, Number(patch.reviewStep || 0));
-  if ("lastStudiedMinutes" in patch) body.last_studied_minutes = Math.max(0, Math.round(Number(patch.lastStudiedMinutes || 0)));
-  if ("studyCount" in patch) body.study_count = Math.max(0, Math.round(Number(patch.studyCount || 0)));
-
-  const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(body),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function archiveSubjectRecord(userId, subjectId) {
-  const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({ is_archived: true }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function unarchiveSubjectRecord(userId, subjectId) {
-  const rows = await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({ is_archived: false }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function deleteSubjectRecord(userId, subjectId) {
-  await supabaseRequest(
-    `/subjects?id=eq.${subjectId}&user_id=eq.${userId}`,
-    {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-}
-
 export async function updateSubjectStudyProgress(userId, subject, options = {}) {
   const patch = buildSubjectStudyProgress(subject, options);
   if (!patch) return null;
   return updateSubjectRecord(userId, subject.id, patch);
-}
-
-const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
-
-export async function loadTopics(userId) {
-  try {
-    const rows = await supabaseRequest(
-      `/topics?user_id=eq.${userId}&select=${TOPIC_SELECT}&order=order_index.asc`,
-      {
-        method: "GET",
-        headers: { apikey: SUPABASE_ANON_KEY },
-      }
-    );
-    logSyncDebug("loadTopics:success", { userId, count: Array.isArray(rows) ? rows.length : 0 });
-    return Array.isArray(rows) ? rows : [];
-  } catch (error) {
-    logSyncDebug("loadTopics:error", { userId, error: error?.message });
-    throw error;
-  }
-}
-
-export async function createTopicRecord(userId, topic) {
-  const rows = await supabaseRequest(
-    `/topics?select=${TOPIC_SELECT}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        id: topic.id,
-        user_id: userId,
-        subject_id: topic.subjectId,
-        title: topic.title,
-        order_index: Math.max(0, Number(topic.orderIndex || 0)),
-        status: normalizeTopicStatus(topic.status || "new"),
-        cheatsheet_text: topic.cheatsheetText || "",
-        cheatsheet_url: topic.cheatsheetUrl || null,
-        confidence: normalizeConfidence(topic.confidence),
-        last_studied_at: toIsoDateTimeOrNull(topic.lastStudiedAt),
-        next_review_at: toIsoDateTimeOrNull(topic.nextReviewAt),
-        review_count: Math.max(0, Number(topic.reviewCount || 0)),
-        review_step: Math.max(0, Number(topic.reviewStep || 0)),
-        completed: Boolean(topic.completed),
-        is_paused_today: Boolean(topic.isPausedToday),
-        archived_at: toIsoDateTimeOrNull(topic.archivedAt),
-      }),
-    }
-  );
-  return rows?.[0] || null;
-}
-
-export async function updateTopicRecord(userId, topicId, patch) {
-  const payload = {};
-
-  if (Object.prototype.hasOwnProperty.call(patch, "subjectId")) payload.subject_id = patch.subjectId;
-  if (Object.prototype.hasOwnProperty.call(patch, "title")) payload.title = patch.title;
-  if (Object.prototype.hasOwnProperty.call(patch, "orderIndex")) payload.order_index = Math.max(0, Number(patch.orderIndex || 0));
-  if (Object.prototype.hasOwnProperty.call(patch, "status")) payload.status = normalizeTopicStatus(patch.status);
-  if (Object.prototype.hasOwnProperty.call(patch, "cheatsheetText")) payload.cheatsheet_text = patch.cheatsheetText || "";
-  if (Object.prototype.hasOwnProperty.call(patch, "cheatsheetUrl")) payload.cheatsheet_url = patch.cheatsheetUrl || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "confidence")) payload.confidence = normalizeConfidence(patch.confidence);
-  if (Object.prototype.hasOwnProperty.call(patch, "lastStudiedAt")) payload.last_studied_at = toIsoDateTimeOrNull(patch.lastStudiedAt);
-  if (Object.prototype.hasOwnProperty.call(patch, "nextReviewAt")) payload.next_review_at = toIsoDateTimeOrNull(patch.nextReviewAt);
-  if (Object.prototype.hasOwnProperty.call(patch, "reviewCount")) payload.review_count = Math.max(0, Number(patch.reviewCount || 0));
-  if (Object.prototype.hasOwnProperty.call(patch, "reviewStep")) payload.review_step = Math.max(0, Number(patch.reviewStep || 0));
-  if (Object.prototype.hasOwnProperty.call(patch, "completed")) payload.completed = Boolean(patch.completed);
-  if (Object.prototype.hasOwnProperty.call(patch, "isPausedToday")) payload.is_paused_today = Boolean(patch.isPausedToday);
-  if (Object.prototype.hasOwnProperty.call(patch, "archivedAt")) payload.archived_at = toIsoDateTimeOrNull(patch.archivedAt);
-
-  const rows = await supabaseRequest(
-    `/topics?id=eq.${topicId}&user_id=eq.${userId}&select=${TOPIC_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  return rows?.[0] || null;
-}
-
-export async function deleteTopicRecord(userId, topicId) {
-  await supabaseRequest(
-    `/topics?id=eq.${topicId}&user_id=eq.${userId}`,
-    {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-}
-
-const EXAM_SELECT = "id,user_id,subject_id,title,exam_date,exam_time,location,notes,status,is_archived,created_at,updated_at";
-
-function mapExamRow(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    subjectId: row.subject_id || "",
-    title: row.title || "",
-    examDate: row.exam_date || "",
-    examTime: row.exam_time || "",
-    location: row.location || "",
-    notes: row.notes || "",
-    status: row.status === "written" ? "written" : "open",
-    isArchived: Boolean(row.is_archived),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export async function loadExams(userId) {
-  const rows = await supabaseRequest(
-    `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}&order=exam_date.asc,exam_time.asc.nullslast,created_at.asc`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return Array.isArray(rows) ? rows.map(mapExamRow).filter(Boolean) : [];
-}
-
-export async function createExamRecord(userId, exam) {
-  const rows = await supabaseRequest(
-    `/exams?select=${EXAM_SELECT}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        id: exam.id,
-        user_id: userId,
-        subject_id: exam.subjectId || null,
-        title: exam.title,
-        exam_date: exam.examDate || null,
-        exam_time: exam.examTime || null,
-        location: exam.location || null,
-        notes: exam.notes || null,
-        status: exam.status === "written" ? "written" : "open",
-        is_archived: Boolean(exam.isArchived),
-      }),
-    }
-  );
-  return mapExamRow(rows?.[0] || null);
-}
-
-export async function updateExamRecord(userId, examId, patch) {
-  const payload = {};
-
-  if (Object.prototype.hasOwnProperty.call(patch, "subjectId")) payload.subject_id = patch.subjectId || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "title")) payload.title = patch.title;
-  if (Object.prototype.hasOwnProperty.call(patch, "examDate")) payload.exam_date = patch.examDate || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "examTime")) payload.exam_time = patch.examTime || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "location")) payload.location = patch.location || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "notes")) payload.notes = patch.notes || null;
-  if (Object.prototype.hasOwnProperty.call(patch, "status")) payload.status = patch.status === "written" ? "written" : "open";
-  if (Object.prototype.hasOwnProperty.call(patch, "isArchived")) payload.is_archived = Boolean(patch.isArchived);
-
-  const rows = await supabaseRequest(
-    `/exams?id=eq.${examId}&user_id=eq.${userId}&select=${EXAM_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  return mapExamRow(rows?.[0] || null);
-}
-
-export async function deleteExamRecord(userId, examId) {
-  await supabaseRequest(
-    `/exams?id=eq.${examId}&user_id=eq.${userId}`,
-    {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
 }
 
 export async function markTopicAsLearnedNew(userId, topic, subject, options = {}) {
