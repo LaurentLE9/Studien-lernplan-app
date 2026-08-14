@@ -64,6 +64,7 @@ Details stehen in `docs/LOOP_ENGINEERING.md`.
 - Ticket, Scope, Akzeptanzkriterien und Nicht-Ziele erfassen.
 - relevante Dateien und Abhängigkeiten identifizieren.
 - Risiken und benötigte Tests bestimmen.
+- Projekt-Hub und fachlich möglicherweise betroffene Confluence-Seiten für den späteren Abschlussabgleich identifizieren.
 
 ### IMPLEMENT
 
@@ -154,11 +155,23 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - keine Tests manipuliert wurden, um Erfolg vorzutäuschen,
 - Repair-Loops und offene Risiken dokumentiert sind,
 - finaler Diff geprüft wurde,
-- Commit und Pull Request den Jira-Key enthalten.
+- Commit und Pull Request den Jira-Key enthalten,
+- Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
 
-**Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und aktualisierter Dokumentation auf `Erledigt` gesetzt werden.
+**Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden.
 
-## 8. Commit, Push, PR und Merge
+## 8. Verbindlicher Confluence-Abgleich
+
+Für jeden Jira-Vorgang gilt vor dem Status `Erledigt`:
+
+1. Nach dem Merge den Projekt-Hub und alle in PLAN identifizierten, fachlich betroffenen Confluence-Seiten erneut prüfen.
+2. Änderungen an Architektur, Datenmodell, Arbeitsprozess, Roadmap, Sprint, Qualität oder Anleitungen unmittelbar in den jeweiligen Seiten nachziehen.
+3. Beschädigte, widersprüchliche oder nachweislich veraltete Inhalte im betroffenen Scope korrigieren; bekannte Dokumentationswidersprüche blockieren `Erledigt`.
+4. Wenn keine Confluence-Inhaltsänderung erforderlich ist, im Jira-Abschlusskommentar ausdrücklich `Confluence geprüft – keine Aktualisierung erforderlich` dokumentieren.
+5. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope; Confluence darf diese Angaben nicht widersprüchlich wiedergeben.
+6. Zugangsdaten, Secrets und Testpasswörter niemals in Confluence oder Jira-Nachweisen dokumentieren.
+
+## 9. Commit, Push, PR und Merge
 
 Nach erfolgreichen Prüfungen:
 
@@ -173,7 +186,7 @@ Nach erfolgreichen Prüfungen:
 
 Der Abschlussbericht enthält Branch, Ausgangs-HEAD, Commit, geänderte Dateien, Prüfungen, Browserergebnis, Repair-Loops, Risiken und offene Punkte.
 
-## 9. KI-/Agenten-Code in der App
+## 10. KI-/Agenten-Code in der App
 
 Neue AI-/Agentenlogik nicht weiter in `src/App.jsx` konzentrieren. Bevorzugte Zuständigkeiten:
 
