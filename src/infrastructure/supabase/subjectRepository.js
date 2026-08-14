@@ -1,15 +1,10 @@
 import { getSupabaseAnonKey } from "./client";
+import { toIsoDateTimeOrNull } from "./dateMapping";
 import { supabaseRequest } from "./restRepository";
 
 export const SUBJECT_SELECT = "id,name,color,description,goal,target_hours,semester_id,group_id,user_id,is_archived,include_in_learning_plan,priority,new_topic_every_days,next_new_topic_due_at,paused,last_studied_at,next_review_at,review_step,last_studied_minutes,study_count,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
-
-function toIsoDateTimeOrNull(value) {
-  if (value === null || value === undefined || value === "" || value === 0) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 export function mapSubjectRow(row) {
   if (!row) return null;

@@ -1,16 +1,11 @@
 import { normalizeConfidence, normalizeTopicStatus } from "@/domain/academics/topic";
 import { getSupabaseAnonKey } from "./client";
+import { toIsoDateTimeOrNull } from "./dateMapping";
 import { logSyncDebug, supabaseRequest } from "./restRepository";
 
 export const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
-
-function toIsoDateTimeOrNull(value) {
-  if (value === null || value === undefined || value === "" || value === 0) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
 
 export function mapTopicRow(row) {
   if (!row) return null;
