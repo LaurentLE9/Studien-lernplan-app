@@ -3,7 +3,6 @@
  * Handles user registration, login, logout, and planner data persistence
  */
 
-import { getSupabaseAnonKey } from "@/infrastructure/supabase/client";
 import {
   getActiveSession as getActiveSessionFromRepository,
   requestPasswordReset as requestPasswordResetFromRepository,
@@ -13,14 +12,15 @@ import {
   signUpWithEmail as signUpWithEmailFromRepository,
 } from "@/infrastructure/supabase/authRepository";
 import {
-  supabaseRequest,
-} from "@/infrastructure/supabase/restRepository";
-import {
   CONFIDENCE_LEVELS,
   normalizeConfidence,
   normalizeTopicStatus,
   TOPIC_STATUSES,
 } from "@/domain/academics/topic";
+import {
+  ACTIVITY_TYPES,
+  normalizeActivityType,
+} from "@/domain/study/activity";
 import { updateSubjectRecord } from "@/infrastructure/supabase/subjectRepository";
 import { updateTopicRecord } from "@/infrastructure/supabase/topicRepository";
 
@@ -63,21 +63,28 @@ export {
   loadExams,
   updateExamRecord,
 } from "@/infrastructure/supabase/examRepository";
-
-const SUPABASE_ANON_KEY = getSupabaseAnonKey();
+export {
+  cancelTimerSession,
+  finishTimerSession,
+  loadActiveTimerSession,
+  pauseTimerSession,
+  resumeTimerSession,
+  startTimerSession,
+} from "@/infrastructure/supabase/timerSessionRepository";
+export {
+  createStudyTimeEntry,
+  deleteStudyTimeEntry,
+  getTotalTimeForSubject,
+  getTotalTimeForTopic,
+  loadStudyTimeEntries,
+  updateStudyTimeEntry,
+} from "@/infrastructure/supabase/studyTimeRepository";
+export { ACTIVITY_TYPES, normalizeActivityType };
 
 export const REVIEW_INTERVAL_DAYS = [1, 3, 7];
 export const SUBJECT_REVIEW_INTERVAL_DAYS = [1, 2, 4, 7];
 export const MAX_REVIEW_GAP_DURING_SEMESTER = 7;
 export const MAX_TOPIC_REVIEW_GAP_DAYS = 21;
-
-export const ACTIVITY_TYPES = [
-  "cheatsheet_created",
-  "theory_read",
-  "exercises_practiced",
-  "review_done",
-  "exam_exercise_practiced",
-];
 
 export const ACTIVITY_TYPE_LABELS = {
   cheatsheet_created: "Cheatsheet erstellt",
@@ -117,38 +124,6 @@ const REVIEW_UPDATING_ACTIVITY_TYPES = new Set([
   "exam_exercise_practiced",
 ]);
 
-function normalizeLookupKey(value) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[_\s-]+/g, " ");
-}
-
-export function normalizeActivityType(value, fallback = "theory_read") {
-  const key = normalizeLookupKey(value);
-  const mapping = {
-    cheatsheet_created: "cheatsheet_created",
-    "cheatsheet created": "cheatsheet_created",
-    "cheatsheet erstellt": "cheatsheet_created",
-    theory_read: "theory_read",
-    "theory read": "theory_read",
-    "theorie gelesen": "theory_read",
-    exercises_practiced: "exercises_practiced",
-    "exercises practiced": "exercises_practiced",
-    "aufgaben geübt": "exercises_practiced",
-    "aufgaben geuebt": "exercises_practiced",
-    "wiederholung": "review_done",
-    review_done: "review_done",
-    "review done": "review_done",
-    "wiederholung gemacht": "review_done",
-    exam_exercise_practiced: "exam_exercise_practiced",
-    "exam exercise practiced": "exam_exercise_practiced",
-    "klausuraufgabe geübt": "exam_exercise_practiced",
-    "klausuraufgabe geuebt": "exam_exercise_practiced",
-  };
-  return mapping[key] || (ACTIVITY_TYPES.includes(fallback) ? fallback : "theory_read");
-}
-
 export function getActivityTypeLabel(value) {
   return ACTIVITY_TYPE_LABELS[normalizeActivityType(value)] || ACTIVITY_TYPE_LABELS.theory_read;
 }
@@ -178,12 +153,6 @@ export function formatLearningDate(value, fallbackText = "noch nicht geplant", o
     ...formatterOptions,
     hour12: false,
   });
-}
-
-function toIsoDateTimeOrNull(value) {
-  if (!isValidDateValue(value)) return null;
-  const date = new Date(value);
-  return date.toISOString();
 }
 
 function addDays(dateLike, days) {
@@ -425,341 +394,4 @@ export async function markTopicAsReviewed(userId, topic, options = {}) {
   });
 
   return updatedTopic;
-}
-
-const TIMER_SESSION_SELECT = "id,user_id,subject_id,mode,preset_minutes,started_at,paused_at,total_pause_seconds,status,created_at,updated_at";
-
-function mapTimerSession(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    subjectId: row.subject_id,
-    mode: row.mode || "stopwatch",
-    presetMinutes: Number(row.preset_minutes || 90),
-    startedAt: row.started_at,
-    pausedAt: row.paused_at,
-    totalPauseSeconds: Number(row.total_pause_seconds || 0),
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export async function loadActiveTimerSession(userId) {
-  const rows = await supabaseRequest(
-    `/timer_sessions?user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}&order=created_at.desc&limit=1`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return mapTimerSession(rows?.[0] || null);
-}
-
-async function loadTimerSessionById(userId, sessionId) {
-  const rows = await supabaseRequest(
-    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&select=${TIMER_SESSION_SELECT}&limit=1`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-  return mapTimerSession(rows?.[0] || null);
-}
-
-export async function startTimerSession(userId, subjectId, options = {}) {
-  const existing = await loadActiveTimerSession(userId);
-  if (existing) return existing;
-
-  const mode = options.mode === "pomodoro" ? "pomodoro" : "stopwatch";
-  const presetMinutes = Math.max(1, Number(options.presetMinutes || 90));
-  const nowIso = new Date().toISOString();
-
-  try {
-    const rows = await supabaseRequest(
-      `/timer_sessions?select=${TIMER_SESSION_SELECT}`,
-      {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Prefer: "return=representation",
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          subject_id: subjectId,
-          mode,
-          preset_minutes: presetMinutes,
-          started_at: nowIso,
-          paused_at: null,
-          total_pause_seconds: 0,
-          status: "running",
-        }),
-      }
-    );
-    return mapTimerSession(rows?.[0] || null);
-  } catch (error) {
-    const message = String(error?.message || "").toLowerCase();
-    if (message.includes("duplicate") || message.includes("unique")) {
-      return loadActiveTimerSession(userId);
-    }
-    throw error;
-  }
-}
-
-export async function pauseTimerSession(userId, sessionId) {
-  const nowIso = new Date().toISOString();
-  const rows = await supabaseRequest(
-    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=eq.running&select=${TIMER_SESSION_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "paused",
-        paused_at: nowIso,
-      }),
-    }
-  );
-
-  if (rows?.[0]) return mapTimerSession(rows[0]);
-  return loadTimerSessionById(userId, sessionId);
-}
-
-export async function resumeTimerSession(userId, sessionId) {
-  const existing = await loadTimerSessionById(userId, sessionId);
-  if (!existing) return null;
-  if (existing.status !== "paused") return existing;
-
-  const pausedAtMs = existing.pausedAt ? new Date(existing.pausedAt).getTime() : Date.now();
-  const additionalPause = Math.max(0, Math.floor((Date.now() - pausedAtMs) / 1000));
-  const updatedPauseSeconds = Number(existing.totalPauseSeconds || 0) + additionalPause;
-
-  const rows = await supabaseRequest(
-    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=eq.paused&select=${TIMER_SESSION_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "running",
-        paused_at: null,
-        total_pause_seconds: updatedPauseSeconds,
-      }),
-    }
-  );
-
-  if (rows?.[0]) return mapTimerSession(rows[0]);
-  return loadTimerSessionById(userId, sessionId);
-}
-
-export async function finishTimerSession(userId, sessionId) {
-  const rows = await supabaseRequest(
-    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "finished",
-        paused_at: null,
-      }),
-    }
-  );
-  return mapTimerSession(rows?.[0] || null);
-}
-
-export async function cancelTimerSession(userId, sessionId) {
-  const rows = await supabaseRequest(
-    `/timer_sessions?id=eq.${sessionId}&user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        status: "cancelled",
-        paused_at: null,
-      }),
-    }
-  );
-  return mapTimerSession(rows?.[0] || null);
-}
-
-/**
- * Study Time Entries CRUD
- * Flexible time tracking linked to subjects and optional topics
- */
-const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,task_id,duration_minutes,source,notes,activity_type,confidence,review_updated,recorded_at,created_at,updated_at";
-
-function mapStudyTimeEntry(row) {
-  if (!row) return null;
-  return {
-    id: row.id,
-    userId: row.user_id,
-    subjectId: row.subject_id,
-    topicId: row.topic_id || null,
-    taskId: row.task_id || null,
-    durationMinutes: Number(row.duration_minutes || 0),
-    source: row.source || "manual",
-    notes: row.notes || "",
-    activityType: normalizeActivityType(row.activity_type),
-    confidence: row.confidence ? normalizeConfidence(row.confidence) : null,
-    reviewUpdated: Boolean(row.review_updated),
-    recordedAt: row.recorded_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-export async function loadStudyTimeEntries(userId, options = {}) {
-  let query = `/study_time_entries?user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`;
-
-  if (options.subjectId) {
-    query += `&subject_id=eq.${options.subjectId}`;
-  }
-  if (options.topicId) {
-    query += `&topic_id=eq.${options.topicId}`;
-  }
-  if (options.taskId) {
-    query += `&task_id=eq.${encodeURIComponent(options.taskId)}`;
-  }
-
-  query += "&order=recorded_at.desc";
-
-  if (options.limit) {
-    query += `&limit=${Math.max(1, Number(options.limit))}`;
-  }
-
-  const rows = await supabaseRequest(query, {
-    method: "GET",
-    headers: { apikey: SUPABASE_ANON_KEY },
-  });
-
-  return Array.isArray(rows) ? rows.map(mapStudyTimeEntry) : [];
-}
-
-export async function createStudyTimeEntry(userId, entry) {
-  if (!entry.subjectId) {
-    throw new Error("subjectId ist erforderlich");
-  }
-  if (!entry.durationMinutes || entry.durationMinutes <= 0) {
-    throw new Error("durationMinutes muss größer als 0 sein");
-  }
-
-  const rows = await supabaseRequest(
-    `/study_time_entries?select=${STUDY_TIME_ENTRY_SELECT}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({
-        id: entry.id || crypto.randomUUID(),
-        user_id: userId,
-        subject_id: entry.subjectId,
-        topic_id: entry.topicId || null,
-        task_id: entry.taskId || null,
-        duration_minutes: Math.max(1, Math.round(Number(entry.durationMinutes))),
-        source: entry.source || "manual",
-        notes: entry.notes || "",
-        activity_type: normalizeActivityType(entry.activityType || entry.activity_type),
-        confidence: entry.confidence ? normalizeConfidence(entry.confidence) : null,
-        review_updated: Boolean(entry.reviewUpdated || entry.review_updated),
-        recorded_at: entry.recordedAt || new Date().toISOString(),
-      }),
-    }
-  );
-
-  return mapStudyTimeEntry(rows?.[0] || null);
-}
-
-export async function updateStudyTimeEntry(userId, entryId, patch) {
-  const payload = {};
-
-  if ("durationMinutes" in patch) {
-    payload.duration_minutes = Math.max(1, Math.round(Number(patch.durationMinutes)));
-  }
-  if ("notes" in patch) {
-    payload.notes = patch.notes || "";
-  }
-  if ("taskId" in patch) {
-    payload.task_id = patch.taskId || null;
-  }
-  if ("topicId" in patch) {
-    payload.topic_id = patch.topicId || null;
-  }
-  if ("source" in patch) {
-    payload.source = patch.source || "manual";
-  }
-  if ("activityType" in patch) {
-    payload.activity_type = normalizeActivityType(patch.activityType);
-  }
-  if ("confidence" in patch) {
-    payload.confidence = patch.confidence ? normalizeConfidence(patch.confidence) : null;
-  }
-  if ("reviewUpdated" in patch) {
-    payload.review_updated = Boolean(patch.reviewUpdated);
-  }
-  if ("recordedAt" in patch) {
-    payload.recorded_at = toIsoDateTimeOrNull(patch.recordedAt);
-  }
-
-  const rows = await supabaseRequest(
-    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
-
-  return mapStudyTimeEntry(rows?.[0] || null);
-}
-
-export async function deleteStudyTimeEntry(userId, entryId) {
-  await supabaseRequest(
-    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}`,
-    {
-      method: "DELETE",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-}
-
-export async function getTotalTimeForTopic(userId, topicId) {
-  const rows = await supabaseRequest(
-    `/study_time_entries?user_id=eq.${userId}&topic_id=eq.${topicId}&select=duration_minutes`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-
-  if (!Array.isArray(rows)) return 0;
-  return rows.reduce((sum, row) => sum + Number(row.duration_minutes || 0), 0);
-}
-
-export async function getTotalTimeForSubject(userId, subjectId) {
-  const rows = await supabaseRequest(
-    `/study_time_entries?user_id=eq.${userId}&subject_id=eq.${subjectId}&select=duration_minutes`,
-    {
-      method: "GET",
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
-  );
-
-  if (!Array.isArray(rows)) return 0;
-  return rows.reduce((sum, row) => sum + Number(row.duration_minutes || 0), 0);
 }
