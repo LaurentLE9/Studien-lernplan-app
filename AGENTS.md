@@ -37,6 +37,18 @@ Schema:
 - Tests: `test/KAN-XX-kurzer-name`
 - Dokumentation: `docs/KAN-XX-kurzer-name`
 
+### Jira-/GitHub-Issue-Abgleich
+
+- Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope. GitHub Issues spiegeln die repositorynahe technische Nachverfolgung.
+- Für jeden eigenständig bearbeitbaren Jira-Vorgang, der einen Aufgaben-Branch und Pull Request erfordert, ist vor der Implementierung ein GitHub Issue erforderlich. Dies gilt insbesondere für Tasks, Features, Stories, Bugs und eigenständig umgesetzte Sub-Tasks.
+- Vor dem Anlegen müssen offene und geschlossene GitHub Issues nach Jira-Key und Inhalt durchsucht werden. Ein passendes Issue wird weiterverwendet; Duplikate sind unzulässig.
+- Das GitHub Issue enthält den Jira-Key und einen Jira-Link. Der Jira-Vorgang enthält den Link zum GitHub Issue. Branch, Commits und Pull Request enthalten den Jira-Key; der Pull Request referenziert das Issue mit `Refs #<Nummer>`.
+- Automatische Schließformeln wie `Closes #<Nummer>` dürfen nicht verwendet werden, weil der Merge allein die Definition of Done noch nicht erfüllt. Das GitHub Issue wird erst nach bestätigtem Merge, vollständiger Nachprüfung, abgeschlossenem Confluence-Abgleich und Jira-Status `Erledigt` mit einem Abschlussnachweis geschlossen.
+- Dokumentierte Ausnahmen gelten für reine Epics/Sammelvorgänge ohne eigene Implementierung, reine Planungs- oder Verwaltungsarbeit ohne Repository-Änderung, Duplikate oder verworfene Vorgänge sowie Inhalte, die aus Sicherheits- oder Datenschutzgründen nicht in GitHub stehen dürfen. Die Ausnahme und ihr Grund müssen vor Arbeitsbeginn im Jira-Vorgang stehen.
+- Vor KAN-85 bereits erledigte Vorgänge erhalten nach dokumentierter Inventur nicht rückwirkend leere GitHub Issues. Bei Wiederaufnahme oder neuem Repository-Änderungsbedarf gilt die Issue-Pflicht.
+- Abweichende Jira-/GitHub-Status werden dokumentiert und ausgehend von Jira kontrolliert bereinigt. Ein GitHub Issue zu einem noch offenen Jira-Vorgang darf nicht allein wegen eines vorhandenen Merges geschlossen werden.
+- Secrets, Zugangsdaten, Testpasswörter und unnötige personenbezogene Daten gehören weder in Jira noch in GitHub Issues.
+
 ## 3. Scope-Regeln
 
 - Nur Änderungen durchführen, die für den aktiven Jira-Vorgang erforderlich sind.
@@ -155,6 +167,7 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - keine Tests manipuliert wurden, um Erfolg vorzutäuschen,
 - Repair-Loops und offene Risiken dokumentiert sind,
 - finaler Diff geprüft wurde,
+- erforderliches GitHub Issue und Jira-Vorgang gegenseitig verknüpft sind oder eine zulässige Ausnahme im Jira-Vorgang dokumentiert ist,
 - Commit und Pull Request den Jira-Key enthalten,
 - Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
 
@@ -178,11 +191,13 @@ Nach erfolgreichen Prüfungen:
 1. `git diff` und `git status` kontrollieren.
 2. nur Ticket-Scope committen.
 3. Commit-Nachricht mit Jira-Key verwenden.
-4. ausschließlich Aufgaben-Branch pushen.
-5. keinen direkten Push nach `main` durchführen.
-6. Pull Request nach dem dokumentierten Workflow erstellen/prüfen.
-7. Review-Hinweise vollständig bewerten und nötige Änderungen erneut testen.
-8. Merge nur nach den festgelegten Freigaberegeln.
+4. Pull Request mit Jira-Key, Jira-Link und `Refs #<GitHub-Issue>` vorbereiten.
+5. ausschließlich Aufgaben-Branch pushen.
+6. keinen direkten Push nach `main` durchführen.
+7. Pull Request nach dem dokumentierten Workflow erstellen/prüfen.
+8. Review-Hinweise vollständig bewerten und nötige Änderungen erneut testen.
+9. Merge nur nach den festgelegten Freigaberegeln.
+10. GitHub Issue erst nach Merge, vollständiger Definition of Done und Jira `Erledigt` mit Abschlussnachweis schließen.
 
 Der Abschlussbericht enthält Branch, Ausgangs-HEAD, Commit, geänderte Dateien, Prüfungen, Browserergebnis, Repair-Loops, Risiken und offene Punkte.
 
