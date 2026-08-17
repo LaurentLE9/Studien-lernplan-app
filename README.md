@@ -15,6 +15,7 @@ Verbindliche Repository-Dokumente:
 
 - [`AGENTS.md`](AGENTS.md) – Arbeits-, Sicherheits-, Test-, Branch- und Abschlussregeln für Entwicklungs-Agenten
 - [`docs/LOOP_ENGINEERING.md`](docs/LOOP_ENGINEERING.md) – kontrollierter Entwicklungs-Loop, Evaluator, Retry-/Stop-Regeln sowie Zielarchitektur für die spätere KI-Integration
+- [`docs/TYPESCRIPT_STRATEGY.md`](docs/TYPESCRIPT_STRATEGY.md) – verbindliche Reihenfolge, Grenzen und Qualitäts-Gates für die schrittweise TypeScript-Migration
 - [`.github/copilot-instructions.md`](.github/copilot-instructions.md) – GitHub-Copilot-spezifische Anweisungen
 
 Projektsteuerung und dauerhafte Prozessregeln:
@@ -50,6 +51,15 @@ Wichtig: Ein technisch erfolgreicher Agenten-Loop bedeutet nicht automatisch, da
 - Einmalige Testausführung: `npm test`
 - Watch-Modus: `npm run test:watch`
 - Testausführung mit Coverage: `npm run test:coverage`
+- TypeScript-Baseline prüfen: `npx tsc --noEmit`
+
+## TypeScript
+
+Das Repository verwendet TypeScript derzeit als `noEmit`-Prüfwerkzeug neben
+der bestehenden JavaScript-/JSX-Codebasis. Die Migration erfolgt bewusst
+inkrementell; eine Komplettumstellung ist nicht vorgesehen. Reihenfolge,
+Interop-Regeln und Qualitäts-Gates stehen in
+[`docs/TYPESCRIPT_STRATEGY.md`](docs/TYPESCRIPT_STRATEGY.md).
 
 ## Supabase Setup für Cloud-Sync & Authentifizierung
 
