@@ -5,10 +5,11 @@ Diese Regeln gelten für GitHub Copilot beim Arbeiten in diesem Repository.
 ## Vor jeder Änderung
 
 1. Aktiven Jira-Vorgang und Akzeptanzkriterien kennen.
-2. `AGENTS.md` lesen und als verbindliche Arbeitsregel behandeln.
-3. `README.md` lesen.
-4. Bei nicht-trivialen Änderungen `docs/LOOP_ENGINEERING.md` lesen.
-5. Relevante bestehende Tests vor der Implementierung prüfen.
+2. Vor einer Repository-Änderung das zugehörige GitHub Issue oder die in Jira dokumentierte Ausnahme prüfen; keine Duplikate erzeugen.
+3. `AGENTS.md` lesen und als verbindliche Arbeitsregel behandeln.
+4. `README.md` lesen.
+5. Bei nicht-trivialen Änderungen `docs/LOOP_ENGINEERING.md` lesen.
+6. Relevante bestehende Tests vor der Implementierung prüfen.
 
 ## Scope
 
@@ -55,8 +56,12 @@ Tests niemals löschen, überspringen oder abschwächen, nur um einen grünen St
 ## Git / GitHub
 
 - Nicht direkt auf `main` arbeiten oder pushen.
+- Jira bleibt die operative Quelle; das GitHub Issue dient der repositorynahen technischen Nachverfolgung.
+- Jira-Vorgang und GitHub Issue müssen vor der Implementierung gegenseitig verknüpft sein, sofern keine in `AGENTS.md` definierte und in Jira dokumentierte Ausnahme greift.
 - Branch und Commit müssen den Jira-Kontext eindeutig erkennen lassen.
 - Commit-Nachricht enthält den Jira-Key.
+- Der Pull Request enthält Jira-Link und `Refs #<GitHub-Issue>`, aber keine automatische Schließformel.
+- Das GitHub Issue bleibt bis zum bestätigten Merge, vollständiger Definition of Done, Confluence-Abgleich und Jira `Erledigt` offen und wird anschließend mit Abschlussnachweis geschlossen.
 - Nur ticketbezogene Änderungen committen.
 - Review-/PR-/Merge-Regeln aus `AGENTS.md` und der Confluence-Definition-of-Done beachten.
 
