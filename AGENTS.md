@@ -170,7 +170,7 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - erforderliches GitHub Issue und Jira-Vorgang gegenseitig verknüpft sind oder eine zulässige Ausnahme im Jira-Vorgang dokumentiert ist,
 - Commit und Pull Request den Jira-Key enthalten,
 - Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
-- bei aktiviertem `[COPILOT-FALLBACK]` der zentrale Copilot-Workflow eingehalten und bei fehlendem Atlassian-Zugriff eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt wurde.
+- bei aktiviertem `[COPILOT-FALLBACK]` Jira-Scope und Akzeptanzkriterien vor der ersten Codeänderung vollständig geladen und geprüft wurden; fehlender Kontext führt zwingend zu `ASK_USER`, und bei später fehlendem Atlassian-Schreibzugriff wurde eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt.
 
 **Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden.
 
@@ -196,16 +196,17 @@ Zentrale Anleitung und kopierbarer Prompt:
 
 Bei aktiviertem Fallback gilt:
 
-1. Aktiven Jira-Vorgang, GitHub Issue, `AGENTS.md`, `.github/copilot-instructions.md`, `README.md` und bei nicht-trivialen Aufgaben `docs/LOOP_ENGINEERING.md` lesen.
-2. Prüfen, ob Atlassian-Rovo-MCP-Werkzeuge für Jira und Confluence verfügbar sind.
-3. Mit Atlassian-Zugriff den Jira-Vorgang und fachlich betroffene Confluence-Seiten vor der Änderung lesen und nach der Umsetzung aktualisieren.
-4. Die vorhandene zentrale Workflow-Seite verwenden und niemals eine gleichnamige zweite Seite anlegen.
-5. Ohne Atlassian-Zugriff `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` erstellen.
-6. Die Übergabe muss Jira-Kommentar, empfohlenen Jira-Status, Akzeptanzkriterien, geänderte Dateien, Prüfungen, Branch, Commit, vollständigen Confluence-Text, Zielseite, Einfügestelle, Risiken, offene Punkte und nächsten Schritt enthalten.
-7. Dieselben Informationen zusätzlich kopierfertig in der Abschlussantwort ausgeben.
-8. Keine Secrets, Tokens, Passwörter oder Testzugangsdaten in Übergaben aufnehmen.
-9. Ein erfolgreicher Commit oder Push bedeutet nur technisch reviewbereit und setzt Jira nicht automatisch auf `Erledigt`.
-10. Ausschließlich den Aufgaben-Branch committen und pushen; nicht direkt nach `main` pushen oder mergen.
+1. Der Minimalauftrag `[COPILOT-FALLBACK] KAN-XX` ist ausreichend, sobald der Atlassian-Rovo-MCP-Server einmalig per OAuth verbunden wurde. Die Repository-Konfiguration liegt in `.vscode/mcp.json`; Secrets oder Tokens dürfen dort nicht gespeichert werden.
+2. Vor jeder Codeänderung über Atlassian Rovo MCP den aktuellen Jira-Vorgang vollständig laden: Titel, Beschreibung, Akzeptanzkriterien, Nicht-Ziele/Constraints, Status und Abhängigkeiten. Danach GitHub Issue, `AGENTS.md`, `.github/copilot-instructions.md`, `README.md` und bei nicht-trivialen Aufgaben `docs/LOOP_ENGINEERING.md` lesen.
+3. Erst implementieren, wenn Jira-Scope und Akzeptanzkriterien vollständig und widerspruchsfrei vorliegen. Fehlen Angaben, ist das Ergebnis `ASK_USER`; vor der Antwort dürfen keine Code-, Commit- oder Push-Änderungen erfolgen.
+4. Falls Atlassian Rovo MCP nicht verfügbar ist, darf nur dann gearbeitet werden, wenn der Benutzerprompt oder ein vertrauenswürdig verknüpftes GitHub Issue einen ausdrücklich aktuellen, vollständigen Jira-Snapshot mit Titel, Beschreibung, Akzeptanzkriterien, Nicht-Zielen/Constraints, Status und Abhängigkeiten enthält. Vollständigkeit und Widerspruchsfreiheit müssen vor der Implementierung geprüft werden.
+5. Fehlt dieser vollständige Offline-Snapshot, gilt zwingend `ASK_USER` und Arbeitsstopp. Eine erst nach der Implementierung erzeugte Übergabedatei ersetzt die vorherige Scope-Prüfung nicht.
+6. Mit Atlassian-Zugriff Jira und fachlich betroffene Confluence-Seiten vor der Änderung lesen und nach der Umsetzung aktualisieren. Die vorhandene zentrale Workflow-Seite verwenden und niemals eine gleichnamige zweite Seite anlegen.
+7. Sind nach der Implementierung Jira-/Confluence-Schreibzugriffe nicht verfügbar, `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` erstellen. Diese Übergabe dokumentiert ausschließlich ausstehende Aktualisierungen; sie ist keine Freigabe, ohne vorher geladene Kriterien zu programmieren.
+8. Die Übergabe muss Jira-Kommentar, empfohlenen Jira-Status, geprüfte Akzeptanzkriterien, geänderte Dateien, Prüfungen, Branch, Commit, vollständigen Confluence-Text, Zielseite, Einfügestelle, Risiken, offene Punkte und nächsten Schritt enthalten. Dieselben Informationen zusätzlich kopierfertig in der Abschlussantwort ausgeben.
+9. Keine Secrets, Tokens, Passwörter oder Testzugangsdaten in Konfiguration oder Übergaben aufnehmen.
+10. Ein erfolgreicher Commit oder Push bedeutet nur technisch reviewbereit und setzt Jira nicht automatisch auf `Erledigt`.
+11. Ausschließlich den Aufgaben-Branch committen und pushen; nicht direkt nach `main` pushen oder mergen.
 
 Der Abschlussbericht nennt Umsetzung, Dateien, Prüfungen, Akzeptanzkriterien, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt.
 
