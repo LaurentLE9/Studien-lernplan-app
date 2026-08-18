@@ -17,13 +17,15 @@ Die besonderen Fallback-Regeln gelten nur, wenn der Benutzerauftrag mit `[COPILO
 
 Dann gilt zusätzlich:
 
-1. Den vollständigen Abschnitt **„GitHub-Copilot-Fallback“** in `AGENTS.md` befolgen.
-2. Falls Atlassian Rovo MCP verfügbar ist, Jira und relevante Confluence-Seiten direkt lesen und nach der Umsetzung aktualisieren.
-3. Die bestehende Confluence-Seite **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“** verwenden und kein Duplikat erstellen:
+1. Den vollständigen Abschnitt **„GitHub-Copilot-Fallback“** in `AGENTS.md` befolgen. Nach der einmaligen Atlassian-OAuth-Verbindung genügt als Auftrag `[COPILOT-FALLBACK] KAN-XX`.
+2. Vor jeder Codeänderung über den in `.vscode/mcp.json` konfigurierten Atlassian-Rovo-MCP-Server den aktuellen Jira-Vorgang vollständig laden: Titel, Beschreibung, Akzeptanzkriterien, Nicht-Ziele/Constraints, Status und Abhängigkeiten.
+3. Nur mit vollständigem, widerspruchsfreiem Scope implementieren. Ist MCP nicht verfügbar, ist ausschließlich ein ausdrücklich aktueller, vollständiger Jira-Snapshot im Prompt oder vertrauenswürdig verknüpften GitHub Issue zulässig.
+4. Wenn weder MCP-Daten noch ein vollständiger Offline-Snapshot vorliegen, zwingend `ASK_USER` ausgeben und vor Code-, Commit- und Push-Änderungen stoppen. Eine spätere Übergabedatei ersetzt diese Vorabprüfung nicht.
+5. Mit Atlassian-Zugriff Jira und relevante Confluence-Seiten direkt lesen und nach der Umsetzung aktualisieren. Die bestehende Confluence-Seite **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“** verwenden und kein Duplikat erstellen:
    https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025
-4. Falls kein Atlassian-Zugriff verfügbar ist, `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` mit kopierfertigem Jira- und Confluence-Inhalt erstellen.
-5. In der Abschlussantwort Umsetzung, Dateien, Prüfungen, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt nennen.
-6. Am Schluss die fertigen Änderungen mit Jira-Key committen und ausschließlich den Aufgaben-Branch pushen. Nicht direkt auf `main` pushen und keinen Merge durchführen.
+6. Falls erst nach der Implementierung kein Atlassian-Schreibzugriff verfügbar ist, `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` mit kopierfertigem Jira- und Confluence-Inhalt erstellen.
+7. In der Abschlussantwort Umsetzung, Dateien, Prüfungen, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt nennen.
+8. Am Schluss die fertigen Änderungen mit Jira-Key committen und ausschließlich den Aufgaben-Branch pushen. Nicht direkt auf `main` pushen und keinen Merge durchführen.
 
 ## Scope
 
