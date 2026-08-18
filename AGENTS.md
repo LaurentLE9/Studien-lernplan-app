@@ -170,6 +170,7 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - erforderliches GitHub Issue und Jira-Vorgang gegenseitig verknüpft sind oder eine zulässige Ausnahme im Jira-Vorgang dokumentiert ist,
 - Commit und Pull Request den Jira-Key enthalten,
 - Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
+- bei aktiviertem `[COPILOT-FALLBACK]` der zentrale Copilot-Workflow eingehalten und bei fehlendem Atlassian-Zugriff eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt wurde.
 
 **Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden.
 
@@ -184,7 +185,31 @@ Für jeden Jira-Vorgang gilt vor dem Status `Erledigt`:
 5. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope; Confluence darf diese Angaben nicht widersprüchlich wiedergeben.
 6. Zugangsdaten, Secrets und Testpasswörter niemals in Confluence oder Jira-Nachweisen dokumentieren.
 
-## 9. Commit, Push, PR und Merge
+## 9. GitHub-Copilot-Fallback
+
+Der Fallback wird nur aktiviert, wenn ein Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt. Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt.
+
+Zentrale Anleitung und kopierbarer Prompt:
+
+- Confluence: **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“**
+- https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025
+
+Bei aktiviertem Fallback gilt:
+
+1. Aktiven Jira-Vorgang, GitHub Issue, `AGENTS.md`, `.github/copilot-instructions.md`, `README.md` und bei nicht-trivialen Aufgaben `docs/LOOP_ENGINEERING.md` lesen.
+2. Prüfen, ob Atlassian-Rovo-MCP-Werkzeuge für Jira und Confluence verfügbar sind.
+3. Mit Atlassian-Zugriff den Jira-Vorgang und fachlich betroffene Confluence-Seiten vor der Änderung lesen und nach der Umsetzung aktualisieren.
+4. Die vorhandene zentrale Workflow-Seite verwenden und niemals eine gleichnamige zweite Seite anlegen.
+5. Ohne Atlassian-Zugriff `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` erstellen.
+6. Die Übergabe muss Jira-Kommentar, empfohlenen Jira-Status, Akzeptanzkriterien, geänderte Dateien, Prüfungen, Branch, Commit, vollständigen Confluence-Text, Zielseite, Einfügestelle, Risiken, offene Punkte und nächsten Schritt enthalten.
+7. Dieselben Informationen zusätzlich kopierfertig in der Abschlussantwort ausgeben.
+8. Keine Secrets, Tokens, Passwörter oder Testzugangsdaten in Übergaben aufnehmen.
+9. Ein erfolgreicher Commit oder Push bedeutet nur technisch reviewbereit und setzt Jira nicht automatisch auf `Erledigt`.
+10. Ausschließlich den Aufgaben-Branch committen und pushen; nicht direkt nach `main` pushen oder mergen.
+
+Der Abschlussbericht nennt Umsetzung, Dateien, Prüfungen, Akzeptanzkriterien, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt.
+
+## 10. Commit, Push, PR und Merge
 
 Nach erfolgreichen Prüfungen:
 
@@ -201,7 +226,7 @@ Nach erfolgreichen Prüfungen:
 
 Der Abschlussbericht enthält Branch, Ausgangs-HEAD, Commit, geänderte Dateien, Prüfungen, Browserergebnis, Repair-Loops, Risiken und offene Punkte.
 
-## 10. KI-/Agenten-Code in der App
+## 11. KI-/Agenten-Code in der App
 
 Neue AI-/Agentenlogik nicht weiter in `src/App.jsx` konzentrieren. Bevorzugte Zuständigkeiten:
 
