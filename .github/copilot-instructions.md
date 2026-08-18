@@ -11,6 +11,20 @@ Diese Regeln gelten für GitHub Copilot beim Arbeiten in diesem Repository.
 5. Bei nicht-trivialen Änderungen `docs/LOOP_ENGINEERING.md` lesen.
 6. Relevante bestehende Tests vor der Implementierung prüfen.
 
+## Copilot-Fallback bei erreichtem ChatGPT-/Codex-Limit
+
+Die besonderen Fallback-Regeln gelten nur, wenn der Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt.
+
+Dann gilt zusätzlich:
+
+1. Den vollständigen Abschnitt **„GitHub-Copilot-Fallback“** in `AGENTS.md` befolgen.
+2. Falls Atlassian Rovo MCP verfügbar ist, Jira und relevante Confluence-Seiten direkt lesen und nach der Umsetzung aktualisieren.
+3. Die bestehende Confluence-Seite **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“** verwenden und kein Duplikat erstellen:
+   https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025
+4. Falls kein Atlassian-Zugriff verfügbar ist, `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` mit kopierfertigem Jira- und Confluence-Inhalt erstellen.
+5. In der Abschlussantwort Umsetzung, Dateien, Prüfungen, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt nennen.
+6. Am Schluss die fertigen Änderungen mit Jira-Key committen und ausschließlich den Aufgaben-Branch pushen. Nicht direkt auf `main` pushen und keinen Merge durchführen.
+
 ## Scope
 
 - Nur Änderungen umsetzen, die zum aktiven Jira-Vorgang gehören.
@@ -78,3 +92,4 @@ Ein erfolgreiches Copilot-Ergebnis bedeutet nur **technisch reviewbereit**, nich
 - `README.md` – Repository-Überblick
 - Jira KAN-30 / KAN-72 / KAN-73 / KAN-74
 - Confluence: „Arbeitsprozess und Definition of Done“
+- Confluence: „KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“
