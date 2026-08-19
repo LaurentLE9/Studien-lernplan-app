@@ -11,7 +11,7 @@ export async function openNavigationPage(name) {
   const sidebar = await screen.findByRole("complementary");
   const navigation = within(sidebar).getByRole("navigation");
   fireEvent.click(within(navigation).getByRole("button", { name }));
-  await screen.findByRole("heading", { name, level: 2 });
+  await screen.findAllByRole("heading", { name, level: 2 });
 }
 
 export function openEntryEditor(entryTitle, buttonIndex) {

@@ -25,6 +25,7 @@ export function mapTimerSessionRow(row) {
 }
 
 export function mapTimerSessionCreate(userId, subjectId, options = {}, nowIso = new Date().toISOString()) {
+  if (!options.semesterId) throw new Error("semesterId ist für Timer-Sitzungen erforderlich");
   return {
     user_id: userId,
     ...(options.semesterId ? { semester_id: options.semesterId } : {}),
@@ -67,7 +68,8 @@ async function loadTimerSessionById(userId, sessionId) {
 }
 
 export async function startTimerSession(userId, subjectId, options = {}) {
-  const existing = await loadActiveTimerSession(userId);
+  if (!options.semesterId) throw new Error("semesterId ist für Timer-Sitzungen erforderlich");
+  const existing = await loadActiveTimerSession(userId, { semesterId: options.semesterId });
   if (existing) return existing;
 
   try {
@@ -80,7 +82,7 @@ export async function startTimerSession(userId, subjectId, options = {}) {
   } catch (error) {
     const message = String(error?.message || "").toLowerCase();
     if (message.includes("duplicate") || message.includes("unique")) {
-      return loadActiveTimerSession(userId);
+      return loadActiveTimerSession(userId, { semesterId: options.semesterId });
     }
     throw error;
   }

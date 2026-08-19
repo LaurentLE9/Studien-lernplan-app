@@ -37,6 +37,7 @@ export function mapStudyTimeEntryRow(row) {
 }
 
 export function mapStudyTimeEntryCreate(userId, entry, nowIso = new Date().toISOString()) {
+  if (!entry.semesterId) throw new Error("semesterId ist für Lernzeiten erforderlich");
   if (!entry.subjectId) throw new Error("subjectId ist erforderlich");
   assertValidDurationMinutes(entry.durationMinutes);
 
@@ -75,6 +76,7 @@ export function mapStudyTimeEntryPatch(patch) {
 }
 
 export async function loadStudyTimeEntries(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Lernzeiten erforderlich");
   let query = `/study_time_entries?user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`;
   if (options.semesterId) query += `&semester_id=eq.${options.semesterId}`;
   if (Array.isArray(options.subjectIds) && options.subjectIds.length) {
@@ -100,9 +102,9 @@ export async function createStudyTimeEntry(userId, entry) {
 }
 
 export async function updateStudyTimeEntry(userId, entryId, patch, options = {}) {
-  const semesterFilter = options.semesterId ? `&semester_id=eq.${options.semesterId}` : "";
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Lernzeiten erforderlich");
   const rows = await supabaseRequest(
-    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}${semesterFilter}&select=${STUDY_TIME_ENTRY_SELECT}`,
+    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${STUDY_TIME_ENTRY_SELECT}`,
     {
       method: "PATCH",
       headers: { ...requestHeaders(), Prefer: "return=representation" },
@@ -113,8 +115,8 @@ export async function updateStudyTimeEntry(userId, entryId, patch, options = {})
 }
 
 export async function deleteStudyTimeEntry(userId, entryId, options = {}) {
-  const semesterFilter = options.semesterId ? `&semester_id=eq.${options.semesterId}` : "";
-  await supabaseRequest(`/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}${semesterFilter}`, {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Lernzeiten erforderlich");
+  await supabaseRequest(`/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });

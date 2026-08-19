@@ -25,6 +25,7 @@ export function mapExamRow(row) {
 }
 
 export function mapExamCreate(userId, exam) {
+  if (!exam.semesterId) throw new Error("semesterId ist für Prüfungen erforderlich");
   return {
     id: exam.id,
     user_id: userId,
@@ -54,6 +55,7 @@ export function mapExamPatch(patch) {
 }
 
 export async function loadExams(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Prüfungen erforderlich");
   let query = `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}`;
   if (options.semesterId) query += `&semester_id=eq.${options.semesterId}`;
   if (Array.isArray(options.subjectIds) && options.subjectIds.length) {
@@ -77,8 +79,8 @@ export async function createExamRecord(userId, exam) {
 }
 
 export async function updateExamRecord(userId, examId, patch, options = {}) {
-  const semesterFilter = options.semesterId ? `&semester_id=eq.${options.semesterId}` : "";
-  const rows = await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}${semesterFilter}&select=${EXAM_SELECT}`, {
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Prüfungen erforderlich");
+  const rows = await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${EXAM_SELECT}`, {
     method: "PATCH",
     headers: { ...requestHeaders(), Prefer: "return=representation" },
     body: JSON.stringify(mapExamPatch(patch)),
@@ -87,8 +89,8 @@ export async function updateExamRecord(userId, examId, patch, options = {}) {
 }
 
 export async function deleteExamRecord(userId, examId, options = {}) {
-  const semesterFilter = options.semesterId ? `&semester_id=eq.${options.semesterId}` : "";
-  await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}${semesterFilter}`, {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Prüfungen erforderlich");
+  await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });

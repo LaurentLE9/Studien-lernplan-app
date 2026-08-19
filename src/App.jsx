@@ -3927,9 +3927,9 @@ export default function StudyPlannerApp() {
   };
 
   const syncTopicsFromDatabase = async (userId) => {
-    if (!userId) return;
+    if (!userId || !selectedSemesterId) return;
     try {
-      const rows = await loadTopics(userId);
+      const rows = await loadTopics(userId, { semesterId: selectedSemesterId });
       console.log("[sync] Topics loaded from DB:", rows.length, rows);
       const mapped = rows.map((row) => ({
         id: row.id,
@@ -3964,7 +3964,7 @@ export default function StudyPlannerApp() {
   };
 
   const syncExamsFromDatabase = async (userId) => {
-    if (!userId) return;
+    if (!userId || !selectedSemesterId) return;
     const rows = await loadExams(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
     setData((prev) => ({ ...prev, exams: rows }));
   };
@@ -3989,12 +3989,12 @@ export default function StudyPlannerApp() {
   }, [session?.user?.id, semesters, data.settings?.activeSemesterId, selectedSemesterId, setData]);
 
   useEffect(() => {
-    if (!session?.user?.id || !isCloudHydrated) return;
+    if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
     syncTopicsFromDatabase(session.user.id).catch((err) => {
       console.error("Topic sync error:", err);
       setCloudSyncError(err?.message || "Themen konnten nicht aus Supabase geladen werden");
     });
-  }, [session?.user?.id, isCloudHydrated]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId]);
 
   useEffect(() => {
     // Debug: Show topic status in browser console
@@ -4009,7 +4009,7 @@ export default function StudyPlannerApp() {
   }, [data.topics, data.subjects, session?.user?.id, isCloudHydrated]);
 
   useEffect(() => {
-    if (!session?.user?.id || !isCloudHydrated) return;
+    if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
     syncExamsFromDatabase(session.user.id).catch((err) => {
       console.error("Exam sync error:", err);
       setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
@@ -4017,7 +4017,7 @@ export default function StudyPlannerApp() {
   }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
 
   useEffect(() => {
-    if (!session?.user?.id || !isCloudHydrated) return;
+    if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
 
     let cancelled = false;
 
@@ -4045,7 +4045,7 @@ export default function StudyPlannerApp() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, isCloudHydrated, activeSemesterSubjectIds]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -4815,7 +4815,7 @@ export default function StudyPlannerApp() {
       return progress;
     }
 
-    const updatedTopic = await updateTopicRecord(userId, topic.id, progress.topicPatch);
+    const updatedTopic = await updateTopicRecord(userId, topic.id, progress.topicPatch, { semesterId: selectedSemesterId });
     upsertTopicInState(updatedTopic);
     return progress;
   }
@@ -4860,7 +4860,7 @@ export default function StudyPlannerApp() {
       const updated = await updateTopicRecord(userId, topic.id, {
         nextReviewAt: tomorrowIso,
         isPausedToday: false,
-      });
+      }, { semesterId: selectedSemesterId });
       upsertTopicInState(updated);
       setCloudSyncError(null);
     } catch (err) {
@@ -4881,7 +4881,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: true });
+      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: true }, { semesterId: selectedSemesterId });
       upsertTopicInState(updated);
       setCloudSyncError(null);
     } catch (err) {
@@ -4902,7 +4902,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: false });
+      const updated = await updateTopicRecord(userId, topic.id, { isPausedToday: false }, { semesterId: selectedSemesterId });
       upsertTopicInState(updated);
       setCloudSyncError(null);
     } catch (err) {
@@ -4923,7 +4923,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      const updated = await updateTopicRecord(userId, topic.id, { completed: true });
+      const updated = await updateTopicRecord(userId, topic.id, { completed: true }, { semesterId: selectedSemesterId });
       upsertTopicInState(updated);
       setCloudSyncError(null);
     } catch (err) {
@@ -4944,7 +4944,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      const updated = await updateTopicRecord(userId, topic.id, { completed: false });
+      const updated = await updateTopicRecord(userId, topic.id, { completed: false }, { semesterId: selectedSemesterId });
       upsertTopicInState(updated);
       setCloudSyncError(null);
     } catch (err) {
@@ -4968,7 +4968,7 @@ export default function StudyPlannerApp() {
       await updateSubjectRecord(userId, subject.id, {
         ...subject,
         includeInLearningPlan: enabled,
-      });
+      }, { semesterId: subject.semesterId || selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       setCloudSyncError(null);
     } catch (err) {
@@ -4992,7 +4992,7 @@ export default function StudyPlannerApp() {
       await updateSubjectRecord(userId, subject.id, {
         ...subject,
         paused,
-      });
+      }, { semesterId: subject.semesterId || selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       setCloudSyncError(null);
     } catch (err) {
@@ -5113,15 +5113,37 @@ export default function StudyPlannerApp() {
     if (nextId !== selectedSemesterId) setSelectedSemesterId(nextId);
   }, [semesters, selectedSemesterId]);
 
-  function selectSemester(semesterId) {
-    const nextId = resolveActiveSemesterId(semesters, semesterId);
-    if (!nextId) return;
+  async function commitSemesterSwitch(nextId) {
+    const userId = session?.user?.id;
+    if (userId) {
+      try {
+        const activeTimer = await loadActiveTimerSession(userId);
+        if (activeTimer) {
+          setCloudSyncError("Semesterwechsel nicht möglich: Bitte den laufenden Timer zuerst beenden oder abbrechen.");
+          return;
+        }
+      } catch (error) {
+        console.error("Semester switch preflight failed:", error);
+        setCloudSyncError(error?.message || "Semesterwechsel konnte nicht sicher vorbereitet werden");
+        return;
+      }
+    }
+
+    setCloudSyncError(null);
     setSelectedSemesterId(nextId);
-    persistActiveSemesterId(session?.user?.id, nextId);
+    persistActiveSemesterId(userId, nextId);
     setData((prev) => ({
       ...prev,
       settings: { ...prev.settings, activeSemesterId: nextId },
     }));
+  }
+
+  function selectSemester(semesterId) {
+    const nextId = resolveActiveSemesterId(semesters, semesterId);
+    if (!nextId || nextId === selectedSemesterId) return;
+    runOrConfirmEditDiscard(() => {
+      void commitSemesterSwitch(nextId);
+    });
   }
 
   async function saveSubject(subject) {
@@ -5145,7 +5167,7 @@ export default function StudyPlannerApp() {
         semesterId: subject.semesterId || selectedSemesterId,
       };
       if (data.subjects.some((s) => s.id === payload.id)) {
-        await updateSubjectRecord(userId, payload.id, payload);
+        await updateSubjectRecord(userId, payload.id, payload, { semesterId: payload.semesterId });
       } else {
         await createSubjectRecord(userId, payload);
       }
@@ -5166,7 +5188,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      await archiveSubjectRecord(userId, id);
+      await archiveSubjectRecord(userId, id, { semesterId: selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       await syncTopicsFromDatabase(userId);
     } catch (err) {
@@ -5180,7 +5202,7 @@ export default function StudyPlannerApp() {
     if (!userId) return;
 
     try {
-      await unarchiveSubjectRecord(userId, id);
+      await unarchiveSubjectRecord(userId, id, { semesterId: selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       await syncTopicsFromDatabase(userId);
     } catch (err) {
@@ -5197,7 +5219,7 @@ export default function StudyPlannerApp() {
     if (!confirmed) return;
 
     try {
-      await deleteSubjectRecord(userId, id);
+      await deleteSubjectRecord(userId, id, { semesterId: selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       await syncTopicsFromDatabase(userId);
     } catch (err) {
@@ -5214,7 +5236,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      await archiveSubjectRecord(userId, id);
+      await archiveSubjectRecord(userId, id, { semesterId: selectedSemesterId });
       await syncSubjectsFromDatabase(userId);
       await syncTopicsFromDatabase(userId);
     } catch (err) {
@@ -6073,7 +6095,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={activeSubjects} tasks={enhancedTasks.filter(isTimerResolvableTask)} topics={activeTopics} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
+              <DashboardQuickActionsPanel subjects={activeSubjects} tasks={enhancedTasks.filter(isTimerResolvableTask)} topics={activeTopics} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} semesterId={selectedSemesterId} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Eintrag anlegen
