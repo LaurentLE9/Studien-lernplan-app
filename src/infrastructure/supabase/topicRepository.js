@@ -3,7 +3,7 @@ import { getSupabaseAnonKey } from "./client";
 import { toIsoDateTimeOrNull } from "./dateMapping";
 import { logSyncDebug, supabaseRequest } from "./restRepository";
 
-export const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
+export const TOPIC_SELECT = "id,semester_id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
@@ -11,6 +11,7 @@ export function mapTopicRow(row) {
   if (!row) return null;
   return {
     id: row.id,
+    semester_id: row.semester_id || null,
     subject_id: row.subject_id,
     user_id: row.user_id,
     title: row.title,
@@ -34,6 +35,7 @@ export function mapTopicRow(row) {
 export function mapTopicCreate(userId, topic) {
   return {
     id: topic.id,
+    semester_id: topic.semesterId || null,
     user_id: userId,
     subject_id: topic.subjectId,
     title: topic.title,

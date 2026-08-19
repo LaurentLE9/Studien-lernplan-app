@@ -81,6 +81,12 @@ import {
   normalizeDeadlineWidgetSettings,
 } from "@/domain/deadlines/deadline";
 import {
+  getSemesterSubjectIds,
+  persistActiveSemesterId,
+  readPersistedActiveSemesterId,
+  resolveActiveSemesterId,
+} from "@/domain/academics/semesterScope";
+import {
   DASHBOARD_BREAKPOINTS,
   DASHBOARD_COLS,
   DASHBOARD_PRESET_DEFAULT_LAYOUTS,
@@ -2764,7 +2770,7 @@ function SettingsBackupPage({
               <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Fächer</p>
-                  <p className="mt-1 text-lg font-bold">{data.subjects.length}</p>
+                  <p className="mt-1 text-lg font-bold">{activeSubjects.length}</p>
                 </div>
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Aufgaben</p>
@@ -2772,7 +2778,7 @@ function SettingsBackupPage({
                 </div>
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Lernzeiten</p>
-                  <p className="mt-1 text-lg font-bold">{data.studySessions.length}</p>
+                  <p className="mt-1 text-lg font-bold">{activeStudySessions.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -3738,6 +3744,34 @@ export default function StudyPlannerApp() {
   const [studyTimeEntries, setStudyTimeEntries] = useState([]);
   const [isLoadingTimeEntries, setIsLoadingTimeEntries] = useState(false);
   const [showScrollTopButton, setShowScrollTopButton] = useState(false);
+  const hasSemesterScope = semesters.length > 0 && Boolean(selectedSemesterId);
+  const activeSemesterSubjectIds = useMemo(
+    () => hasSemesterScope
+      ? getSemesterSubjectIds(data.subjects, selectedSemesterId)
+      : new Set(data.subjects.map((subject) => subject.id).filter(Boolean)),
+    [data.subjects, selectedSemesterId, hasSemesterScope],
+  );
+  const activeSubjects = useMemo(
+    () => data.subjects.filter((subject) => activeSemesterSubjectIds.has(subject.id)),
+    [data.subjects, activeSemesterSubjectIds],
+  );
+  const activeTopics = useMemo(
+    () => data.topics.filter((topic) => activeSemesterSubjectIds.has(topic.subjectId)),
+    [data.topics, activeSemesterSubjectIds],
+  );
+  const activeTasks = useMemo(
+    () => data.tasks.filter((task) => activeSemesterSubjectIds.has(task.subjectId)),
+    [data.tasks, activeSemesterSubjectIds],
+  );
+  const activeStudySessions = useMemo(
+    () => data.studySessions.filter((session) => activeSemesterSubjectIds.has(session.subjectId)),
+    [data.studySessions, activeSemesterSubjectIds],
+  );
+  const activeExams = useMemo(
+    () => data.exams.filter((exam) => !hasSemesterScope
+      || (exam.semesterId ? exam.semesterId === selectedSemesterId : activeSemesterSubjectIds.has(exam.subjectId))),
+    [data.exams, activeSemesterSubjectIds, hasSemesterScope, selectedSemesterId],
+  );
   const deadlineWidgetSettings = useMemo(
     () => normalizeDeadlineWidgetSettings(data.settings?.deadlineWidget),
     [data.settings?.deadlineWidget]
@@ -3899,6 +3933,7 @@ export default function StudyPlannerApp() {
       console.log("[sync] Topics loaded from DB:", rows.length, rows);
       const mapped = rows.map((row) => ({
         id: row.id,
+        semesterId: row.semester_id || row.semesterId || null,
         subjectId: row.subject_id,
         title: row.title,
         orderIndex: Math.max(0, Number(row.order_index || 0)),
@@ -3930,7 +3965,7 @@ export default function StudyPlannerApp() {
 
   const syncExamsFromDatabase = async (userId) => {
     if (!userId) return;
-    const rows = await loadExams(userId);
+    const rows = await loadExams(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
     setData((prev) => ({ ...prev, exams: rows }));
   };
 
@@ -3941,6 +3976,17 @@ export default function StudyPlannerApp() {
       setCloudSyncError(err?.message || "Fächer konnten nicht aus Supabase geladen werden");
     });
   }, [session?.user?.id, isCloudHydrated]);
+
+  useEffect(() => {
+    if (!session?.user?.id || !semesters.length) return;
+    const storedId = readPersistedActiveSemesterId(session.user.id) || data.settings?.activeSemesterId || "";
+    const nextId = resolveActiveSemesterId(semesters, storedId);
+    if (nextId !== selectedSemesterId) setSelectedSemesterId(nextId);
+    if (data.settings?.activeSemesterId !== nextId) {
+      setData((prev) => ({ ...prev, settings: { ...prev.settings, activeSemesterId: nextId } }));
+    }
+    persistActiveSemesterId(session.user.id, nextId);
+  }, [session?.user?.id, semesters, data.settings?.activeSemesterId, selectedSemesterId, setData]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -3968,7 +4014,7 @@ export default function StudyPlannerApp() {
       console.error("Exam sync error:", err);
       setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
     });
-  }, [session?.user?.id, isCloudHydrated]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -3978,9 +4024,9 @@ export default function StudyPlannerApp() {
     const syncStudyTimeEntries = async () => {
       try {
         setIsLoadingTimeEntries(true);
-        const rows = await loadStudyTimeEntries(session.user.id, {});
+        const rows = await loadStudyTimeEntries(session.user.id, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
         if (!cancelled) {
-          setStudyTimeEntries(rows);
+          setStudyTimeEntries(rows.filter((entry) => activeSemesterSubjectIds.has(entry.subjectId)));
         }
       } catch (error) {
         console.error("Study time entries sync error:", error);
@@ -3999,7 +4045,7 @@ export default function StudyPlannerApp() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, isCloudHydrated]);
+  }, [session?.user?.id, isCloudHydrated, activeSemesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -4171,11 +4217,11 @@ export default function StudyPlannerApp() {
   }, [data.seeds.tasks, data.seeds.sessions, setData, session?.user?.id, isCloudHydrated]);
 
   const subjectsById = useMemo(() => {
-    const allSubjects = [...data.subjects, ...archivedSubjects];
+    const allSubjects = [...activeSubjects, ...archivedSubjects.filter((subject) => activeSemesterSubjectIds.has(subject.id))];
     return Object.fromEntries(allSubjects.map((s) => [s.id, s]));
-  }, [data.subjects, archivedSubjects]);
+  }, [activeSubjects, archivedSubjects, activeSemesterSubjectIds]);
 
-  const enhancedTasks = useMemo(() => normalizeTasks(data.tasks).map((task) => {
+  const enhancedTasks = useMemo(() => normalizeTasks(activeTasks).map((task) => {
     const nextMilestone = getNextTaskMilestone(task);
     const nextRelevantDate = normalizeTaskType(task) === "project" ? null : getTaskDeadlineDate(task);
     return {
@@ -4187,7 +4233,7 @@ export default function StudyPlannerApp() {
       projectDisplayDate: normalizeTaskType(task) === "project" ? nextMilestone?.date || null : null,
       subject: subjectsById[task.subjectId],
     };
-  }), [data.tasks, subjectsById]);
+  }), [activeTasks, subjectsById]);
 
   const projectTasks = useMemo(() => enhancedTasks.filter(isProjectTask), [enhancedTasks]);
   const completedProjectTasks = useMemo(() => enhancedTasks.filter(isCompletedProjectTask), [enhancedTasks]);
@@ -4244,9 +4290,9 @@ export default function StudyPlannerApp() {
   }, [studyTimeEntries]);
 
   const studyStats = useMemo(() => {
-    const timedSessions = data.studySessions.filter((session) => session.source !== "seed");
+    const timedSessions = activeStudySessions.filter((session) => session.source !== "seed");
 
-    const total = data.studySessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const total = activeStudySessions.reduce((sum, s) => sum + s.durationMinutes, 0);
     const todayMinutes = timedSessions
       .filter((s) => isSameDay(new Date(s.createdAt), today))
       .reduce((sum, s) => sum + s.durationMinutes, 0);
@@ -4257,8 +4303,8 @@ export default function StudyPlannerApp() {
       .filter((s) => new Date(s.createdAt) >= monthStart)
       .reduce((sum, s) => sum + s.durationMinutes, 0);
 
-    const bySubject = data.subjects.map((subject) => {
-      const minutes = data.studySessions
+    const bySubject = activeSubjects.map((subject) => {
+      const minutes = activeStudySessions
         .filter((s) => s.subjectId === subject.id)
         .reduce((sum, s) => sum + s.durationMinutes, 0);
       return {
@@ -4279,11 +4325,11 @@ export default function StudyPlannerApp() {
       sessionsByTaskId.set(session.taskId, current);
     });
 
-    const byTask = data.tasks
+    const byTask = activeTasks
       .map((task) => {
         const sessions = sessionsByTaskId.get(task.id) || [];
         if (sessions.length === 0) return null;
-        const subject = data.subjects.find((s) => s.id === task.subjectId);
+        const subject = activeSubjects.find((s) => s.id === task.subjectId);
         const totalMinutes = sessions.reduce((sum, s) => sum + Number(s.durationMinutes || 0), 0);
         const sortedSessions = [...sessions].sort((a, b) => {
           const first = new Date(a.createdAt || a.recordedAt || 0).getTime();
@@ -4367,7 +4413,7 @@ export default function StudyPlannerApp() {
 
       if (!Number.isNaN(semesterStart.getTime()) && effectiveEnd.getTime() >= semesterStart.getTime()) {
         hasSemesterStart = true;
-        const semesterMinutes = data.studySessions
+        const semesterMinutes = activeStudySessions
           .filter((session) => {
             const sessionDate = new Date(session.createdAt || session.recordedAt || 0);
             if (Number.isNaN(sessionDate.getTime())) return false;
@@ -4400,7 +4446,7 @@ export default function StudyPlannerApp() {
         .slice(0, 5)
         .map((s) => ({ ...s, subject: subjectsById[s.subjectId] })),
     };
-  }, [data.studySessions, data.subjects, data.tasks, subjectsById, semesters, selectedSemesterId]);
+  }, [activeStudySessions, activeSubjects, activeTasks, subjectsById, semesters, selectedSemesterId]);
 
   const taskSummary = useMemo(() => {
     const plannerTasks = enhancedTasks.filter(isPlannerTask);
@@ -4435,20 +4481,21 @@ export default function StudyPlannerApp() {
   ), [enhancedTasks]);
 
   const trackedSessions = useMemo(() => {
-    return [...data.studySessions]
+    return [...activeStudySessions]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .map((session) => ({
         ...session,
         subject: subjectsById[session.subjectId],
       }));
-  }, [data.studySessions, subjectsById]);
+  }, [activeStudySessions, subjectsById]);
 
   const todayFocusEntries = useMemo(() => {
     return (data.todayFocus || [])
       .filter((entry) => isSameDay(new Date(entry.createdAt), today))
+      .filter((entry) => activeSemesterSubjectIds.has(entry.subjectId))
       .map((entry) => ({ ...entry, subject: subjectsById[entry.subjectId] }))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [data.todayFocus, subjectsById, today]);
+  }, [data.todayFocus, subjectsById, today, activeSemesterSubjectIds]);
 
   const learningPlanModel = useMemo(() => {
     const now = new Date();
@@ -4464,7 +4511,7 @@ export default function StudyPlannerApp() {
       return Number.isNaN(parsed) ? null : parsed;
     };
 
-    const selectedSubjects = data.subjects
+    const selectedSubjects = activeSubjects
       .filter((subject) => subject.includeInLearningPlan !== false)
       .sort((a, b) => {
         const pA = Number.isFinite(Number(a.priority)) ? Number(a.priority) : Number.MAX_SAFE_INTEGER;
@@ -4474,7 +4521,7 @@ export default function StudyPlannerApp() {
       });
 
     const selectedSubjectIds = new Set(selectedSubjects.map((subject) => subject.id));
-    const subjectMap = Object.fromEntries(data.subjects.map((subject) => [subject.id, subject]));
+    const subjectMap = Object.fromEntries(activeSubjects.map((subject) => [subject.id, subject]));
     const statusRank = { overdue: 0, due: 1, learned: 2, upcoming: 3, continue: 4, postponed: 5, archived: 6 };
 
     const subjectRows = selectedSubjects.map((subject) => {
@@ -4518,7 +4565,7 @@ export default function StudyPlannerApp() {
       return (a.name || "").localeCompare(b.name || "", "de");
     });
 
-    const topicRows = (data.topics || [])
+    const topicRows = activeTopics
       .map((topic) => {
         const subject = subjectMap[topic.subjectId] || null;
         const nextReviewTs = toTs(topic.nextReviewAt);
@@ -4643,7 +4690,7 @@ export default function StudyPlannerApp() {
       archivedTopics: archivedFiltered,
       selectedOverview,
     };
-  }, [data.subjects, data.topics, learningPlanFilter]);
+  }, [activeSubjects, activeTopics, learningPlanFilter]);
 
   const upsertTopicInState = (topicRow) => {
     if (!topicRow) return;
@@ -4687,6 +4734,7 @@ export default function StudyPlannerApp() {
     const nowIso = new Date().toISOString();
     const localTopic = {
       id: topicDraft.id || crypto.randomUUID(),
+      semesterId: selectedSemesterId,
       subjectId,
       title,
       orderIndex: nextOrderIndex,
@@ -4957,7 +5005,7 @@ export default function StudyPlannerApp() {
     const semestersById = Object.fromEntries(semesters.map((semester) => [semester.id, semester]));
     const bucket = new Map();
 
-    data.subjects.forEach((subject) => {
+    activeSubjects.forEach((subject) => {
       const key = subject.semesterId || "ungrouped";
       if (!bucket.has(key)) {
         bucket.set(key, {
@@ -4970,7 +5018,7 @@ export default function StudyPlannerApp() {
     });
 
     return [...bucket.values()].sort((a, b) => a.name.localeCompare(b.name, "de"));
-  }, [data.subjects, semesters]);
+  }, [activeSubjects, semesters]);
 
   const semesterSummaries = useMemo(() => {
     return semesters.map((semester) => {
@@ -5061,16 +5109,20 @@ export default function StudyPlannerApp() {
   }, [semesters, darkMode]);
 
   useEffect(() => {
-    if (!semesters.length) {
-      if (selectedSemesterId) setSelectedSemesterId("");
-      return;
-    }
-    if (!selectedSemesterId) {
-      setSelectedSemesterId(semesters[0].id);
-    } else if (!semesters.some((semester) => semester.id === selectedSemesterId)) {
-      setSelectedSemesterId(semesters[0].id);
-    }
-  }, [semesters]);
+    const nextId = resolveActiveSemesterId(semesters, selectedSemesterId);
+    if (nextId !== selectedSemesterId) setSelectedSemesterId(nextId);
+  }, [semesters, selectedSemesterId]);
+
+  function selectSemester(semesterId) {
+    const nextId = resolveActiveSemesterId(semesters, semesterId);
+    if (!nextId) return;
+    setSelectedSemesterId(nextId);
+    persistActiveSemesterId(session?.user?.id, nextId);
+    setData((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, activeSemesterId: nextId },
+    }));
+  }
 
   async function saveSubject(subject) {
     const userId = session?.user?.id;
@@ -5090,6 +5142,7 @@ export default function StudyPlannerApp() {
       const payload = {
         ...subject,
         id: subject.id || crypto.randomUUID(),
+        semesterId: subject.semesterId || selectedSemesterId,
       };
       if (data.subjects.some((s) => s.id === payload.id)) {
         await updateSubjectRecord(userId, payload.id, payload);
@@ -5220,6 +5273,7 @@ export default function StudyPlannerApp() {
       const savedTask = {
         ...existingTask,
         ...cleanedTask,
+        semesterId: cleanedTask.semesterId || selectedSemesterId,
         parentProjectId: isProject ? "" : (cleanedTask.parentProjectId === cleanedTask.id ? "" : cleanedTask.parentProjectId),
         createdAt: existingTask?.createdAt || cleanedTask.createdAt || formatDateInput(new Date()),
       };
@@ -5331,6 +5385,8 @@ export default function StudyPlannerApp() {
     const payload = {
       ...exam,
       id: exam.id || crypto.randomUUID(),
+      semesterId: exam.semesterId || selectedSemesterId,
+      subjectId: exam.subjectId || activeSubjects[0]?.id || null,
       status: exam.status === "written" ? "written" : "open",
       isArchived: Boolean(exam.isArchived),
     };
@@ -5359,7 +5415,7 @@ export default function StudyPlannerApp() {
 
     try {
       if (data.exams.some((entry) => entry.id === payload.id)) {
-        await updateExamRecord(userId, payload.id, payload);
+        await updateExamRecord(userId, payload.id, payload, { semesterId: selectedSemesterId });
       } else {
         await createExamRecord(userId, payload);
       }
@@ -5377,7 +5433,7 @@ export default function StudyPlannerApp() {
     if (!userId || !exam?.id) return;
 
     try {
-      await updateExamRecord(userId, exam.id, { status: "written" });
+      await updateExamRecord(userId, exam.id, { status: "written" }, { semesterId: selectedSemesterId });
       await syncExamsFromDatabase(userId);
     } catch (err) {
       console.error("Mark exam written error:", err);
@@ -5390,7 +5446,7 @@ export default function StudyPlannerApp() {
     if (!userId || !exam?.id) return;
 
     try {
-      await updateExamRecord(userId, exam.id, { isArchived: true });
+      await updateExamRecord(userId, exam.id, { isArchived: true }, { semesterId: selectedSemesterId });
       await syncExamsFromDatabase(userId);
     } catch (err) {
       console.error("Archive exam error:", err);
@@ -5403,7 +5459,7 @@ export default function StudyPlannerApp() {
     if (!userId || !exam?.id) return;
 
     try {
-      await updateExamRecord(userId, exam.id, { status: "open", isArchived: false });
+      await updateExamRecord(userId, exam.id, { status: "open", isArchived: false }, { semesterId: selectedSemesterId });
       await syncExamsFromDatabase(userId);
     } catch (err) {
       console.error("Restore exam error:", err);
@@ -5419,7 +5475,7 @@ export default function StudyPlannerApp() {
     }
 
     try {
-      await deleteExamRecord(userId, id);
+      await deleteExamRecord(userId, id, { semesterId: selectedSemesterId });
       await syncExamsFromDatabase(userId);
     } catch (err) {
       console.error("Delete exam error:", err);
@@ -5485,7 +5541,7 @@ export default function StudyPlannerApp() {
   async function saveStudySession(sessionEntry) {
     const userId = session?.user?.id;
     const recordedAt = sessionEntry.createdAt || new Date().toISOString();
-    const linkedTopic = sessionEntry.topicId ? data.topics.find((topic) => topic.id === sessionEntry.topicId) : null;
+    const linkedTopic = sessionEntry.topicId ? activeTopics.find((topic) => topic.id === sessionEntry.topicId) : null;
     const linkedTopicStatus = normalizeTopicStatus(linkedTopic?.status);
     const reviewableTopic = linkedTopic && !linkedTopic.completed && !linkedTopic.archivedAt && linkedTopicStatus !== "archived"
       ? linkedTopic
@@ -5501,7 +5557,7 @@ export default function StudyPlannerApp() {
         deadlineDates: getSubjectReviewClampDates(reviewableTopic.subjectId),
       })
       : { reviewUpdated: false };
-    const subject = sessionEntry.subjectId ? data.subjects.find((entry) => entry.id === sessionEntry.subjectId) : null;
+    const subject = sessionEntry.subjectId ? activeSubjects.find((entry) => entry.id === sessionEntry.subjectId) : null;
     const subjectProgress = subject
       ? buildSubjectStudyProgress(subject, {
         studiedAt: recordedAt,
@@ -5550,6 +5606,7 @@ export default function StudyPlannerApp() {
     if (userId && normalizedSessionEntry.subjectId && normalizedSessionEntry.durationMinutes > 0) {
       try {
         await createStudyTimeEntry(userId, {
+          semesterId: selectedSemesterId,
           subjectId: normalizedSessionEntry.subjectId,
           topicId: reviewableTopic?.id || null,
           taskId: normalizedSessionEntry.taskId || null,
@@ -5571,7 +5628,7 @@ export default function StudyPlannerApp() {
         }
         
         // Reload study time entries
-        const rows = await loadStudyTimeEntries(userId, {});
+        const rows = await loadStudyTimeEntries(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
         setStudyTimeEntries(rows);
         if (!planSyncError) {
           setCloudSyncError(null);
@@ -5611,7 +5668,7 @@ export default function StudyPlannerApp() {
 
   function getActiveLinkedTopicForTask(task) {
     if (!task?.linkedTopicId) return null;
-    const topic = data.topics.find((entry) => entry.id === task.linkedTopicId) || null;
+    const topic = activeTopics.find((entry) => entry.id === task.linkedTopicId) || null;
     if (!topic) return null;
     const status = normalizeTopicStatus(topic.status);
     if (status === "archived" || topic.completed || topic.archivedAt) return null;
@@ -6016,7 +6073,7 @@ export default function StudyPlannerApp() {
             </div>
 
             <div className="flex w-full flex-wrap items-center justify-start gap-3 xl:ml-auto xl:w-auto xl:justify-end">
-              <DashboardQuickActionsPanel subjects={data.subjects || []} tasks={enhancedTasks.filter(isTimerResolvableTask)} topics={data.topics || []} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
+              <DashboardQuickActionsPanel subjects={activeSubjects} tasks={enhancedTasks.filter(isTimerResolvableTask)} topics={activeTopics} onSaveSession={saveStudySession} onCreateTopic={createLearningTopic} darkMode={darkMode} userId={session?.user?.id || null} timerStartRequest={timerStartRequest} />
 
               <Button variant="outline" className={cn("h-11 rounded-[1rem] px-4 shadow-[var(--shadow-xs)] sm:h-12 sm:px-5", darkMode ? "border-slate-700 bg-slate-900 text-slate-50 hover:bg-slate-800" : "border-slate-200 bg-white text-slate-900 hover:bg-slate-50")} onClick={() => setTaskDialogOpen(true)}>
                 <Plus className="h-4 w-4" />Eintrag anlegen
@@ -6029,7 +6086,7 @@ export default function StudyPlannerApp() {
                 description="Erstelle eine Aufgabe, Deadline oder ein Projekt und weise den Eintrag einem Fach zu."
                 badgeText="Neu erfassen"
               >
-                <TaskForm subjects={data.subjects} topics={data.topics} projects={projectTasks} allTasks={enhancedTasks} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
+                <TaskForm subjects={activeSubjects} topics={activeTopics} projects={projectTasks} allTasks={enhancedTasks} onSave={saveTask} onDone={() => setTaskDialogOpen(false)} />
               </ResizablePanel>
 
               
@@ -6134,7 +6191,7 @@ export default function StudyPlannerApp() {
                         <SortableTile key="projects" id="projects" isEditing={isDashboardEditMode} layout={tile} onHide={hideDashboardTile}>
                           <ProjectOverviewCard
                             projects={projectTasks}
-                            topics={data.topics}
+                            topics={activeTopics}
                             allTasks={enhancedTasks}
                             darkMode={darkMode}
                             onEditProject={startTaskEdit}
@@ -6164,8 +6221,8 @@ export default function StudyPlannerApp() {
                             <CardContent className="px-3 pb-5 sm:px-5">
                               <TopicTimeStatsCard 
                                 darkMode={darkMode} 
-                                topics={data.topics} 
-                                subjects={data.subjects} 
+                                topics={activeTopics}
+                                subjects={activeSubjects}
                                 timeEntriesByTopic={timeEntriesByTopic}
                                 getSurfaceClass={getSurfaceClass}
                               />
@@ -6244,15 +6301,18 @@ export default function StudyPlannerApp() {
               ) : (
                 <div className="grid gap-4 lg:grid-cols-2">
                   {semesters.map((semester) => (
-                    <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
+                    <Card key={semester.id} className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode), selectedSemesterId === semester.id && "ring-2 ring-blue-500")}>
                       <CardHeader>
                         <div className="flex items-start justify-between gap-3">
-                          <div>
+                          <button type="button" className="text-left" onClick={() => selectSemester(semester.id)}>
                             <CardTitle>{semester.name}</CardTitle>
                             <CardDescription>
-                              {semester.start_date && semester.end_date ? `${formatDateDisplay(semester.start_date)} - ${formatDateDisplay(semester.end_date)}` : "Zeitraum noch nicht gesetzt"}
+                              {semester.startDate && semester.endDate ? `${formatDateDisplay(semester.startDate)} - ${formatDateDisplay(semester.endDate)}` : "Zeitraum noch nicht gesetzt"}
                             </CardDescription>
-                          </div>
+                            <Badge variant={selectedSemesterId === semester.id ? "default" : "outline"} className="mt-2">
+                              {selectedSemesterId === semester.id ? "Aktives Semester" : "Semester auswählen"}
+                            </Badge>
+                          </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button>
@@ -6296,7 +6356,7 @@ export default function StudyPlannerApp() {
                       <CardTitle>Fächerübersicht</CardTitle>
                       <CardDescription>Scrollt intern, damit die Seite stabil bleibt.</CardDescription>
                     </div>
-                    <Badge variant="outline">{data.subjects.length}</Badge>
+                    <Badge variant="outline">{activeSubjects.length}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="max-h-[calc(100vh-19rem)] overflow-y-auto pr-2 pt-4 lg:max-h-[calc(100vh-17rem)]">
@@ -6308,7 +6368,7 @@ export default function StudyPlannerApp() {
                         <div className="flex items-center gap-2"><h3 className="text-lg font-semibold tracking-tight">{group.name}</h3><Badge variant="outline">{group.subjects.length}</Badge></div>
                         <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                           {group.subjects.map((subject) => {
-                            const totalMinutes = data.studySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
+                            const totalMinutes = activeStudySessions.filter((s) => s.subjectId === subject.id).reduce((sum, s) => sum + s.durationMinutes, 0);
                             const openTasks = enhancedTasks.filter((t) => isPlannerTask(t) && t.subjectId === subject.id && t.status !== "erledigt").length;
                             const progressValue = subject.targetHours ? Math.min(100, Math.round((totalMinutes / 60 / subject.targetHours) * 100)) : 0;
                             const todayFocus = todayFocusEntries.find((entry) => entry.subjectId === subject.id);
@@ -6426,9 +6486,9 @@ export default function StudyPlannerApp() {
               projects={projectTasks}
               completedProjects={completedProjectTasks}
               deletedProjects={deletedProjectTasks}
-              topics={data.topics}
+              topics={activeTopics}
               allTasks={enhancedTasks}
-              subjects={data.subjects}
+              subjects={activeSubjects}
               darkMode={darkMode}
               onEditProject={startTaskEdit}
               onDeleteProject={deleteTask}
@@ -6455,7 +6515,7 @@ export default function StudyPlannerApp() {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Alle Fächer</SelectItem>
-                        {data.subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}
+                        {activeSubjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -6706,9 +6766,9 @@ export default function StudyPlannerApp() {
           {page === "exams" ? (
             <ExamsPage
               darkMode={darkMode}
-              examSubjects={[...data.subjects, ...archivedSubjects]}
+              examSubjects={[...activeSubjects, ...archivedSubjects.filter((subject) => activeSemesterSubjectIds.has(subject.id))]}
               subjectsById={subjectsById}
-              exams={data.exams}
+              exams={activeExams}
               examFilter={examFilter}
               setExamFilter={setExamFilter}
               examDialogOpen={examDialogOpen}
@@ -6775,7 +6835,7 @@ export default function StudyPlannerApp() {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"><StatCard darkMode={darkMode} title="Gesamtlernzeit" value={formatMinutes(studyStats.total)} sub="Über alle Fächer" icon={Clock3} /><StatCard darkMode={darkMode} title="Heute" value={formatMinutes(studyStats.todayMinutes)} sub="Heutige Lernzeit" icon={CalendarClock} /><StatCard darkMode={darkMode} title="Durchschnitt / Tag" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.dailyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BarChart3} /><StatCard darkMode={darkMode} title="Durchschnitt / Woche" value={formatMinutes(studyStats.hasSemesterStart ? studyStats.weeklyAverageSinceSemesterStart : 0)} sub={studyStats.hasSemesterStart ? "Seit Semesterstart" : "Semesterstart fehlt"} icon={BookOpen} /></div>
               <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Wochenübersicht</CardTitle><CardDescription>Lernstunden pro Tag in dieser Woche</CardDescription></CardHeader><CardContent className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={studyStats.weekLine} margin={{ top: 28, right: 12, left: 0, bottom: 8 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="day" /><YAxis /><Tooltip formatter={(value) => formatMinutes(Math.round(Number(value) * 60))} /><Line type="monotone" dataKey="Stunden" stroke="#6366f1" strokeWidth={3} dot={{ r: 4 }} label={(props) => <LinePointLabel {...props} darkMode={darkMode} />} /></LineChart></ResponsiveContainer></CardContent></Card><Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Verteilung der Lernzeit</CardTitle><CardDescription>Alle Fächer bleiben in der Statistik sichtbar</CardDescription></CardHeader><CardContent className="grid gap-4 xl:grid-cols-[1fr_220px]"><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={studyStats.bySubject} dataKey="minutes" nameKey="name" innerRadius={65} outerRadius={100} paddingAngle={3}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip formatter={(value) => formatMinutes(Number(value))} /></PieChart></ResponsiveContainer></div><div className="grid content-start gap-2">{studyStats.bySubject.map((subject) => <div key={subject.id} className="flex items-center justify-between rounded-xl border p-3 text-sm"><div className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} /><span>{subject.name}</span></div><span className="font-medium">{formatMinutes(subject.minutes)}</span></div>)}</div></CardContent></Card></div>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Stunden pro Fach</CardTitle><CardDescription>Direkter Vergleich der Lernzeit</CardDescription></CardHeader><CardContent className="h-[390px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={studyStats.bySubject} margin={{ top: 42, right: 12, left: 0, bottom: 24 }}><CartesianGrid strokeDasharray="3 3" opacity={0.15} /><XAxis dataKey="name" axisLine={false} tickLine={false} interval={0} height={62} tick={(props) => <SubjectAxisTick {...props} darkMode={darkMode} />} /><YAxis domain={[0, "dataMax + 4"]} /><Tooltip formatter={(_value, _name, item) => [formatMinutes(item?.payload?.minutes || 0), item?.payload?.name || "Lernzeit"]} /><Bar dataKey="hours" radius={[8, 8, 0, 0]}>{studyStats.bySubject.map((entry, index) => <Cell key={index} fill={entry.color} />)}<LabelList position="top" dataKey="hours" content={(props) => <BarTopLabel {...props} darkMode={darkMode} />} /></Bar></BarChart></ResponsiveContainer></CardContent></Card>
-              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Diese Auswertung zeigt nur Aufgaben, denen Lernzeit direkt zugewiesen wurde</CardDescription></CardHeader><CardContent><TaskTimeStatsTable darkMode={darkMode} rows={studyStats.byTask} subjects={data.subjects} formatMinutes={formatMinutes} formatDateTimeDisplay={formatDateTimeDisplay} getActivityTypeLabel={getActivityTypeLabel} /></CardContent></Card>
+              <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}><CardHeader><CardTitle>Lernzeit pro Aufgabe</CardTitle><CardDescription>Diese Auswertung zeigt nur Aufgaben, denen Lernzeit direkt zugewiesen wurde</CardDescription></CardHeader><CardContent><TaskTimeStatsTable darkMode={darkMode} rows={studyStats.byTask} subjects={activeSubjects} formatMinutes={formatMinutes} formatDateTimeDisplay={formatDateTimeDisplay} getActivityTypeLabel={getActivityTypeLabel} /></CardContent></Card>
             </div>
           ) : null}
 
@@ -6810,7 +6870,7 @@ export default function StudyPlannerApp() {
                   <Label>Fach</Label>
                   <Select value={todaySubjectDraft.subjectId} onValueChange={(value) => setTodaySubjectDraft((prev) => ({ ...prev, subjectId: value }))}>
                     <SelectTrigger><SelectValue placeholder="Fach wählen" /></SelectTrigger>
-                    <SelectContent>{data.subjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>{activeSubjects.map((subject) => <SelectItem key={subject.id} value={subject.id}>{subject.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
@@ -6880,8 +6940,8 @@ export default function StudyPlannerApp() {
             {editingTask ? (
               <TaskForm
                 key={editingTask.id}
-                subjects={data.subjects}
-                topics={data.topics}
+                subjects={activeSubjects}
+                topics={activeTopics}
                 projects={projectTasks}
                 allTasks={enhancedTasks}
                 initialValue={editingTask}
@@ -6938,8 +6998,8 @@ export default function StudyPlannerApp() {
           <ManualStudySheet
             open={!!editingSession}
             onOpenChange={(open) => !open && setEditingSession(null)}
-            subjects={data.subjects || []}
-            topics={data.topics || []}
+            subjects={activeSubjects}
+            topics={activeTopics}
             tasks={enhancedTasks.filter(isPlannerTask)}
             darkMode={darkMode}
             selectedSubjectId={editingSession?.subjectId || ""}
