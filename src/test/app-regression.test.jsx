@@ -50,8 +50,12 @@ function setupCloudMocks(plannerData, options = {}) {
   });
   cloudMocks.loadUserPlannerData.mockResolvedValue(plannerData);
   cloudMocks.saveUserPlannerData.mockResolvedValue(true);
-  cloudMocks.loadSemesters.mockResolvedValue(options.semesters || []);
-  cloudMocks.loadSubjects.mockResolvedValue(options.subjects || [{ ...testSubjectRow }]);
+  cloudMocks.loadSemesters.mockResolvedValue(options.semesters || [
+    { id: "semester-default", name: "Standardsemester", start_date: "2026-04-01", end_date: "2026-09-30" },
+  ]);
+  cloudMocks.loadSubjects.mockResolvedValue(options.subjects || [
+    { ...testSubjectRow, semester_id: "semester-default" },
+  ]);
   cloudMocks.loadTopics.mockResolvedValue([]);
   cloudMocks.loadExams.mockResolvedValue([]);
   cloudMocks.loadStudyTimeEntries.mockResolvedValue([]);
@@ -124,11 +128,53 @@ describe("Semesterwechsel", () => {
     expect(within(screen.getByText("Semester A").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
     expect(localStorage.getItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`)).toBe("semester-a");
   });
+
+  it("lädt und zeigt aktive sowie archivierte Fächer nur für das ausgewählte Semester", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp({
+      semesters: semesterOptions.semesters,
+      subjects: [
+        { ...testSubjectRow, semester_id: "semester-a" },
+        { ...testSubjectRow, id: "archived-a", name: "Archiv A", semester_id: "semester-a", is_archived: true },
+        { ...testSubjectRow, id: "subject-b", name: "Datenbanken", semester_id: "semester-b" },
+        { ...testSubjectRow, id: "archived-b", name: "Archiv B", semester_id: "semester-b", is_archived: true },
+      ],
+    });
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Archiv A")).toBeInTheDocument();
+    expect(screen.queryByText("Archiv B")).not.toBeInTheDocument();
+    expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-a" });
+
+    await openNavigationPage("Semesterkonfiguration");
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-b" });
+    });
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Archiv B")).toBeInTheDocument();
+    expect(screen.queryByText("Archiv A")).not.toBeInTheDocument();
+  });
+
+  it("bindet den Fachdialog fest an das aktive Semester", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-b");
+    await renderPlannerApp(semesterOptions);
+    await openNavigationPage("Fächer");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fach anlegen" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Fach anlegen" });
+    const semesterSelect = within(dialog).getByRole("combobox");
+    expect(semesterSelect).toHaveTextContent("Semester B");
+    expect(semesterSelect).toBeDisabled();
+  });
 });
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-07-22T12:00:00.000Z"));
+  localStorage.removeItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`);
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
   Object.values(cloudMocks).forEach((mock) => mock.mockReset());

@@ -2803,12 +2803,12 @@ function SettingsBackupPage({
   );
 }
 
-function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
+function SubjectForm({ onSave, initialValue, onDone, semesters = [], activeSemesterId = "" }) {
   const [form, setForm] = useState(() => initialValue || {
     name: "",
     color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
     description: "",
-    semesterId: semesters[0]?.id || "",
+    semesterId: activeSemesterId || semesters[0]?.id || "",
     goal: "",
     targetHours: 30,
     includeInLearningPlan: true,
@@ -2822,16 +2822,16 @@ function SubjectForm({ onSave, initialValue, onDone, semesters = [] }) {
     if (!semesters.length) return;
     setForm((prev) => ({
       ...prev,
-      semesterId: prev.semesterId || semesters[0].id,
+      semesterId: activeSemesterId || prev.semesterId || semesters[0].id,
     }));
-  }, [semesters]);
+  }, [semesters, activeSemesterId]);
 
   return (
     <div className="grid gap-4">
       <div className="grid gap-2"><Label>Fachname</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
       <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Farbe</Label><input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} className="h-10 w-full rounded-md border bg-transparent" /></div><div className="grid gap-2"><Label>Zielstunden</Label><Input type="number" value={form.targetHours} onChange={(e) => setForm({ ...form, targetHours: Number(e.target.value) || 0 })} /></div></div>
       <div className="grid gap-2"><Label>Beschreibung</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
-      <div className="grid gap-2"><Label>Semester</Label><Select value={form.semesterId} onValueChange={(value) => setForm({ ...form, semesterId: value })}><SelectTrigger><SelectValue placeholder="Semester wählen" /></SelectTrigger><SelectContent>{semesters.map((semester) => <SelectItem key={semester.id} value={semester.id}>{semester.name}</SelectItem>)}</SelectContent></Select></div>
+      <div className="grid gap-2"><Label>Semester</Label><Select value={form.semesterId} disabled={Boolean(activeSemesterId)} onValueChange={(value) => setForm({ ...form, semesterId: value })}><SelectTrigger><SelectValue placeholder="Semester wählen" /></SelectTrigger><SelectContent>{semesters.map((semester) => <SelectItem key={semester.id} value={semester.id}>{semester.name}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid gap-2"><Label>Ziel / Notiz</Label><Textarea value={form.goal} onChange={(e) => setForm({ ...form, goal: e.target.value })} /></div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="flex items-center justify-between rounded-xl border p-3"><span className="text-sm">Im Lernplan aktiv</span><Switch checked={form.includeInLearningPlan !== false} onCheckedChange={(checked) => setForm({ ...form, includeInLearningPlan: checked })} /></label>
@@ -3755,6 +3755,10 @@ export default function StudyPlannerApp() {
     () => data.subjects.filter((subject) => activeSemesterSubjectIds.has(subject.id)),
     [data.subjects, activeSemesterSubjectIds],
   );
+  const activeArchivedSubjects = useMemo(
+    () => archivedSubjects.filter((subject) => subject.semesterId === selectedSemesterId),
+    [archivedSubjects, selectedSemesterId],
+  );
   const activeTopics = useMemo(
     () => data.topics.filter((topic) => activeSemesterSubjectIds.has(topic.subjectId)),
     [data.topics, activeSemesterSubjectIds],
@@ -3877,13 +3881,26 @@ export default function StudyPlannerApp() {
     };
   }, [session?.user?.id, setData]);
 
-  const syncSubjectsFromDatabase = async (userId) => {
+  const syncSubjectsFromDatabase = async (userId, semesterId = selectedSemesterId) => {
     if (!userId) return;
 
-    const [semesterRows, subjects] = await Promise.all([
-      loadSemesters(userId),
-      loadSubjects(userId),
-    ]);
+    const semesterRows = await loadSemesters(userId);
+
+    const mappedSemesters = semesterRows.map((semester) => ({
+      id: semester.id,
+      name: semester.name,
+      startDate: semester.start_date || "",
+      endDate: semester.end_date || "",
+      createdAt: semester.created_at,
+    }));
+    const requestedSemesterId = semesterId
+      || readPersistedActiveSemesterId(userId)
+      || data.settings?.activeSemesterId
+      || "";
+    const scopedSemesterId = resolveActiveSemesterId(mappedSemesters, requestedSemesterId);
+    const subjects = scopedSemesterId
+      ? await loadSubjects(userId, { semesterId: scopedSemesterId })
+      : [];
 
     const semestersById = Object.fromEntries(semesterRows.map((semester) => [semester.id, semester]));
     const mapRowToSubject = (row) => ({
@@ -3912,14 +3929,6 @@ export default function StudyPlannerApp() {
 
     const active = subjects.filter((row) => !row.is_archived).map(mapRowToSubject);
     const archived = subjects.filter((row) => row.is_archived).map(mapRowToSubject);
-
-    const mappedSemesters = semesterRows.map((semester) => ({
-      id: semester.id,
-      name: semester.name,
-      startDate: semester.start_date || "",
-      endDate: semester.end_date || "",
-      createdAt: semester.created_at,
-    }));
 
     setSemesters(mappedSemesters);
     setArchivedSubjects(archived);
@@ -3975,7 +3984,7 @@ export default function StudyPlannerApp() {
       console.error("Subject sync error:", err);
       setCloudSyncError(err?.message || "Fächer konnten nicht aus Supabase geladen werden");
     });
-  }, [session?.user?.id, isCloudHydrated]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId]);
 
   useEffect(() => {
     if (!session?.user?.id || !semesters.length) return;
@@ -4217,9 +4226,9 @@ export default function StudyPlannerApp() {
   }, [data.seeds.tasks, data.seeds.sessions, setData, session?.user?.id, isCloudHydrated]);
 
   const subjectsById = useMemo(() => {
-    const allSubjects = [...activeSubjects, ...archivedSubjects.filter((subject) => activeSemesterSubjectIds.has(subject.id))];
+    const allSubjects = [...activeSubjects, ...activeArchivedSubjects];
     return Object.fromEntries(allSubjects.map((s) => [s.id, s]));
-  }, [activeSubjects, archivedSubjects, activeSemesterSubjectIds]);
+  }, [activeSubjects, activeArchivedSubjects]);
 
   const enhancedTasks = useMemo(() => normalizeTasks(activeTasks).map((task) => {
     const nextMilestone = getNextTaskMilestone(task);
@@ -5148,13 +5157,14 @@ export default function StudyPlannerApp() {
 
   async function saveSubject(subject) {
     const userId = session?.user?.id;
+    const scopedSubject = { ...subject, semesterId: selectedSemesterId };
 
     if (!userId) {
       setData((prev) => ({
         ...prev,
-        subjects: prev.subjects.some((s) => s.id === subject.id)
-          ? prev.subjects.map((s) => (s.id === subject.id ? subject : s))
-          : [...prev.subjects, { ...subject, id: crypto.randomUUID() }],
+        subjects: prev.subjects.some((s) => s.id === scopedSubject.id)
+          ? prev.subjects.map((s) => (s.id === scopedSubject.id ? scopedSubject : s))
+          : [...prev.subjects, { ...scopedSubject, id: crypto.randomUUID() }],
       }));
       setEditingSubject(null);
       return;
@@ -5162,16 +5172,15 @@ export default function StudyPlannerApp() {
 
     try {
       const payload = {
-        ...subject,
-        id: subject.id || crypto.randomUUID(),
-        semesterId: subject.semesterId || selectedSemesterId,
+        ...scopedSubject,
+        id: scopedSubject.id || crypto.randomUUID(),
       };
       if (data.subjects.some((s) => s.id === payload.id)) {
         await updateSubjectRecord(userId, payload.id, payload, { semesterId: payload.semesterId });
       } else {
         await createSubjectRecord(userId, payload);
       }
-      await syncSubjectsFromDatabase(userId);
+      await syncSubjectsFromDatabase(userId, selectedSemesterId);
       await syncTopicsFromDatabase(userId);
       setEditingSubject(null);
     } catch (err) {
@@ -6368,7 +6377,7 @@ export default function StudyPlannerApp() {
                     description="Erstelle ein neues Fach für dein Lernsystem."
                     badgeText="Neu erfassen"
                   >
-                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} semesters={semesters} />
+                    <SubjectForm onSave={saveSubject} onDone={() => setSubjectDialogOpen(false)} semesters={semesters} activeSemesterId={selectedSemesterId} />
                   </ResizablePanel>
               </div>
               <Card className={cn("rounded-2xl border shadow-sm", getSurfaceClass(darkMode))}>
@@ -6455,7 +6464,7 @@ export default function StudyPlannerApp() {
                           <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                               <h3 className="text-lg font-semibold tracking-tight">Archiv</h3>
-                              <Badge variant="outline">{archivedSubjects.length}</Badge>
+                              <Badge variant="outline">{activeArchivedSubjects.length}</Badge>
                             </div>
                             <ChevronDown className={cn("h-5 w-5 transition-transform", archiveCollapsed && "-rotate-90")} />
                           </div>
@@ -6464,10 +6473,10 @@ export default function StudyPlannerApp() {
                       
                       {!archiveCollapsed && (
                         <CardContent className="grid gap-3 pt-0">
-                          {archivedSubjects.length === 0 ? (
+                          {activeArchivedSubjects.length === 0 ? (
                             <p className="text-sm text-muted-foreground">Keine archivierten Fächer vorhanden.</p>
                           ) : (
-                            archivedSubjects.map((subject) => (
+                            activeArchivedSubjects.map((subject) => (
                               <div key={subject.id} className="flex items-center justify-between rounded-xl border px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: subject.color }} />
@@ -6788,7 +6797,7 @@ export default function StudyPlannerApp() {
           {page === "exams" ? (
             <ExamsPage
               darkMode={darkMode}
-              examSubjects={[...activeSubjects, ...archivedSubjects.filter((subject) => activeSemesterSubjectIds.has(subject.id))]}
+              examSubjects={[...activeSubjects, ...activeArchivedSubjects]}
               subjectsById={subjectsById}
               exams={activeExams}
               examFilter={examFilter}
@@ -6931,7 +6940,8 @@ export default function StudyPlannerApp() {
                 initialValue={editingSubject} 
                 onSave={saveSubject} 
                 onDone={() => setEditingSubject(null)} 
-                semesters={semesters} 
+                semesters={semesters}
+                activeSemesterId={selectedSemesterId}
               />
             ) : null}
           </ResizablePanel>

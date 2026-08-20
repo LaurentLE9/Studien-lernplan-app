@@ -178,6 +178,18 @@ describe("Akademische Repository-Mappings", () => {
 });
 
 describe("Akademische Repository-Grenzen", () => {
+  it("begrenzt Fach-Lesen zwingend auf das aktive Semester", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const repository = await import("@/infrastructure/supabase/subjectRepository");
+
+    await expect(repository.loadSubjects(TEST_USER_ID)).rejects.toThrow("semesterId ist zum Laden von Fächern erforderlich");
+    await repository.loadSubjects(TEST_USER_ID, { semesterId: "semester-1" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain(`user_id=eq.${TEST_USER_ID}&semester_id=eq.semester-1`);
+  });
+
   it("begrenzt Themen-Lesen und -Ändern auf das aktive Semester", async () => {
     const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
     vi.stubGlobal("fetch", fetchMock);

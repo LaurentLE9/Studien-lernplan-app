@@ -80,8 +80,9 @@ export function mapSubjectPatch(patch) {
   return row;
 }
 
-export async function loadSubjects(userId) {
-  const rows = await supabaseRequest(`/subjects?user_id=eq.${userId}&select=${SUBJECT_SELECT}&order=created_at.asc`, {
+export async function loadSubjects(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Fächern erforderlich");
+  const rows = await supabaseRequest(`/subjects?user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${SUBJECT_SELECT}&order=created_at.asc`, {
     method: "GET",
     headers: requestHeaders(),
   });
