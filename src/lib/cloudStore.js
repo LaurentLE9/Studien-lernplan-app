@@ -352,7 +352,7 @@ export async function isAuthenticated() {
 export async function updateSubjectStudyProgress(userId, subject, options = {}) {
   const patch = buildSubjectStudyProgress(subject, options);
   if (!patch) return null;
-  return updateSubjectRecord(userId, subject.id, patch);
+  return updateSubjectRecord(userId, subject.id, patch, { semesterId: subject.semesterId });
 }
 
 export async function markTopicAsLearnedNew(userId, topic, subject, options = {}) {
@@ -369,11 +369,11 @@ export async function markTopicAsLearnedNew(userId, topic, subject, options = {}
       nextReviewAt,
       isPausedToday: false,
       completed: false,
-    }),
+    }, { semesterId: topic.semesterId || subject.semesterId }),
     updateSubjectRecord(userId, subject.id, {
       ...subject,
       nextNewTopicDueAt,
-    }),
+    }, { semesterId: subject.semesterId }),
   ]);
 
   return { updatedTopic, nextNewTopicDueAt };
@@ -391,7 +391,7 @@ export async function markTopicAsReviewed(userId, topic, options = {}) {
     lastStudiedAt: now.toISOString(),
     nextReviewAt,
     isPausedToday: false,
-  });
+  }, { semesterId: topic.semesterId });
 
   return updatedTopic;
 }

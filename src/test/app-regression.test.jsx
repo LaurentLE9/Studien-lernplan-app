@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi } from "vitest";
 import App from "@/App";
+import { ACTIVE_SEMESTER_STORAGE_KEY } from "@/domain/academics/semesterScope";
 import {
   createPlannerFixture,
   TEST_USER_ID,
@@ -41,7 +42,7 @@ vi.mock("@/components/DashboardQuickActions", () => ({
   default: () => null,
 }));
 
-function setupCloudMocks(plannerData) {
+function setupCloudMocks(plannerData, options = {}) {
   cloudMocks.getActiveSession.mockResolvedValue({
     access_token: "test-access-token",
     expires_at: 4102444800,
@@ -49,25 +50,131 @@ function setupCloudMocks(plannerData) {
   });
   cloudMocks.loadUserPlannerData.mockResolvedValue(plannerData);
   cloudMocks.saveUserPlannerData.mockResolvedValue(true);
-  cloudMocks.loadSemesters.mockResolvedValue([]);
-  cloudMocks.loadSubjects.mockResolvedValue([{ ...testSubjectRow }]);
+  cloudMocks.loadSemesters.mockResolvedValue(options.semesters || [
+    { id: "semester-default", name: "Standardsemester", start_date: "2026-04-01", end_date: "2026-09-30" },
+  ]);
+  cloudMocks.loadSubjects.mockResolvedValue(options.subjects || [
+    { ...testSubjectRow, semester_id: "semester-default" },
+  ]);
   cloudMocks.loadTopics.mockResolvedValue([]);
   cloudMocks.loadExams.mockResolvedValue([]);
   cloudMocks.loadStudyTimeEntries.mockResolvedValue([]);
   cloudMocks.loadActiveTimerSession.mockResolvedValue(null);
 }
 
-async function renderPlannerApp() {
+async function renderPlannerApp(options = {}) {
   const plannerData = createPlannerFixture();
   localStorage.setItem(PLANNER_STORAGE_KEY, JSON.stringify(plannerData));
-  setupCloudMocks(plannerData);
+  setupCloudMocks(plannerData, options);
   render(<App />);
   await screen.findAllByRole("button", { name: "Aufgaben" });
 }
 
+describe("Semesterwechsel", () => {
+  const semesterOptions = {
+    semesters: [
+      { id: "semester-a", name: "Semester A", start_date: "2026-04-01", end_date: "2026-09-30" },
+      { id: "semester-b", name: "Semester B", start_date: "2026-10-01", end_date: "2027-03-31" },
+    ],
+    subjects: [
+      { ...testSubjectRow, semester_id: "semester-a" },
+      { ...testSubjectRow, id: "subject-b", name: "Datenbanken", semester_id: "semester-b" },
+    ],
+  };
+
+  it("behält das aktive Semester bei, solange ein Timer läuft", async () => {
+    await renderPlannerApp(semesterOptions);
+    cloudMocks.loadActiveTimerSession.mockResolvedValue({
+      id: "timer-a",
+      semesterId: "semester-a",
+      subjectId: testSubjectRow.id,
+      status: "running",
+    });
+
+    await openNavigationPage("Semesterkonfiguration");
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+
+    expect(await screen.findByText("Semesterwechsel nicht möglich: Bitte den laufenden Timer zuerst beenden oder abbrechen.")).toBeInTheDocument();
+    expect(within(screen.getByText("Semester A").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
+    expect(within(screen.getByText("Semester B").closest('[data-slot="card"]')).getByText("Semester auswählen")).toBeInTheDocument();
+  });
+
+  it("wechselt A nach B und zurück und persistiert erst nach erfolgreicher Vorprüfung", async () => {
+    await renderPlannerApp(semesterOptions);
+    await openNavigationPage("Semesterkonfiguration");
+
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+    await waitFor(() => {
+      expect(within(screen.getByText("Semester B").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
+    });
+    expect(cloudMocks.loadTopics.mock.calls.some(([, options]) => options?.semesterId === "semester-b")).toBe(true);
+    expect(localStorage.getItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`)).toBe("semester-b");
+
+    fireEvent.click(screen.getByRole("button", { name: /Semester A/ }));
+    await waitFor(() => {
+      expect(within(screen.getByText("Semester A").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
+    });
+    expect(localStorage.getItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`)).toBe("semester-a");
+  });
+
+  it("persistiert bei fehlgeschlagener Vorprüfung keinen teilweise gewechselten Zustand", async () => {
+    await renderPlannerApp(semesterOptions);
+    cloudMocks.loadActiveTimerSession.mockRejectedValue(new Error("Timerstatus nicht erreichbar"));
+    await openNavigationPage("Semesterkonfiguration");
+
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+
+    expect(await screen.findByText("Timerstatus nicht erreichbar")).toBeInTheDocument();
+    expect(within(screen.getByText("Semester A").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
+    expect(localStorage.getItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`)).toBe("semester-a");
+  });
+
+  it("lädt und zeigt aktive sowie archivierte Fächer nur für das ausgewählte Semester", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp({
+      semesters: semesterOptions.semesters,
+      subjects: [
+        { ...testSubjectRow, semester_id: "semester-a" },
+        { ...testSubjectRow, id: "archived-a", name: "Archiv A", semester_id: "semester-a", is_archived: true },
+        { ...testSubjectRow, id: "subject-b", name: "Datenbanken", semester_id: "semester-b" },
+        { ...testSubjectRow, id: "archived-b", name: "Archiv B", semester_id: "semester-b", is_archived: true },
+      ],
+    });
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Archiv A")).toBeInTheDocument();
+    expect(screen.queryByText("Archiv B")).not.toBeInTheDocument();
+    expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-a" });
+
+    await openNavigationPage("Semesterkonfiguration");
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-b" });
+    });
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Archiv B")).toBeInTheDocument();
+    expect(screen.queryByText("Archiv A")).not.toBeInTheDocument();
+  });
+
+  it("bindet den Fachdialog fest an das aktive Semester", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-b");
+    await renderPlannerApp(semesterOptions);
+    await openNavigationPage("Fächer");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fach anlegen" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Fach anlegen" });
+    const semesterSelect = within(dialog).getByRole("combobox");
+    expect(semesterSelect).toHaveTextContent("Semester B");
+    expect(semesterSelect).toBeDisabled();
+  });
+});
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-07-22T12:00:00.000Z"));
+  localStorage.removeItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`);
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "info").mockImplementation(() => {});
   Object.values(cloudMocks).forEach((mock) => mock.mockReset());

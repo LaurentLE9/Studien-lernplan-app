@@ -35,6 +35,7 @@ export function mapSubjectRow(row) {
 }
 
 export function mapSubjectCreate(userId, subject) {
+  if (!subject.semesterId && !subject.groupId) throw new Error("semesterId ist für Fächer erforderlich");
   return {
     id: subject.id,
     user_id: userId,
@@ -79,8 +80,9 @@ export function mapSubjectPatch(patch) {
   return row;
 }
 
-export async function loadSubjects(userId) {
-  const rows = await supabaseRequest(`/subjects?user_id=eq.${userId}&select=${SUBJECT_SELECT}&order=created_at.asc`, {
+export async function loadSubjects(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Fächern erforderlich");
+  const rows = await supabaseRequest(`/subjects?user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${SUBJECT_SELECT}&order=created_at.asc`, {
     method: "GET",
     headers: requestHeaders(),
   });
@@ -96,8 +98,9 @@ export async function createSubjectRecord(userId, subject) {
   return mapSubjectRow(rows?.[0]);
 }
 
-export async function updateSubjectRecord(userId, subjectId, patch) {
-  const rows = await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`, {
+export async function updateSubjectRecord(userId, subjectId, patch, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Fächern erforderlich");
+  const rows = await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${SUBJECT_SELECT}`, {
     method: "PATCH",
     headers: { ...requestHeaders(), Prefer: "return=representation" },
     body: JSON.stringify(mapSubjectPatch(patch)),
@@ -105,8 +108,9 @@ export async function updateSubjectRecord(userId, subjectId, patch) {
   return mapSubjectRow(rows?.[0]);
 }
 
-async function setSubjectArchived(userId, subjectId, isArchived) {
-  const rows = await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}&select=${SUBJECT_SELECT}`, {
+async function setSubjectArchived(userId, subjectId, isArchived, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Archivieren von Fächern erforderlich");
+  const rows = await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${SUBJECT_SELECT}`, {
     method: "PATCH",
     headers: { ...requestHeaders(), Prefer: "return=representation" },
     body: JSON.stringify({ is_archived: isArchived }),
@@ -114,16 +118,17 @@ async function setSubjectArchived(userId, subjectId, isArchived) {
   return mapSubjectRow(rows?.[0]);
 }
 
-export function archiveSubjectRecord(userId, subjectId) {
-  return setSubjectArchived(userId, subjectId, true);
+export function archiveSubjectRecord(userId, subjectId, options = {}) {
+  return setSubjectArchived(userId, subjectId, true, options);
 }
 
-export function unarchiveSubjectRecord(userId, subjectId) {
-  return setSubjectArchived(userId, subjectId, false);
+export function unarchiveSubjectRecord(userId, subjectId, options = {}) {
+  return setSubjectArchived(userId, subjectId, false, options);
 }
 
-export async function deleteSubjectRecord(userId, subjectId) {
-  await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}`, {
+export async function deleteSubjectRecord(userId, subjectId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Fächern erforderlich");
+  await supabaseRequest(`/subjects?id=eq.${subjectId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });

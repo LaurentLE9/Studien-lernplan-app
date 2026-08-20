@@ -2,7 +2,7 @@ import { clampPostgresInteger, POSTGRES_INTEGER_MAX } from "@/domain/study/integ
 import { getSupabaseAnonKey } from "./client";
 import { supabaseRequest } from "./restRepository";
 
-export const TIMER_SESSION_SELECT = "id,user_id,subject_id,mode,preset_minutes,started_at,paused_at,total_pause_seconds,status,created_at,updated_at";
+export const TIMER_SESSION_SELECT = "id,user_id,semester_id,subject_id,mode,preset_minutes,started_at,paused_at,total_pause_seconds,status,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
@@ -11,6 +11,7 @@ export function mapTimerSessionRow(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    ...(row.semester_id ? { semesterId: row.semester_id } : {}),
     subjectId: row.subject_id,
     mode: row.mode || "stopwatch",
     presetMinutes: clampPostgresInteger(row.preset_minutes, { minimum: 1, fallback: 90 }),
@@ -24,8 +25,10 @@ export function mapTimerSessionRow(row) {
 }
 
 export function mapTimerSessionCreate(userId, subjectId, options = {}, nowIso = new Date().toISOString()) {
+  if (!options.semesterId) throw new Error("semesterId ist für Timer-Sitzungen erforderlich");
   return {
     user_id: userId,
+    ...(options.semesterId ? { semester_id: options.semesterId } : {}),
     subject_id: subjectId,
     mode: options.mode === "pomodoro" ? "pomodoro" : "stopwatch",
     preset_minutes: clampPostgresInteger(options.presetMinutes, { minimum: 1, fallback: 90 }),
@@ -45,9 +48,12 @@ export function calculateAccumulatedPauseSeconds(session, nowMs = Date.now()) {
   return Math.min(POSTGRES_INTEGER_MAX, persisted + additionalPause);
 }
 
-export async function loadActiveTimerSession(userId) {
+export async function loadActiveTimerSession(userId, options = {}) {
+  let query = `/timer_sessions?user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}`;
+  if (options.semesterId) query += `&semester_id=eq.${options.semesterId}`;
+  query += "&order=created_at.desc&limit=1";
   const rows = await supabaseRequest(
-    `/timer_sessions?user_id=eq.${userId}&status=in.(running,paused)&select=${TIMER_SESSION_SELECT}&order=created_at.desc&limit=1`,
+    query,
     { method: "GET", headers: requestHeaders() },
   );
   return mapTimerSessionRow(rows?.[0] || null);
@@ -62,7 +68,8 @@ async function loadTimerSessionById(userId, sessionId) {
 }
 
 export async function startTimerSession(userId, subjectId, options = {}) {
-  const existing = await loadActiveTimerSession(userId);
+  if (!options.semesterId) throw new Error("semesterId ist für Timer-Sitzungen erforderlich");
+  const existing = await loadActiveTimerSession(userId, { semesterId: options.semesterId });
   if (existing) return existing;
 
   try {
@@ -75,7 +82,7 @@ export async function startTimerSession(userId, subjectId, options = {}) {
   } catch (error) {
     const message = String(error?.message || "").toLowerCase();
     if (message.includes("duplicate") || message.includes("unique")) {
-      return loadActiveTimerSession(userId);
+      return loadActiveTimerSession(userId, { semesterId: options.semesterId });
     }
     throw error;
   }

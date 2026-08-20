@@ -54,6 +54,7 @@ export default function DashboardQuickActions({
   onCreateTopic,
   darkMode,
   userId,
+  semesterId,
   timerStartRequest,
 }) {
   const storedTimer = useMemo(() => {
@@ -211,7 +212,7 @@ export default function DashboardQuickActions({
     const subjectId = timerStartRequest.subjectId;
     const taskId = timerStartRequest.taskId;
 
-    if (!userId || !subjectId || !taskId || activeTimer) return;
+    if (!userId || !semesterId || !subjectId || !taskId || activeTimer) return;
 
     let cancelled = false;
 
@@ -224,6 +225,7 @@ export default function DashboardQuickActions({
       try {
         setTimerBusy(true);
         const created = await startTimerSession(userId, subjectId, {
+          semesterId,
           mode: timerMode,
           presetMinutes: timerPreset,
           taskId,
@@ -244,10 +246,10 @@ export default function DashboardQuickActions({
     return () => {
       cancelled = true;
     };
-  }, [timerStartRequest, userId, activeTimer, timerMode, timerPreset]);
+  }, [timerStartRequest, userId, semesterId, activeTimer, timerMode, timerPreset]);
 
   useEffect(() => {
-    if (!userId) {
+    if (!userId || !semesterId) {
       setActiveTimer(null);
       return;
     }
@@ -255,7 +257,7 @@ export default function DashboardQuickActions({
     let cancelled = false;
     const restoreActiveTimer = async () => {
       try {
-        const existing = await loadActiveTimerSession(userId);
+        const existing = await loadActiveTimerSession(userId, { semesterId });
         if (cancelled) return;
         if (existing) {
           setActiveTimer(existing);
@@ -281,7 +283,7 @@ export default function DashboardQuickActions({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, semesterId]);
 
   function getElapsedSeconds(session, nowMs = Date.now()) {
     if (!session?.startedAt) return 0;
@@ -375,11 +377,12 @@ export default function DashboardQuickActions({
     setTimerTaskSelectMode(false);
     setTimerOpen(false);
 
-    if (!userId || !timerSubjectId || activeTimer) return;
+    if (!userId || !semesterId || !timerSubjectId || activeTimer) return;
 
     try {
       setTimerBusy(true);
       const created = await startTimerSession(userId, timerSubjectId, {
+        semesterId,
         mode: timerMode,
         presetMinutes: timerPreset,
         taskId: taskId || undefined,
@@ -400,11 +403,12 @@ export default function DashboardQuickActions({
     setTimerTaskSelectMode(false);
     setTimerOpen(false);
 
-    if (!userId || !timerSubjectId || activeTimer) return;
+    if (!userId || !semesterId || !timerSubjectId || activeTimer) return;
 
     try {
       setTimerBusy(true);
       const created = await startTimerSession(userId, timerSubjectId, {
+        semesterId,
         mode: timerMode,
         presetMinutes: timerPreset,
       });

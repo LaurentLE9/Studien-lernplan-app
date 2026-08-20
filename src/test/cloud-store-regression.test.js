@@ -228,10 +228,11 @@ describe("Supabase-Planner-Transformationen", () => {
     vi.stubGlobal("fetch", fetchMock);
     const { loadSubjects } = await importCloudStore();
 
-    await expect(loadSubjects(TEST_USER_ID)).resolves.toEqual(subjectRows);
+    await expect(loadSubjects(TEST_USER_ID, { semesterId: "semester-1" })).resolves.toEqual(subjectRows);
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toContain("/rest/v1/subjects?");
+    expect(fetchMock.mock.calls[0][0]).toContain("semester_id=eq.semester-1");
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer expired-cloud-test-token");
     expect(fetchMock.mock.calls[1][0]).toBe("https://kan35.supabase.test/auth/v1/token?grant_type=refresh_token");
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({

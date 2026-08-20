@@ -5,7 +5,7 @@ import { getSupabaseAnonKey } from "./client";
 import { toIsoDateTimeOrNull } from "./dateMapping";
 import { supabaseRequest } from "./restRepository";
 
-export const STUDY_TIME_ENTRY_SELECT = "id,user_id,subject_id,topic_id,task_id,duration_minutes,source,notes,activity_type,confidence,review_updated,recorded_at,created_at,updated_at";
+export const STUDY_TIME_ENTRY_SELECT = "id,user_id,semester_id,subject_id,topic_id,task_id,duration_minutes,source,notes,activity_type,confidence,review_updated,recorded_at,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
@@ -20,6 +20,7 @@ export function mapStudyTimeEntryRow(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    ...(row.semester_id ? { semesterId: row.semester_id } : {}),
     subjectId: row.subject_id,
     topicId: row.topic_id || null,
     taskId: row.task_id || null,
@@ -36,6 +37,7 @@ export function mapStudyTimeEntryRow(row) {
 }
 
 export function mapStudyTimeEntryCreate(userId, entry, nowIso = new Date().toISOString()) {
+  if (!entry.semesterId) throw new Error("semesterId ist für Lernzeiten erforderlich");
   if (!entry.subjectId) throw new Error("subjectId ist erforderlich");
   assertValidDurationMinutes(entry.durationMinutes);
 
@@ -52,6 +54,7 @@ export function mapStudyTimeEntryCreate(userId, entry, nowIso = new Date().toISO
     confidence: entry.confidence ? normalizeConfidence(entry.confidence) : null,
     review_updated: Boolean(entry.reviewUpdated || entry.review_updated),
     recorded_at: toIsoDateTimeOrNull(entry.recordedAt) || nowIso,
+    ...(entry.semesterId ? { semester_id: entry.semesterId } : {}),
   };
 }
 
@@ -73,7 +76,12 @@ export function mapStudyTimeEntryPatch(patch) {
 }
 
 export async function loadStudyTimeEntries(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Lernzeiten erforderlich");
   let query = `/study_time_entries?user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`;
+  if (options.semesterId) query += `&semester_id=eq.${options.semesterId}`;
+  if (Array.isArray(options.subjectIds) && options.subjectIds.length) {
+    query += `&subject_id=in.(${options.subjectIds.join(",")})`;
+  }
   if (options.subjectId) query += `&subject_id=eq.${options.subjectId}`;
   if (options.topicId) query += `&topic_id=eq.${options.topicId}`;
   if (options.taskId) query += `&task_id=eq.${encodeURIComponent(options.taskId)}`;
@@ -93,9 +101,10 @@ export async function createStudyTimeEntry(userId, entry) {
   return mapStudyTimeEntryRow(rows?.[0] || null);
 }
 
-export async function updateStudyTimeEntry(userId, entryId, patch) {
+export async function updateStudyTimeEntry(userId, entryId, patch, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Lernzeiten erforderlich");
   const rows = await supabaseRequest(
-    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&select=${STUDY_TIME_ENTRY_SELECT}`,
+    `/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${STUDY_TIME_ENTRY_SELECT}`,
     {
       method: "PATCH",
       headers: { ...requestHeaders(), Prefer: "return=representation" },
@@ -105,8 +114,9 @@ export async function updateStudyTimeEntry(userId, entryId, patch) {
   return mapStudyTimeEntryRow(rows?.[0] || null);
 }
 
-export async function deleteStudyTimeEntry(userId, entryId) {
-  await supabaseRequest(`/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}`, {
+export async function deleteStudyTimeEntry(userId, entryId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Lernzeiten erforderlich");
+  await supabaseRequest(`/study_time_entries?id=eq.${entryId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });

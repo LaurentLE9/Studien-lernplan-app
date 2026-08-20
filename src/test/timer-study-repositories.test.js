@@ -21,6 +21,7 @@ const futureSession = {
 const timerRow = {
   id: "timer-1",
   user_id: TEST_USER_ID,
+  semester_id: "semester-1",
   subject_id: "subject-1",
   mode: "pomodoro",
   preset_minutes: 25,
@@ -69,6 +70,7 @@ describe("Timer-Repository-Mappings und Pausengrenzen", () => {
     expect(mapTimerSessionRow(timerRow)).toEqual({
       id: "timer-1",
       userId: TEST_USER_ID,
+      semesterId: "semester-1",
       subjectId: "subject-1",
       mode: "pomodoro",
       presetMinutes: 25,
@@ -83,10 +85,12 @@ describe("Timer-Repository-Mappings und Pausengrenzen", () => {
 
   it("bindet neue Timer-Sitzungen an Benutzer und Fach und begrenzt Presets", () => {
     expect(mapTimerSessionCreate(TEST_USER_ID, "subject-1", {
+      semesterId: "semester-1",
       mode: "pomodoro",
       presetMinutes: POSTGRES_INTEGER_MAX + 10,
     }, "2026-08-14T12:00:00.000Z")).toEqual({
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
       mode: "pomodoro",
       preset_minutes: POSTGRES_INTEGER_MAX,
@@ -95,6 +99,12 @@ describe("Timer-Repository-Mappings und Pausengrenzen", () => {
       total_pause_seconds: 0,
       status: "running",
     });
+  });
+
+  it("verweigert neue Timer-Sitzungen ohne Semester-ID", () => {
+    expect(() => mapTimerSessionCreate(TEST_USER_ID, "subject-1")).toThrow(
+      "semesterId ist für Timer-Sitzungen erforderlich",
+    );
   });
 
   it("addiert normale und wiederholte Pausen sekundengenau", () => {
@@ -131,6 +141,7 @@ describe("Lernzeit-Repository-Mappings", () => {
     const row = {
       id: "entry-1",
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
       topic_id: "topic-1",
       task_id: "task-1",
@@ -148,6 +159,7 @@ describe("Lernzeit-Repository-Mappings", () => {
     expect(mapStudyTimeEntryRow(row)).toEqual({
       id: "entry-1",
       userId: TEST_USER_ID,
+      semesterId: "semester-1",
       subjectId: "subject-1",
       topicId: "topic-1",
       taskId: "task-1",
@@ -166,6 +178,7 @@ describe("Lernzeit-Repository-Mappings", () => {
   it("mappt Create und Patch explizit und begrenzt Integer-Minuten", () => {
     expect(mapStudyTimeEntryCreate(TEST_USER_ID, {
       id: "entry-1",
+      semesterId: "semester-1",
       subjectId: "subject-1",
       topicId: "topic-1",
       taskId: "task-1",
@@ -177,6 +190,7 @@ describe("Lernzeit-Repository-Mappings", () => {
       recordedAt: "2026-08-14T11:00:00.000Z",
     })).toEqual(expect.objectContaining({
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
       topic_id: "topic-1",
       task_id: "task-1",
@@ -203,6 +217,7 @@ describe("Lernzeit-Repository-Mappings", () => {
 
   it("weist ungültige Dauerwerte vor einem Datenbankaufruf zurück", () => {
     expect(() => mapStudyTimeEntryCreate(TEST_USER_ID, {
+      semesterId: "semester-1",
       subjectId: "subject-1",
       durationMinutes: Number.NaN,
     })).toThrow("durationMinutes muss größer als 0 sein");
@@ -230,7 +245,7 @@ describe("Timer- und Lernzeit-Repository-Grenzen", () => {
     vi.stubGlobal("fetch", fetchMock);
     const repository = await import("@/infrastructure/supabase/timerSessionRepository");
 
-    await repository.startTimerSession(TEST_USER_ID, "subject-1", { mode: "stopwatch" });
+    await repository.startTimerSession(TEST_USER_ID, "subject-1", { semesterId: "semester-1", mode: "stopwatch" });
     await repository.pauseTimerSession(TEST_USER_ID, "timer-1");
     await repository.resumeTimerSession(TEST_USER_ID, "timer-1");
     await repository.finishTimerSession(TEST_USER_ID, "timer-1");
@@ -238,7 +253,9 @@ describe("Timer- und Lernzeit-Repository-Grenzen", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(7);
     const calls = fetchMock.mock.calls.map(([url, options]) => ({ url, method: options.method, body: options.body }));
+    expect(calls[0].url).toContain("semester_id=eq.semester-1");
     expect(calls[1]).toEqual(expect.objectContaining({ method: "POST" }));
+    expect(calls[1].body).toContain('"semester_id":"semester-1"');
     expect(calls[2].url).toContain("id=eq.timer-1&user_id=eq.");
     expect(calls[2].body).toContain('"status":"paused"');
     expect(calls[4].body).toContain('"total_pause_seconds":420');
@@ -251,10 +268,10 @@ describe("Timer- und Lernzeit-Repository-Grenzen", () => {
     vi.stubGlobal("fetch", fetchMock);
     const repository = await import("@/infrastructure/supabase/studyTimeRepository");
 
-    await repository.deleteStudyTimeEntry(TEST_USER_ID, "entry-1");
+    await repository.deleteStudyTimeEntry(TEST_USER_ID, "entry-1", { semesterId: "semester-1" });
 
     expect(fetchMock.mock.calls[0][0]).toBe(
-      `https://kan71.supabase.test/rest/v1/study_time_entries?id=eq.entry-1&user_id=eq.${TEST_USER_ID}`,
+      `https://kan71.supabase.test/rest/v1/study_time_entries?id=eq.entry-1&user_id=eq.${TEST_USER_ID}&semester_id=eq.semester-1`,
     );
     expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({ method: "DELETE" }));
   });

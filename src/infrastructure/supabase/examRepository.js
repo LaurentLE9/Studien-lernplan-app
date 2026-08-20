@@ -1,7 +1,7 @@
 import { getSupabaseAnonKey } from "./client";
 import { supabaseRequest } from "./restRepository";
 
-export const EXAM_SELECT = "id,user_id,subject_id,title,exam_date,exam_time,location,notes,status,is_archived,created_at,updated_at";
+export const EXAM_SELECT = "id,user_id,semester_id,subject_id,title,exam_date,exam_time,location,notes,status,is_archived,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
@@ -10,6 +10,7 @@ export function mapExamRow(row) {
   return {
     id: row.id,
     userId: row.user_id,
+    ...(row.semester_id ? { semesterId: row.semester_id } : {}),
     subjectId: row.subject_id || "",
     title: row.title || "",
     examDate: row.exam_date || "",
@@ -24,6 +25,7 @@ export function mapExamRow(row) {
 }
 
 export function mapExamCreate(userId, exam) {
+  if (!exam.semesterId) throw new Error("semesterId ist für Prüfungen erforderlich");
   return {
     id: exam.id,
     user_id: userId,
@@ -35,6 +37,7 @@ export function mapExamCreate(userId, exam) {
     notes: exam.notes || null,
     status: exam.status === "written" ? "written" : "open",
     is_archived: Boolean(exam.isArchived),
+    ...(exam.semesterId ? { semester_id: exam.semesterId } : {}),
   };
 }
 
@@ -51,8 +54,15 @@ export function mapExamPatch(patch) {
   return row;
 }
 
-export async function loadExams(userId) {
-  const rows = await supabaseRequest(`/exams?user_id=eq.${userId}&select=${EXAM_SELECT}&order=exam_date.asc,exam_time.asc.nullslast,created_at.asc`, {
+export async function loadExams(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Prüfungen erforderlich");
+  let query = `/exams?user_id=eq.${userId}&select=${EXAM_SELECT}`;
+  if (options.semesterId) query += `&semester_id=eq.${options.semesterId}`;
+  if (Array.isArray(options.subjectIds) && options.subjectIds.length) {
+    query += `&subject_id=in.(${options.subjectIds.join(",")})`;
+  }
+  query += "&order=exam_date.asc,exam_time.asc.nullslast,created_at.asc";
+  const rows = await supabaseRequest(query, {
     method: "GET",
     headers: requestHeaders(),
   });
@@ -68,8 +78,9 @@ export async function createExamRecord(userId, exam) {
   return mapExamRow(rows?.[0]);
 }
 
-export async function updateExamRecord(userId, examId, patch) {
-  const rows = await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}&select=${EXAM_SELECT}`, {
+export async function updateExamRecord(userId, examId, patch, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Prüfungen erforderlich");
+  const rows = await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${EXAM_SELECT}`, {
     method: "PATCH",
     headers: { ...requestHeaders(), Prefer: "return=representation" },
     body: JSON.stringify(mapExamPatch(patch)),
@@ -77,8 +88,9 @@ export async function updateExamRecord(userId, examId, patch) {
   return mapExamRow(rows?.[0]);
 }
 
-export async function deleteExamRecord(userId, examId) {
-  await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}`, {
+export async function deleteExamRecord(userId, examId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Prüfungen erforderlich");
+  await supabaseRequest(`/exams?id=eq.${examId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });

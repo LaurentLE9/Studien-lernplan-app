@@ -100,6 +100,7 @@ describe("Akademische Repository-Mappings", () => {
   it("bindet Themen explizit an Benutzer und Fach und normalisiert Fortschritt", () => {
     const row = mapTopicCreate(TEST_USER_ID, {
       id: "topic-1",
+      semesterId: "semester-1",
       subjectId: "subject-1",
       title: "Repository Pattern",
       status: "lernen",
@@ -109,6 +110,7 @@ describe("Akademische Repository-Mappings", () => {
 
     expect(row).toEqual(expect.objectContaining({
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
       status: "active",
       confidence: "confident",
@@ -121,6 +123,7 @@ describe("Akademische Repository-Mappings", () => {
     expect(mapTopicPatch({ title: "Nur Titel" })).not.toHaveProperty("user_id");
     expect(mapTopicRow({ ...row, created_at: "now", updated_at: "now" })).toEqual(expect.objectContaining({
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
     }));
   });
@@ -128,6 +131,7 @@ describe("Akademische Repository-Mappings", () => {
   it("mappt Prüfungen verlustfrei zwischen Domain- und Datenbankformat", () => {
     const row = mapExamCreate(TEST_USER_ID, {
       id: "exam-1",
+      semesterId: "semester-1",
       subjectId: "subject-1",
       title: "Klausur",
       examDate: "2026-09-01",
@@ -141,6 +145,7 @@ describe("Akademische Repository-Mappings", () => {
     expect(row).toEqual({
       id: "exam-1",
       user_id: TEST_USER_ID,
+      semester_id: "semester-1",
       subject_id: "subject-1",
       title: "Klausur",
       exam_date: "2026-09-01",
@@ -153,6 +158,7 @@ describe("Akademische Repository-Mappings", () => {
     expect(mapExamRow({ ...row, created_at: "created", updated_at: "updated" })).toEqual({
       id: "exam-1",
       userId: TEST_USER_ID,
+      semesterId: "semester-1",
       subjectId: "subject-1",
       title: "Klausur",
       examDate: "2026-09-01",
@@ -172,21 +178,45 @@ describe("Akademische Repository-Mappings", () => {
 });
 
 describe("Akademische Repository-Grenzen", () => {
+  it("begrenzt Fach-Lesen zwingend auf das aktive Semester", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const repository = await import("@/infrastructure/supabase/subjectRepository");
+
+    await expect(repository.loadSubjects(TEST_USER_ID)).rejects.toThrow("semesterId ist zum Laden von Fächern erforderlich");
+    await repository.loadSubjects(TEST_USER_ID, { semesterId: "semester-1" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toContain(`user_id=eq.${TEST_USER_ID}&semester_id=eq.semester-1`);
+  });
+
+  it("begrenzt Themen-Lesen und -Ändern auf das aktive Semester", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
+    vi.stubGlobal("fetch", fetchMock);
+    const repository = await import("@/infrastructure/supabase/topicRepository");
+
+    await repository.loadTopics(TEST_USER_ID, { semesterId: "semester-1" });
+    await repository.updateTopicRecord(TEST_USER_ID, "topic-1", { completed: true }, { semesterId: "semester-1" });
+
+    expect(fetchMock.mock.calls[0][0]).toContain(`user_id=eq.${TEST_USER_ID}&semester_id=eq.semester-1`);
+    expect(fetchMock.mock.calls[1][0]).toContain(`id=eq.topic-1&user_id=eq.${TEST_USER_ID}&semester_id=eq.semester-1`);
+  });
+
   it.each([
-    ["Semester", () => import("@/infrastructure/supabase/semesterRepository"), "deleteSemester", "semesters", "semester-1"],
-    ["Fach", () => import("@/infrastructure/supabase/subjectRepository"), "deleteSubjectRecord", "subjects", "subject-1"],
-    ["Thema", () => import("@/infrastructure/supabase/topicRepository"), "deleteTopicRecord", "topics", "topic-1"],
-    ["Prüfung", () => import("@/infrastructure/supabase/examRepository"), "deleteExamRecord", "exams", "exam-1"],
-  ])("begrenzt %s-Löschungen auf Datensatz und Benutzer", async (_label, loadRepository, exportName, table, recordId) => {
+    ["Semester", () => import("@/infrastructure/supabase/semesterRepository"), "deleteSemester", "semesters", "semester-1", false],
+    ["Fach", () => import("@/infrastructure/supabase/subjectRepository"), "deleteSubjectRecord", "subjects", "subject-1", true],
+    ["Thema", () => import("@/infrastructure/supabase/topicRepository"), "deleteTopicRecord", "topics", "topic-1", true],
+    ["Prüfung", () => import("@/infrastructure/supabase/examRepository"), "deleteExamRecord", "exams", "exam-1", true],
+  ])("begrenzt %s-Löschungen auf Datensatz, Benutzer und gegebenenfalls Semester", async (_label, loadRepository, exportName, table, recordId, semesterScoped) => {
     const fetchMock = vi.fn().mockResolvedValue(emptyResponse());
     vi.stubGlobal("fetch", fetchMock);
     const repository = await loadRepository();
 
-    await repository[exportName](TEST_USER_ID, recordId);
+    await repository[exportName](TEST_USER_ID, recordId, { semesterId: "semester-1" });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe(
-      `https://kan70.supabase.test/rest/v1/${table}?id=eq.${recordId}&user_id=eq.${TEST_USER_ID}`,
+      `https://kan70.supabase.test/rest/v1/${table}?id=eq.${recordId}&user_id=eq.${TEST_USER_ID}${semesterScoped ? "&semester_id=eq.semester-1" : ""}`,
     );
     expect(fetchMock.mock.calls[0][1]).toEqual(expect.objectContaining({ method: "DELETE" }));
   });

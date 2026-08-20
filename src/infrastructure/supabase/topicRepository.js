@@ -3,7 +3,7 @@ import { getSupabaseAnonKey } from "./client";
 import { toIsoDateTimeOrNull } from "./dateMapping";
 import { logSyncDebug, supabaseRequest } from "./restRepository";
 
-export const TOPIC_SELECT = "id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
+export const TOPIC_SELECT = "id,semester_id,subject_id,user_id,title,order_index,status,cheatsheet_text,cheatsheet_url,confidence,last_studied_at,next_review_at,review_count,review_step,completed,is_paused_today,archived_at,created_at,updated_at";
 
 const requestHeaders = () => ({ apikey: getSupabaseAnonKey() });
 
@@ -11,6 +11,7 @@ export function mapTopicRow(row) {
   if (!row) return null;
   return {
     id: row.id,
+    semester_id: row.semester_id || null,
     subject_id: row.subject_id,
     user_id: row.user_id,
     title: row.title,
@@ -32,8 +33,10 @@ export function mapTopicRow(row) {
 }
 
 export function mapTopicCreate(userId, topic) {
+  if (!topic.semesterId) throw new Error("semesterId ist für Themen erforderlich");
   return {
     id: topic.id,
+    semester_id: topic.semesterId || null,
     user_id: userId,
     subject_id: topic.subjectId,
     title: topic.title,
@@ -71,9 +74,10 @@ export function mapTopicPatch(patch) {
   return row;
 }
 
-export async function loadTopics(userId) {
+export async function loadTopics(userId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Laden von Themen erforderlich");
   try {
-    const rows = await supabaseRequest(`/topics?user_id=eq.${userId}&select=${TOPIC_SELECT}&order=order_index.asc`, {
+    const rows = await supabaseRequest(`/topics?user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${TOPIC_SELECT}&order=order_index.asc`, {
       method: "GET",
       headers: requestHeaders(),
     });
@@ -94,8 +98,9 @@ export async function createTopicRecord(userId, topic) {
   return mapTopicRow(rows?.[0]);
 }
 
-export async function updateTopicRecord(userId, topicId, patch) {
-  const rows = await supabaseRequest(`/topics?id=eq.${topicId}&user_id=eq.${userId}&select=${TOPIC_SELECT}`, {
+export async function updateTopicRecord(userId, topicId, patch, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Ändern von Themen erforderlich");
+  const rows = await supabaseRequest(`/topics?id=eq.${topicId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}&select=${TOPIC_SELECT}`, {
     method: "PATCH",
     headers: { ...requestHeaders(), Prefer: "return=representation" },
     body: JSON.stringify(mapTopicPatch(patch)),
@@ -103,8 +108,9 @@ export async function updateTopicRecord(userId, topicId, patch) {
   return mapTopicRow(rows?.[0]);
 }
 
-export async function deleteTopicRecord(userId, topicId) {
-  await supabaseRequest(`/topics?id=eq.${topicId}&user_id=eq.${userId}`, {
+export async function deleteTopicRecord(userId, topicId, options = {}) {
+  if (!options.semesterId) throw new Error("semesterId ist zum Löschen von Themen erforderlich");
+  await supabaseRequest(`/topics?id=eq.${topicId}&user_id=eq.${userId}&semester_id=eq.${options.semesterId}`, {
     method: "DELETE",
     headers: requestHeaders(),
   });
