@@ -93,6 +93,19 @@ Tests niemals löschen, überspringen oder abschwächen, nur um einen grünen St
 - Der Kernregressionslauf umfasst Semester A → B → A, Fach, Aufgabe, Projekt/Subtask, Timer normal und aus Aufgabe, Pause/Fortsetzen/Beenden, seitenübergreifende Timeranzeige, Reload, Statistik, Persistenz sowie Console-/Request-Fehler.
 - `.github/workflows/e2e-regression.yml` und `e2e/core-regression.spec.js` sind der automatisierte Kernnachweis. Ein nicht ausgeführter erforderlicher Browser-Test blockiert `Done`.
 
+## Expedite-/P0-Regeln
+
+`docs/EXPEDITE_POLICY.md` ist für kritische Blocker verbindlich.
+
+- Kein separater künstlicher Notfall-Sprint; kritische Arbeit läuft über die Expedite-/P0-Lane.
+- Expedite nur bei echten Produktions-, Security-, Datenintegritäts-, CI/Test/Deployment- oder Sprint-Blockern.
+- Jira-Kennzeichnung: Priorität `Highest`, Labels `expedite` und `p0`; bei blockierter Sprint-Fortsetzung zusätzlich `sprint-blocker`.
+- Hartes Expedite-WIP-Limit: **1**.
+- Sobald ein Expedite-Vorgang aktiv ist, normale Sprintarbeit pausieren und keinen zweiten Expedite-Vorgang parallel beginnen.
+- P0 verkürzt die Definition of Done nicht. Tests, Review, PR, Merge, Deployment-Nachweis und Jira-/Confluence-Abgleich bleiben Pflicht.
+- Normale Sprintarbeit erst fortsetzen, nachdem der aktive Expedite-/P0-Vorgang vollständig `Erledigt` ist.
+- KAN-109 ist aktuell als `Highest` + `expedite` + `p0` + `sprint-blocker` klassifiziert und blockiert die Sprint-Fortsetzung bis zur vollständigen DoD.
+
 ## Git / GitHub
 
 - Nicht direkt auf `main` arbeiten oder pushen.
@@ -116,7 +129,9 @@ Ein erfolgreiches Copilot-Ergebnis bedeutet nur **technisch reviewbereit**, nich
 - `AGENTS.md` – verbindliche Agentenregeln
 - `docs/LOOP_ENGINEERING.md` – Loop-, Evaluations-, Retry- und Stop-Regeln
 - `docs/BROWSER_E2E_POLICY.md` – Browser-/E2E-Kernregression und Testkonto-Regeln
+- `docs/EXPEDITE_POLICY.md` – Expedite-/P0-Notfallprozess
 - `README.md` – Repository-Überblick
 - Jira KAN-30 / KAN-72 / KAN-73 / KAN-74 / KAN-109
 - Confluence: „Arbeitsprozess und Definition of Done“
+- Confluence: „Expedite- und P0-Notfallprozess“
 - Confluence: „KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“
