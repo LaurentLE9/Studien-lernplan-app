@@ -3481,6 +3481,7 @@ export default function StudyPlannerApp() {
     const cloudSyncTimeoutRef = useRef(null);
     const cloudHydrationRetryRef = useRef(null);
     const hasPendingCloudSaveRef = useRef(false);
+    const semesterSyncVersionRef = useRef({ subjects: new Map(), topics: new Map(), exams: new Map() });
   const [page, setPage] = useState("dashboard");
   const dashboardTileLayout = useMemo(
     () => normalizeDashboardTileLayout(data.settings?.dashboardTileLayout, data.settings?.dashboardLayout, data.settings?.dashboardTileSizes),
@@ -3707,6 +3708,11 @@ export default function StudyPlannerApp() {
   const [semesters, setSemesters] = useState([]);
   const [editingSemester, setEditingSemester] = useState(null);
   const [selectedSemesterId, setSelectedSemesterId] = useState("");
+  const activeSemesterScopeRef = useRef({ userId: "", semesterId: "" });
+  activeSemesterScopeRef.current = {
+    userId: session?.user?.id || "",
+    semesterId: selectedSemesterId || "",
+  };
   const [activeTaskTab, setActiveTaskTab] = useState("tasks");
   const [activeLearningPlanTab, setActiveLearningPlanTab] = useState("plan");
   const [examFilter, setExamFilter] = useState({ subjectId: "all", status: "all" });
@@ -3750,6 +3756,12 @@ export default function StudyPlannerApp() {
       ? getSemesterSubjectIds(data.subjects, selectedSemesterId)
       : new Set(data.subjects.map((subject) => subject.id).filter(Boolean)),
     [data.subjects, selectedSemesterId, hasSemesterScope],
+  );
+  const semesterSubjectIds = useMemo(
+    () => hasSemesterScope
+      ? getSemesterSubjectIds([...data.subjects, ...archivedSubjects], selectedSemesterId)
+      : new Set([...data.subjects, ...archivedSubjects].map((subject) => subject.id).filter(Boolean)),
+    [data.subjects, archivedSubjects, selectedSemesterId, hasSemesterScope],
   );
   const activeSubjects = useMemo(
     () => data.subjects.filter((subject) => activeSemesterSubjectIds.has(subject.id)),
@@ -3805,6 +3817,9 @@ export default function StudyPlannerApp() {
 
   useEffect(() => {
     if (!session?.user?.id) {
+      semesterSyncVersionRef.current.subjects.clear();
+      semesterSyncVersionRef.current.topics.clear();
+      semesterSyncVersionRef.current.exams.clear();
       setIsCloudHydrated(false);
       setCloudSyncError(null);
       setSemesters([]);
@@ -3881,64 +3896,89 @@ export default function StudyPlannerApp() {
     };
   }, [session?.user?.id, setData]);
 
-  const syncSubjectsFromDatabase = async (userId, semesterId = selectedSemesterId) => {
-    if (!userId) return;
-
-    const semesterRows = await loadSemesters(userId);
-
-    const mappedSemesters = semesterRows.map((semester) => ({
-      id: semester.id,
-      name: semester.name,
-      startDate: semester.start_date || "",
-      endDate: semester.end_date || "",
-      createdAt: semester.created_at,
-    }));
-    const requestedSemesterId = semesterId
-      || readPersistedActiveSemesterId(userId)
-      || data.settings?.activeSemesterId
-      || "";
-    const scopedSemesterId = resolveActiveSemesterId(mappedSemesters, requestedSemesterId);
-    const subjects = scopedSemesterId
-      ? await loadSubjects(userId, { semesterId: scopedSemesterId })
-      : [];
-
-    const semestersById = Object.fromEntries(semesterRows.map((semester) => [semester.id, semester]));
-    const mapRowToSubject = (row) => ({
-      id: row.id,
-      name: row.name,
-      color: row.color || "#3b82f6",
-      description: row.description || "",
-      semesterId: row.semester_id || row.group_id || "",
-      semester: semestersById[row.semester_id || row.group_id]?.name || "Ohne Semester",
-      goal: row.goal || "",
-      targetHours: Number(row.target_hours || 0),
-      includeInLearningPlan: row.include_in_learning_plan !== false,
-      priority: Number.isFinite(Number(row.priority)) ? Number(row.priority) : null,
-      newTopicEveryDays: Math.max(1, Number(row.new_topic_every_days || 3)),
-      nextNewTopicDueAt: row.next_new_topic_due_at || null,
-      paused: Boolean(row.paused),
-      lastStudiedAt: row.last_studied_at || null,
-      nextReviewAt: row.next_review_at || null,
-      reviewStep: Math.max(0, Number(row.review_step || 0)),
-      lastStudiedMinutes: Math.max(0, Number(row.last_studied_minutes || 0)),
-      studyCount: Math.max(0, Number(row.study_count || 0)),
-      isArchived: Boolean(row.is_archived),
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    });
-
-    const active = subjects.filter((row) => !row.is_archived).map(mapRowToSubject);
-    const archived = subjects.filter((row) => row.is_archived).map(mapRowToSubject);
-
-    setSemesters(mappedSemesters);
-    setArchivedSubjects(archived);
-    setData((prev) => ({ ...prev, subjects: active }));
+  const beginSemesterSync = (resource, userId, semesterId) => {
+    const scopeKey = `${userId}:${semesterId || ""}`;
+    const versions = semesterSyncVersionRef.current[resource];
+    const requestVersion = (versions.get(scopeKey) || 0) + 1;
+    versions.set(scopeKey, requestVersion);
+    return { scopeKey, requestVersion };
   };
 
-  const syncTopicsFromDatabase = async (userId) => {
-    if (!userId || !selectedSemesterId) return;
+  const isCurrentSemesterSync = (resource, userId, semesterId, request) => {
+    const activeScope = activeSemesterScopeRef.current;
+    return activeScope.userId === userId
+      && activeScope.semesterId === (semesterId || "")
+      && semesterSyncVersionRef.current[resource].get(request.scopeKey) === request.requestVersion;
+  };
+
+  const syncSubjectsFromDatabase = async (userId, semesterId = selectedSemesterId) => {
+    if (!userId) return;
+    const request = beginSemesterSync("subjects", userId, semesterId);
+
     try {
-      const rows = await loadTopics(userId, { semesterId: selectedSemesterId });
+      const semesterRows = await loadSemesters(userId);
+
+      const mappedSemesters = semesterRows.map((semester) => ({
+        id: semester.id,
+        name: semester.name,
+        startDate: semester.start_date || "",
+        endDate: semester.end_date || "",
+        createdAt: semester.created_at,
+      }));
+      const requestedSemesterId = semesterId
+        || readPersistedActiveSemesterId(userId)
+        || data.settings?.activeSemesterId
+        || "";
+      const scopedSemesterId = resolveActiveSemesterId(mappedSemesters, requestedSemesterId);
+      const subjects = scopedSemesterId
+        ? await loadSubjects(userId, { semesterId: scopedSemesterId })
+        : [];
+
+      const semestersById = Object.fromEntries(semesterRows.map((semester) => [semester.id, semester]));
+      const mapRowToSubject = (row) => ({
+        id: row.id,
+        name: row.name,
+        color: row.color || "#3b82f6",
+        description: row.description || "",
+        semesterId: row.semester_id || row.group_id || "",
+        semester: semestersById[row.semester_id || row.group_id]?.name || "Ohne Semester",
+        goal: row.goal || "",
+        targetHours: Number(row.target_hours || 0),
+        includeInLearningPlan: row.include_in_learning_plan !== false,
+        priority: Number.isFinite(Number(row.priority)) ? Number(row.priority) : null,
+        newTopicEveryDays: Math.max(1, Number(row.new_topic_every_days || 3)),
+        nextNewTopicDueAt: row.next_new_topic_due_at || null,
+        paused: Boolean(row.paused),
+        lastStudiedAt: row.last_studied_at || null,
+        nextReviewAt: row.next_review_at || null,
+        reviewStep: Math.max(0, Number(row.review_step || 0)),
+        lastStudiedMinutes: Math.max(0, Number(row.last_studied_minutes || 0)),
+        studyCount: Math.max(0, Number(row.study_count || 0)),
+        isArchived: Boolean(row.is_archived),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      });
+
+      const active = subjects.filter((row) => !row.is_archived).map(mapRowToSubject);
+      const archived = subjects.filter((row) => row.is_archived).map(mapRowToSubject);
+
+      if (!isCurrentSemesterSync("subjects", userId, semesterId, request)) return false;
+      setSemesters(mappedSemesters);
+      setArchivedSubjects(archived);
+      setData((prev) => ({ ...prev, subjects: active }));
+      return true;
+    } catch (error) {
+      if (!isCurrentSemesterSync("subjects", userId, semesterId, request)) return false;
+      throw error;
+    }
+  };
+
+  const syncTopicsFromDatabase = async (userId, semesterId = selectedSemesterId) => {
+    if (!userId || !semesterId) return;
+    const request = beginSemesterSync("topics", userId, semesterId);
+    try {
+      const rows = await loadTopics(userId, { semesterId });
+      if (!isCurrentSemesterSync("topics", userId, semesterId, request)) return false;
       console.log("[sync] Topics loaded from DB:", rows.length, rows);
       const mapped = rows.map((row) => ({
         id: row.id,
@@ -3966,21 +4006,31 @@ export default function StudyPlannerApp() {
         console.log("[sync] Topics set in state:", updated.topics.length);
         return updated;
       });
+      return true;
     } catch (error) {
+      if (!isCurrentSemesterSync("topics", userId, semesterId, request)) return false;
       console.error("[sync] Error loading topics:", error);
       throw error;
     }
   };
 
-  const syncExamsFromDatabase = async (userId) => {
-    if (!userId || !selectedSemesterId) return;
-    const rows = await loadExams(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
-    setData((prev) => ({ ...prev, exams: rows }));
+  const syncExamsFromDatabase = async (userId, semesterId = selectedSemesterId, subjectIds = [...semesterSubjectIds]) => {
+    if (!userId || !semesterId) return;
+    const request = beginSemesterSync("exams", userId, semesterId);
+    try {
+      const rows = await loadExams(userId, { semesterId, subjectIds });
+      if (!isCurrentSemesterSync("exams", userId, semesterId, request)) return false;
+      setData((prev) => ({ ...prev, exams: rows }));
+      return true;
+    } catch (error) {
+      if (!isCurrentSemesterSync("exams", userId, semesterId, request)) return false;
+      throw error;
+    }
   };
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
-    syncSubjectsFromDatabase(session.user.id).catch((err) => {
+    syncSubjectsFromDatabase(session.user.id, selectedSemesterId).catch((err) => {
       console.error("Subject sync error:", err);
       setCloudSyncError(err?.message || "Fächer konnten nicht aus Supabase geladen werden");
     });
@@ -3999,7 +4049,7 @@ export default function StudyPlannerApp() {
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
-    syncTopicsFromDatabase(session.user.id).catch((err) => {
+    syncTopicsFromDatabase(session.user.id, selectedSemesterId).catch((err) => {
       console.error("Topic sync error:", err);
       setCloudSyncError(err?.message || "Themen konnten nicht aus Supabase geladen werden");
     });
@@ -4019,11 +4069,11 @@ export default function StudyPlannerApp() {
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
-    syncExamsFromDatabase(session.user.id).catch((err) => {
+    syncExamsFromDatabase(session.user.id, selectedSemesterId, [...semesterSubjectIds]).catch((err) => {
       console.error("Exam sync error:", err);
       setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
     });
-  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, semesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
@@ -4033,9 +4083,9 @@ export default function StudyPlannerApp() {
     const syncStudyTimeEntries = async () => {
       try {
         setIsLoadingTimeEntries(true);
-        const rows = await loadStudyTimeEntries(session.user.id, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
+        const rows = await loadStudyTimeEntries(session.user.id, { semesterId: selectedSemesterId, subjectIds: [...semesterSubjectIds] });
         if (!cancelled) {
-          setStudyTimeEntries(rows.filter((entry) => activeSemesterSubjectIds.has(entry.subjectId)));
+          setStudyTimeEntries(rows.filter((entry) => semesterSubjectIds.has(entry.subjectId)));
         }
       } catch (error) {
         console.error("Study time entries sync error:", error);
@@ -4054,7 +4104,7 @@ export default function StudyPlannerApp() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, semesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -5659,7 +5709,7 @@ export default function StudyPlannerApp() {
         }
         
         // Reload study time entries
-        const rows = await loadStudyTimeEntries(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
+        const rows = await loadStudyTimeEntries(userId, { semesterId: selectedSemesterId, subjectIds: [...semesterSubjectIds] });
         setStudyTimeEntries(rows);
         if (!planSyncError) {
           setCloudSyncError(null);

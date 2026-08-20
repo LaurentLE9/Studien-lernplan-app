@@ -27,6 +27,7 @@ const cloudMocks = vi.hoisted(() => ({
   saveUserPlannerData: vi.fn(),
   loadSemesters: vi.fn(),
   loadSubjects: vi.fn(),
+  createSubjectRecord: vi.fn(),
   loadTopics: vi.fn(),
   loadExams: vi.fn(),
   loadStudyTimeEntries: vi.fn(),
@@ -56,6 +57,7 @@ function setupCloudMocks(plannerData, options = {}) {
   cloudMocks.loadSubjects.mockResolvedValue(options.subjects || [
     { ...testSubjectRow, semester_id: "semester-default" },
   ]);
+  cloudMocks.createSubjectRecord.mockResolvedValue(null);
   cloudMocks.loadTopics.mockResolvedValue([]);
   cloudMocks.loadExams.mockResolvedValue([]);
   cloudMocks.loadStudyTimeEntries.mockResolvedValue([]);
@@ -68,6 +70,14 @@ async function renderPlannerApp(options = {}) {
   setupCloudMocks(plannerData, options);
   render(<App />);
   await screen.findAllByRole("button", { name: "Aufgaben" });
+}
+
+function createDeferred() {
+  let resolve;
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 describe("Semesterwechsel", () => {
@@ -107,7 +117,9 @@ describe("Semesterwechsel", () => {
     await waitFor(() => {
       expect(within(screen.getByText("Semester B").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
     });
-    expect(cloudMocks.loadTopics.mock.calls.some(([, options]) => options?.semesterId === "semester-b")).toBe(true);
+    await waitFor(() => {
+      expect(cloudMocks.loadTopics.mock.calls.some(([, options]) => options?.semesterId === "semester-b")).toBe(true);
+    });
     expect(localStorage.getItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`)).toBe("semester-b");
 
     fireEvent.click(screen.getByRole("button", { name: /Semester A/ }));
@@ -155,6 +167,116 @@ describe("Semesterwechsel", () => {
     await openNavigationPage("Fächer");
     expect(await screen.findByText("Archiv B")).toBeInTheDocument();
     expect(screen.queryByText("Archiv A")).not.toBeInTheDocument();
+  });
+
+  it("berücksichtigt archivierte Fächer bei historischen Semesterabfragen", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp({
+      semesters: semesterOptions.semesters,
+      subjects: [
+        { ...testSubjectRow, semester_id: "semester-a" },
+        { ...testSubjectRow, id: "archived-a", name: "Archiv A", semester_id: "semester-a", is_archived: true },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(cloudMocks.loadExams).toHaveBeenCalledWith(TEST_USER_ID, {
+        semesterId: "semester-a",
+        subjectIds: expect.arrayContaining([testSubjectRow.id, "archived-a"]),
+      });
+      expect(cloudMocks.loadStudyTimeEntries).toHaveBeenCalledWith(TEST_USER_ID, {
+        semesterId: "semester-a",
+        subjectIds: expect.arrayContaining([testSubjectRow.id, "archived-a"]),
+      });
+    });
+  });
+
+  it("blendet offene Aufgaben archivierter Fächer aus aktiven Ansichten aus", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp({
+      semesters: semesterOptions.semesters,
+      subjects: [
+        { ...testSubjectRow, semester_id: "semester-a", is_archived: true },
+      ],
+    });
+
+    await openNavigationPage("Aufgaben");
+    expect(screen.queryByText("Refactoring vorbereiten")).not.toBeInTheDocument();
+  });
+
+  it("ignoriert verspätete Fachantworten eines zuvor ausgewählten Semesters", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp(semesterOptions);
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-a" });
+    });
+
+    const delayedSemesterB = createDeferred();
+    cloudMocks.loadSubjects.mockImplementation((userId, options) => {
+      if (options?.semesterId === "semester-b") return delayedSemesterB.promise;
+      return Promise.resolve([{ ...testSubjectRow, semester_id: "semester-a" }]);
+    });
+
+    await openNavigationPage("Semesterkonfiguration");
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-b" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Semester A/ }));
+    await waitFor(() => {
+      expect(within(screen.getByText("Semester A").closest('[data-slot="card"]')).getByText("Aktives Semester")).toBeInTheDocument();
+    });
+
+    delayedSemesterB.resolve([
+      { ...testSubjectRow, id: "subject-b", name: "Datenbanken", semester_id: "semester-b" },
+    ]);
+    await Promise.resolve();
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Softwaretechnik")).toBeInTheDocument();
+    expect(screen.queryByText("Datenbanken")).not.toBeInTheDocument();
+  });
+
+  it("lässt eine verspätete Mutation aus Semester A die laufende Synchronisation von Semester B nicht verdrängen", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp(semesterOptions);
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-a" });
+    });
+
+    const delayedCreate = createDeferred();
+    const delayedSemesterB = createDeferred();
+    cloudMocks.createSubjectRecord.mockReturnValueOnce(delayedCreate.promise);
+    cloudMocks.loadSubjects.mockImplementation((userId, options) => {
+      if (options?.semesterId === "semester-b") return delayedSemesterB.promise;
+      return Promise.resolve([{ ...testSubjectRow, semester_id: "semester-a" }]);
+    });
+
+    await openNavigationPage("Fächer");
+    fireEvent.click(screen.getByRole("button", { name: "Fach anlegen" }));
+    const dialog = await screen.findByRole("dialog", { name: "Fach anlegen" });
+    fireEvent.change(within(dialog).getAllByRole("textbox")[0], { target: { value: "Verteilte Systeme" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    await waitFor(() => expect(cloudMocks.createSubjectRecord).toHaveBeenCalled());
+
+    await openNavigationPage("Semesterkonfiguration");
+    fireEvent.click(screen.getByRole("button", { name: /Semester B/ }));
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects).toHaveBeenCalledWith(TEST_USER_ID, { semesterId: "semester-b" });
+    });
+
+    delayedCreate.resolve(null);
+    await waitFor(() => {
+      expect(cloudMocks.loadSubjects.mock.calls.filter(([, options]) => options?.semesterId === "semester-a")).toHaveLength(2);
+    });
+    delayedSemesterB.resolve([
+      { ...testSubjectRow, id: "subject-b", name: "Datenbanken", semester_id: "semester-b" },
+    ]);
+
+    await openNavigationPage("Fächer");
+    expect(await screen.findByText("Datenbanken")).toBeInTheDocument();
+    expect(screen.queryByText("Softwaretechnik")).not.toBeInTheDocument();
   });
 
   it("bindet den Fachdialog fest an das aktive Semester", async () => {
