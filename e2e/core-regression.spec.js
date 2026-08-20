@@ -139,6 +139,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
       await expect(page.getByText(taskA, { exact: true })).toBeVisible();
       await navigate(page, 'Projekte');
       await expect(page.getByText(projectA, { exact: true })).toBeVisible();
+      await navigate(page, 'Aufgaben');
       await expect(page.getByText(subtaskA, { exact: true })).toBeVisible();
     });
 

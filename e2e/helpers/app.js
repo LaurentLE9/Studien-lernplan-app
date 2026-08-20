@@ -131,7 +131,10 @@ export async function createProject(page, name, subjectName, subtaskName) {
   await dialog.getByRole('button', { name: 'Aufgabe', exact: true }).click();
   await dialog.getByPlaceholder('Aufgabentitel').fill(subtaskName);
   await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  const projectCard = page.getByText(name, { exact: true }).locator('xpath=ancestor::*[@data-slot="card"][1]');
+  await expect(projectCard).toBeVisible();
+  await expect(projectCard.getByText('1 Teilaufgaben offen', { exact: true })).toBeVisible();
+  await navigate(page, 'Aufgaben');
   await expect(page.getByText(subtaskName, { exact: true })).toBeVisible();
 }
 
