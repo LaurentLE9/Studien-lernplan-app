@@ -20,6 +20,7 @@ Verknüpfte Vorgänge:
 - KAN-72 – Isolierten Testnutzer und Browser-End-to-End-Tests einführen
 - KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
 - KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
+- KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
 
 ## 2. Git- und Branch-Regeln
 
@@ -157,18 +158,48 @@ Secrets dürfen niemals in Code, Logs, Tests, Commits oder Dokumentation aufgeno
 
 ## 6. Browser- und End-to-End-Prüfung
 
-Soweit eine Änderung sichtbares oder interaktives Verhalten betrifft:
+Soweit eine Änderung sichtbares oder interaktives Verhalten betrifft, ist die Browser-/E2E-Prüfung ein verbindlicher Teil der Verifikation. Die Detailregeln stehen in `docs/BROWSER_E2E_POLICY.md`.
 
-- isolierte Testumgebung/Testgruppe verwenden,
-- keine vorhandenen Nutzertabs verändern,
-- Vercel-Deployment anhand Jira-Key, Branch und Commit identifizieren,
-- Status `Ready` bestätigen,
-- zugehörige Preview öffnen,
-- betroffene Funktionen und zentrale abhängige Kernabläufe prüfen,
-- neue Console Errors dokumentieren,
-- Testtabs nach Abschluss schließen.
+### Test-Account-Policy – keine zusätzliche Rückfrage
 
-Sobald KAN-72 umgesetzt ist, ist der isolierte Testnutzer für diese Prüfungen verbindlich zu verwenden.
+Der vorgesehene isolierte Test-Account ist für Browser-, E2E-, Smoke-, Regression- und Funktionsprüfungen vorab freigegeben.
+
+Wenn ein Test aufgrund des Jira-Scopes, einer Codeänderung, eines Bugs oder der Definition of Done erforderlich ist:
+
+1. Test-Account selbstständig verwenden.
+2. erforderliche E2E-Testdaten selbstständig erstellen.
+3. Test selbstständig ausführen.
+4. Ergebnis auswerten.
+5. eindeutig erzeugte Testdaten nach Erfolg oder Fehler bereinigen.
+6. **nicht** fragen, ob der Browser-Test gestartet oder das Testkonto verwendet werden soll.
+
+Diese Freigabe gilt ausschließlich für den isolierten Test-Account und eindeutig mit `E2E-<Run-ID>-...` markierte Testdaten. Sie gilt nicht für echte Benutzerkonten oder fremde Produktivdaten. Testpasswörter, Tokens und sonstige Zugangsdaten dürfen ausschließlich über Secrets/Umgebungsvariablen bereitgestellt werden und gehören weder in Code noch Logs, Jira oder Confluence.
+
+Fehlende Testkonto-/Supabase-Secrets sind ein **Blocker**. Der E2E-Test darf in diesem Fall nicht still übersprungen, als PASS gewertet oder durch eine manuelle Sichtprüfung ersetzt werden.
+
+### Verbindlicher Kern-Regressionsumfang
+
+Der Browser-Test muss für den vollständigen Kernregressionslauf mindestens abdecken:
+
+- Login mit Testkonto und Dashboard-Ladevorgang,
+- zwei Semester anlegen,
+- Semester A → B → A wechseln und Datentrennung prüfen,
+- Fach anlegen,
+- Aufgabe anlegen und Fach/Semester-Zuordnung prüfen,
+- Projekt und Unteraufgabe anlegen,
+- Timer direkt aus einer Aufgabe starten,
+- globalen Timer starten,
+- Timer pausieren, fortsetzen und beenden,
+- laufenden Timer mindestens auf Dashboard, Aufgaben, Projekte, Statistik, Lernplan, Fächer und Semesterkonfiguration prüfen,
+- Reload bei laufendem Timer prüfen,
+- Persistenz nach Reload prüfen,
+- Statistik gegen die erzeugte Lernzeit fachlich plausibilisieren und Semestertrennung prüfen,
+- `console.error`, ungefangene Exceptions, fehlgeschlagene Requests, API-4xx und HTTP-5xx auswerten,
+- E2E-Testdaten nach Abschluss bereinigen.
+
+Agenten wählen anhand des tatsächlichen Diffs selbstständig den erforderlichen Testumfang. Der Benutzer muss nicht entscheiden, welcher Browser-Test nötig ist. Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- und Synchronisationsänderungen lösen mindestens die jeweils betroffenen Kernabläufe aus.
+
+Für automatisierte Regressionen ist der Branch-Build zu testen. Die GitHub-Action `.github/workflows/e2e-regression.yml` baut den aktuellen Branch, startet den Branch-Build lokal und führt Playwright dagegen aus. Bei Fehlern werden soweit verfügbar Trace, Screenshot, Video, Report und Logs als Nachweis aufbewahrt.
 
 ## 7. Definition of Done
 
@@ -182,14 +213,21 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - `npm run test:coverage` erfolgreich ist,
 - `npx tsc --noEmit` erfolgreich ist,
 - `npm run build` erfolgreich ist,
-- erforderliche Browserprüfung dokumentiert ist,
+- bei sichtbaren/interaktiven Kernfunktionen der relevante Browser-/E2E-Test **tatsächlich erfolgreich ausgeführt** wurde,
+- der isolierte Test-Account ohne zusätzliche Benutzer-Rückfrage verwendet wurde, sofern ein Browser-/E2E-Test erforderlich war,
+- erforderliche E2E-Testdaten eindeutig markiert, erstellt und anschließend bereinigt wurden,
+- Timeränderungen mit Start/Pause/Fortsetzen/Beenden, Seitenwechsel, Dashboard, Reload und Statistik geprüft wurden,
+- Semesteränderungen mindestens mit A → B → A und Datentrennung geprüft wurden,
+- Aufgaben-/Projekt-/Statistikänderungen mit den zugehörigen echten Benutzerabläufen geprüft wurden,
+- Browser-Console, ungefangene Exceptions und relevante Request-Fehler geprüft wurden,
+- ein fehlender Testlauf oder fehlende E2E-Secrets nicht als PASS behandelt wurden,
 - Sicherheitsregeln eingehalten sind,
-- keine Tests manipuliert wurden, um Erfolg vorzutäuschen,
+- keine Tests manipuliert, abgeschwächt oder übersprungen wurden, um Erfolg vorzutäuschen,
 - Repair-Loops und offene Risiken dokumentiert sind,
 - finaler Diff geprüft wurde,
 - erforderliches GitHub Issue und Jira-Vorgang gegenseitig verknüpft sind oder eine zulässige Ausnahme im Jira-Vorgang dokumentiert ist,
 - Commit und Pull Request den Jira-Key enthalten,
-- Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
+- Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind,
 - bei aktiviertem `[COPILOT-FALLBACK]` Jira-Scope und Akzeptanzkriterien vor der ersten Codeänderung vollständig geladen und geprüft wurden; fehlender Kontext führt zwingend zu `ASK_USER`, und bei später fehlendem Atlassian-Schreibzugriff wurde eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt.
 
 ### Ressourcen- und Kontext-Effizienz
@@ -204,7 +242,7 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - [ ] Neue Funktionen führen nicht ohne nachvollziehbaren Grund zu deutlich höherem Kontext- oder Nutzerverbrauch.
 - [ ] Bei auffällig hohem Ressourcenverbrauch wurde die Ursache dokumentiert.
 
-**Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden.
+**Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden. Ein erforderlicher, aber nicht erfolgreich ausgeführter Browser-/E2E-Test blockiert `Erledigt` und damit die Fortsetzung eines davon abhängigen Sprints.
 
 ## 8. Verbindlicher Confluence-Abgleich
 
