@@ -6,7 +6,6 @@ import {
   createProject,
   createSemester,
   createSubject,
-  createSubtask,
   createTask,
   installBrowserGuards,
   login,
@@ -62,14 +61,17 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
     await test.step('Fach, Aufgabe, Projekt und Subtask in Semester A anlegen', async () => {
       await createSubject(page, subjectA);
       await createTask(page, taskA, subjectA);
-      await createProject(page, projectA, subjectA);
-      await createSubtask(page, projectA, subtaskA);
+      await createProject(page, projectA, subjectA, subtaskA);
     });
 
     await test.step('Semestertrennung A → B → A prüfen', async () => {
       await switchSemester(page, semesterB);
       await navigate(page, 'Fächer');
       await expect(page.getByText(subjectA, { exact: true })).toHaveCount(0);
+      await navigate(page, 'Aufgaben');
+      await expect(page.getByText(taskA, { exact: true })).toHaveCount(0);
+      await navigate(page, 'Projekte');
+      await expect(page.getByText(projectA, { exact: true })).toHaveCount(0);
       await createSubject(page, subjectB);
 
       await switchSemester(page, semesterA);
@@ -83,7 +85,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
     });
 
     await test.step('Timer direkt aus Aufgabe starten', async () => {
-      await startTimerFromTask(page, taskA);
+      await startTimerFromTask(page, taskA, subjectA);
       await assertRunningTimer(page);
     });
 
@@ -112,10 +114,12 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
 
     await test.step('Statistik nach erzeugter Lernzeit prüfen', async () => {
       await navigate(page, 'Statistik');
-      await expect(page.getByText(subjectA, { exact: true }).first()).toBeVisible();
+      const subjectRow = page.getByText(subjectA, { exact: true }).first().locator('xpath=../..');
+      await expect(subjectRow.getByText('2min', { exact: true })).toBeVisible();
+      const taskRow = page.getByText(taskA, { exact: true }).first().locator('xpath=ancestor::tr[1]');
+      await expect(taskRow.getByText('1min', { exact: true })).toBeVisible();
       const body = await page.locator('body').innerText();
       expect(body).not.toMatch(/NaN|undefined/);
-      expect(body).toMatch(/\d/);
     });
 
     await test.step('Statistik zwischen Semestern trennen', async () => {

@@ -42,13 +42,14 @@ jobs:
       - name: Install app dependencies
         run: npm ci
 
-      - name: Install Playwright for this CI run
-        run: |
-          npm install --no-save --package-lock=false @playwright/test@1.55.0
-          npx playwright install --with-deps chromium
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
 
       - name: Unit and integration tests
         run: npm test
+
+      - name: Coverage
+        run: npm run test:coverage
 
       - name: Typecheck
         run: npx tsc --noEmit

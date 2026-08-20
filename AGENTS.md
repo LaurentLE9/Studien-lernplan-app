@@ -194,7 +194,7 @@ Der Browser-Test muss für den vollständigen Kernregressionslauf mindestens abd
 - Reload bei laufendem Timer prüfen,
 - Persistenz nach Reload prüfen,
 - Statistik gegen die erzeugte Lernzeit fachlich plausibilisieren und Semestertrennung prüfen,
-- `console.error`, ungefangene Exceptions und unerwartete HTTP-5xx auswerten,
+- `console.error`, ungefangene Exceptions, fehlgeschlagene Requests, API-4xx und HTTP-5xx auswerten,
 - E2E-Testdaten nach Abschluss bereinigen.
 
 Agenten wählen anhand des tatsächlichen Diffs selbstständig den erforderlichen Testumfang. Der Benutzer muss nicht entscheiden, welcher Browser-Test nötig ist. Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- und Synchronisationsänderungen lösen mindestens die jeweils betroffenen Kernabläufe aus.

@@ -3,7 +3,12 @@ import { expect } from '@playwright/test';
 export const runId = `E2E-${process.env.GITHUB_RUN_ID || Date.now()}`;
 
 export function requireE2EEnvironment() {
-  const required = ['E2E_TEST_EMAIL', 'E2E_TEST_PASSWORD'];
+  const required = [
+    'VITE_SUPABASE_URL',
+    'VITE_SUPABASE_ANON_KEY',
+    'E2E_TEST_EMAIL',
+    'E2E_TEST_PASSWORD',
+  ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length) {
     throw new Error(`E2E-Testkonto nicht konfiguriert. Fehlend: ${missing.join(', ')}. Der Browser-Test darf nicht übersprungen werden.`);
@@ -13,11 +18,17 @@ export function requireE2EEnvironment() {
 export function installBrowserGuards(page) {
   const errors = [];
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('requestfailed', (request) => {
+    errors.push(`requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`);
+  });
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`console.error: ${message.text()}`);
   });
   page.on('response', (response) => {
-    if (response.status() >= 500) errors.push(`HTTP ${response.status()}: ${response.url()}`);
+    const isApiResponse = /\/auth\/v1\/|\/rest\/v1\//.test(response.url());
+    if (response.status() >= 500 || (isApiResponse && response.status() >= 400)) {
+      errors.push(`HTTP ${response.status()}: ${response.url()}`);
+    }
   });
   return errors;
 }
@@ -51,20 +62,15 @@ export async function clickAny(scope, patterns) {
   throw new Error(`Erforderliche Aktion nicht gefunden: ${patterns.map(String).join(' | ')}`);
 }
 
-async function chooseOption(page, dialog, value) {
-  const combos = dialog.getByRole('combobox');
-  for (let i = 0; i < await combos.count(); i += 1) {
-    const combo = combos.nth(i);
-    if (!(await combo.isEnabled().catch(() => false))) continue;
-    await combo.click();
-    const option = page.getByRole('option', { name: value, exact: true });
-    if (await option.isVisible().catch(() => false)) {
-      await option.click();
-      return true;
-    }
-    await page.keyboard.press('Escape');
-  }
-  return false;
+function fieldGroup(scope, label) {
+  return scope.getByText(label, { exact: true }).locator('xpath=..');
+}
+
+async function selectField(page, scope, label, value) {
+  const combo = fieldGroup(scope, label).getByRole('combobox');
+  await expect(combo).toBeEnabled();
+  await combo.click();
+  await page.getByRole('option', { name: value, exact: true }).click();
 }
 
 export async function createSemester(page, name, start = '2026-10-01', end = '2027-03-31') {
@@ -103,75 +109,61 @@ export async function createSubject(page, name) {
 
 export async function createTask(page, name, subjectName) {
   await navigate(page, 'Aufgaben');
-  await clickAny(page, [/Neue Aufgabe/i, /Aufgabe anlegen/i, /Aufgabe erstellen/i]);
-  const dialog = page.getByRole('dialog').last();
+  await page.getByRole('button', { name: 'Eintrag anlegen', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Eintrag anlegen' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('textbox').first().fill(name);
-  if (!(await chooseOption(page, dialog, subjectName))) throw new Error(`Fach ${subjectName} konnte der Aufgabe nicht zugeordnet werden.`);
-  await clickAny(dialog, [/Speichern/i, /Anlegen/i, /Erstellen/i]);
+  await fieldGroup(dialog, 'Titel').getByRole('textbox').fill(name);
+  await selectField(page, dialog, 'Typ', 'Aufgabe');
+  await selectField(page, dialog, 'Fach', subjectName);
+  await fieldGroup(dialog, 'Abgabe').locator('input[type="date"]').fill('2027-03-01');
+  await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
 }
 
-export async function createProject(page, name, subjectName) {
+export async function createProject(page, name, subjectName, subtaskName) {
   await navigate(page, 'Projekte');
-  await clickAny(page, [/Neues Projekt/i, /Projekt anlegen/i, /Projekt erstellen/i]);
-  const dialog = page.getByRole('dialog').last();
+  await page.getByRole('button', { name: 'Eintrag anlegen', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Eintrag anlegen' });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('textbox').first().fill(name);
-  await chooseOption(page, dialog, subjectName);
-  await clickAny(dialog, [/Speichern/i, /Anlegen/i, /Erstellen/i]);
+  await fieldGroup(dialog, 'Titel').getByRole('textbox').fill(name);
+  await selectField(page, dialog, 'Typ', 'Projekt');
+  await selectField(page, dialog, 'Fach', subjectName);
+  await dialog.getByRole('button', { name: 'Aufgabe', exact: true }).click();
+  await dialog.getByPlaceholder('Aufgabentitel').fill(subtaskName);
+  await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(page.getByText(name, { exact: true })).toBeVisible();
-}
-
-export async function createSubtask(page, projectName, subtaskName) {
-  await navigate(page, 'Projekte');
-  const card = page.getByText(projectName, { exact: true }).locator('xpath=ancestor::*[@data-slot="card"][1]');
-  await expect(card).toBeVisible();
-  await clickAny(card, [/Unteraufgabe/i, /Subtask/i, /Aufgabe hinzufügen/i]);
-  const dialog = page.getByRole('dialog').last();
-  await dialog.getByRole('textbox').first().fill(subtaskName);
-  await clickAny(dialog, [/Speichern/i, /Anlegen/i, /Erstellen/i]);
   await expect(page.getByText(subtaskName, { exact: true })).toBeVisible();
 }
 
-export async function startTimerFromTask(page, taskName) {
-  await navigate(page, 'Aufgaben');
-  const card = page.getByText(taskName, { exact: true }).locator('xpath=ancestor::*[@data-slot="card"][1]');
-  await expect(card).toBeVisible();
-  const named = card.getByRole('button', { name: /Timer|Start/i }).first();
-  if (await named.isVisible().catch(() => false)) await named.click();
-  else {
-    const titled = card.locator('button[title*="Timer"], button[aria-label*="Timer"]').first();
-    if (!(await titled.isVisible().catch(() => false))) throw new Error('Timer-Aktion an der Aufgabe nicht gefunden.');
-    await titled.click();
-  }
-  const dialog = page.getByRole('dialog').last();
-  if (await dialog.isVisible().catch(() => false)) await clickAny(dialog, [/Timer starten/i, /^Starten$/i, /^Start$/i]);
+export async function startTimerFromTask(page, taskName, subjectName) {
+  await navigate(page, 'Dashboard');
+  await page.getByRole('button', { name: `Timer für ${taskName} starten`, exact: true }).click();
+  await expect(page.getByText(subjectName, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(taskName, { exact: true }).first()).toBeVisible();
 }
 
 export async function startGlobalTimer(page, subjectName) {
   await navigate(page, 'Dashboard');
-  await clickAny(page, [/Timer starten/i, /Timer/i]);
+  await page.getByRole('button', { name: 'Timer', exact: true }).click();
   const dialog = page.getByRole('dialog').last();
-  if (await dialog.isVisible().catch(() => false)) {
-    await chooseOption(page, dialog, subjectName);
-    await clickAny(dialog, [/Timer starten/i, /^Starten$/i, /^Start$/i]);
-  }
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: subjectName, exact: true }).click();
+  await dialog.getByRole('button', { name: 'Ohne Aufgabe starten', exact: true }).click();
+  await expect(page.getByText(subjectName, { exact: true }).first()).toBeVisible();
 }
 
 export async function stopTimer(page) {
-  await clickAny(page, [/Timer stoppen/i, /Timer beenden/i, /^Stoppen$/i, /^Beenden$/i]);
-  const dialog = page.getByRole('dialog').last();
-  if (await dialog.isVisible().catch(() => false)) {
-    const confirm = dialog.getByRole('button', { name: /Speichern|Beenden|Abschließen|Stoppen/i }).first();
-    if (await confirm.isVisible().catch(() => false)) await confirm.click();
-  }
+  await page.getByRole('button', { name: 'Beenden', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Timer beenden' });
+  await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
+  await expect(dialog).toBeHidden();
 }
 
 export async function pauseAndResumeTimer(page) {
-  await clickAny(page, [/Pausieren/i, /^Pause$/i]);
+  await page.getByRole('button', { name: 'Timer pausieren', exact: true }).click();
+  await expect(page.getByText('Pausiert', { exact: true })).toBeVisible();
   await page.waitForTimeout(500);
-  await clickAny(page, [/Fortsetzen/i, /Weiter/i, /^Start$/i]);
+  await page.getByRole('button', { name: 'Timer fortsetzen', exact: true }).click();
 }
 
 export async function assertRunningTimer(page) {

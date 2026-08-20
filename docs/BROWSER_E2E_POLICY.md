@@ -30,7 +30,7 @@ Der Kernregressionstest muss mindestens prüfen:
 12. Globalen Timer starten, pausieren, fortsetzen und beenden.
 13. Lernzeit/Statistik auf plausible Werte, `NaN`/`undefined` und Semestertrennung prüfen.
 14. Persistenz nach Reload prüfen.
-15. `console.error`, ungefangene Exceptions und unerwartete HTTP-5xx erfassen.
+15. `console.error`, ungefangene Exceptions, fehlgeschlagene Requests, API-4xx und HTTP-5xx erfassen.
 16. Testdaten nach Erfolg oder Fehler bereinigen.
 
 Die Testdaten verwenden das Präfix `E2E-<Run-ID>-...`, damit parallele Läufe eindeutig getrennt und nur eigene Daten gelöscht werden.
@@ -59,7 +59,7 @@ Benötigte GitHub Actions Secrets:
 
 Fehlende Secrets führen zu einem fehlgeschlagenen Workflow. Der E2E-Test darf nicht still übersprungen werden.
 
-Playwright wird im CI-Lauf temporär installiert, damit für KAN-109 kein unnötiges Paket-/Lockfile-Upgrade erzwungen wird.
+Playwright ist als fest gepinnte Dev-Abhängigkeit eingecheckt; im CI-Lauf wird nur der benötigte Chromium-Browser installiert.
 
 ## Fehlernachweise
 
