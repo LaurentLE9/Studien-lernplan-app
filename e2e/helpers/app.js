@@ -104,7 +104,7 @@ export async function createSubject(page, name) {
   const dialog = page.getByRole('dialog', { name: 'Fach anlegen' });
   await dialog.getByRole('textbox').first().fill(name);
   await dialog.getByRole('button', { name: 'Speichern' }).click();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByText(name, { exact: true }).first()).toBeVisible();
 }
 
 export async function createTask(page, name, subjectName) {
@@ -160,6 +160,11 @@ export async function stopTimer(page) {
   const dialog = page.getByRole('dialog', { name: 'Timer beenden' });
   await dialog.getByRole('button', { name: 'Speichern', exact: true }).click();
   await expect(dialog).toBeHidden();
+  const entryDialog = page.getByRole('dialog', { name: 'Lerneinheit anlegen' });
+  await expect(entryDialog).toBeVisible();
+  await entryDialog.getByRole('button', { name: 'Aktualisieren', exact: true }).click();
+  await expect(entryDialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Beenden', exact: true })).toBeHidden();
 }
 
 export async function pauseAndResumeTimer(page) {

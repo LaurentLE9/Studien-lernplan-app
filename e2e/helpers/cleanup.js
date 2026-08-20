@@ -171,27 +171,29 @@ async function purgePlannerSnapshot(page, prefix) {
 export async function cleanupE2EData(page, { prefix, semesters }) {
   if (page.isClosed()) return;
   const sidebar = page.getByRole('complementary');
-  if (!(await sidebar.isVisible().catch(() => false))) return;
+  const canUseUi = await sidebar.isVisible().catch(() => false);
 
   // UI cleanup exercises the normal deletion paths. The authenticated,
   // user-scoped snapshot purge below remains authoritative so a failed
   // assertion cannot leave data behind or poison a Playwright retry.
-  try {
-    await discardActiveTimer(page);
+  if (canUseUi) {
+    try {
+      await discardActiveTimer(page);
 
-    for (const semester of semesters) {
-      await switchSemester(page, semester).catch(() => false);
-      await deleteStudySessions(page, prefix);
-      await archiveProjects(page, prefix);
-      await deleteTasks(page, prefix);
-      await permanentlyDeleteSubjects(page, prefix);
-    }
+      for (const semester of semesters) {
+        await switchSemester(page, semester).catch(() => false);
+        await deleteStudySessions(page, prefix);
+        await archiveProjects(page, prefix);
+        await deleteTasks(page, prefix);
+        await permanentlyDeleteSubjects(page, prefix);
+      }
 
-    for (const semester of [...semesters].reverse()) {
-      await deleteSemester(page, semester);
+      for (const semester of [...semesters].reverse()) {
+        await deleteSemester(page, semester);
+      }
+    } catch {
+      // The verified snapshot purge is the deterministic cleanup fallback.
     }
-  } catch {
-    // The verified snapshot purge is the deterministic cleanup fallback.
   }
 
   await purgePlannerSnapshot(page, prefix);
