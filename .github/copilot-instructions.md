@@ -77,9 +77,21 @@ npx tsc --noEmit
 npm run build
 ```
 
-Bei sichtbaren/interaktiven Änderungen zusätzlich Browser-/Preview-Prüfung vorsehen.
+Bei sichtbaren/interaktiven Änderungen zusätzlich Browser-/E2E-Prüfung vorsehen.
 
 Tests niemals löschen, überspringen oder abschwächen, nur um einen grünen Status zu erreichen.
+
+## Browser-/E2E-Regeln
+
+`AGENTS.md` und `docs/BROWSER_E2E_POLICY.md` sind verbindlich.
+
+- Der isolierte Test-Account ist für erforderliche Browser-, E2E-, Smoke-, Regression- und Funktionstests vorab freigegeben.
+- **Nicht nachfragen**, ob der Test gestartet oder der Test-Account verwendet werden soll.
+- Notwendige E2E-Testdaten selbstständig mit `E2E-<Run-ID>-...` kennzeichnen, erstellen und anschließend bereinigen.
+- Fehlende Testkonto-/Supabase-Secrets sind ein Blocker; Tests niemals still skippen oder als PASS werten.
+- Bei Änderungen an Timer, Semester, Aufgaben, Projekten, Statistik, Dashboard, Navigation, Persistenz oder Synchronisierung den betroffenen echten Benutzerablauf selbstständig auswählen und testen.
+- Der Kernregressionslauf umfasst Semester A → B → A, Fach, Aufgabe, Projekt/Subtask, Timer normal und aus Aufgabe, Pause/Fortsetzen/Beenden, seitenübergreifende Timeranzeige, Reload, Statistik, Persistenz sowie Console-/Request-Fehler.
+- `.github/workflows/e2e-regression.yml` und `e2e/core-regression.spec.js` sind der automatisierte Kernnachweis. Ein nicht ausgeführter erforderlicher Browser-Test blockiert `Done`.
 
 ## Git / GitHub
 
@@ -97,13 +109,14 @@ Tests niemals löschen, überspringen oder abschwächen, nur um einen grünen St
 
 Ein erfolgreiches Copilot-Ergebnis bedeutet nur **technisch reviewbereit**, nicht automatisch Jira `Erledigt`.
 
-`Erledigt` setzt weiterhin voraus: Akzeptanzkriterien, Tests, erforderliche Browserprüfung, Review, geklärte Hinweise, erfolgreichen PR/Merge nach `main` sowie aktuelle Jira-/Confluence-Dokumentation.
+`Erledigt` setzt weiterhin voraus: Akzeptanzkriterien, Tests, erforderliche tatsächlich ausgeführte Browser-/E2E-Prüfung, Review, geklärte Hinweise, erfolgreichen PR/Merge nach `main` sowie aktuelle Jira-/Confluence-Dokumentation. Bei blockierenden Sofortaufgaben darf der nächste Sprint erst weitergeführt werden, wenn diese vollständige Definition of Done erfüllt ist.
 
 ## Verknüpfte Dokumente
 
 - `AGENTS.md` – verbindliche Agentenregeln
 - `docs/LOOP_ENGINEERING.md` – Loop-, Evaluations-, Retry- und Stop-Regeln
+- `docs/BROWSER_E2E_POLICY.md` – Browser-/E2E-Kernregression und Testkonto-Regeln
 - `README.md` – Repository-Überblick
-- Jira KAN-30 / KAN-72 / KAN-73 / KAN-74
+- Jira KAN-30 / KAN-72 / KAN-73 / KAN-74 / KAN-109
 - Confluence: „Arbeitsprozess und Definition of Done“
 - Confluence: „KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“
