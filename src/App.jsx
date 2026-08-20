@@ -3748,6 +3748,12 @@ export default function StudyPlannerApp() {
   const hasSemesterScope = semesters.length > 0 && Boolean(selectedSemesterId);
   const activeSemesterSubjectIds = useMemo(
     () => hasSemesterScope
+      ? getSemesterSubjectIds(data.subjects, selectedSemesterId)
+      : new Set(data.subjects.map((subject) => subject.id).filter(Boolean)),
+    [data.subjects, selectedSemesterId, hasSemesterScope],
+  );
+  const semesterSubjectIds = useMemo(
+    () => hasSemesterScope
       ? getSemesterSubjectIds([...data.subjects, ...archivedSubjects], selectedSemesterId)
       : new Set([...data.subjects, ...archivedSubjects].map((subject) => subject.id).filter(Boolean)),
     [data.subjects, archivedSubjects, selectedSemesterId, hasSemesterScope],
@@ -3988,7 +3994,7 @@ export default function StudyPlannerApp() {
     }
   };
 
-  const syncExamsFromDatabase = async (userId, semesterId = selectedSemesterId, subjectIds = [...activeSemesterSubjectIds]) => {
+  const syncExamsFromDatabase = async (userId, semesterId = selectedSemesterId, subjectIds = [...semesterSubjectIds]) => {
     if (!userId || !semesterId) return;
     const requestVersion = ++semesterSyncVersionRef.current.exams;
     try {
@@ -4043,11 +4049,11 @@ export default function StudyPlannerApp() {
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
-    syncExamsFromDatabase(session.user.id, selectedSemesterId, [...activeSemesterSubjectIds]).catch((err) => {
+    syncExamsFromDatabase(session.user.id, selectedSemesterId, [...semesterSubjectIds]).catch((err) => {
       console.error("Exam sync error:", err);
       setCloudSyncError(err?.message || "Klausuren konnten nicht aus Supabase geladen werden");
     });
-  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, semesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated || !selectedSemesterId) return;
@@ -4057,9 +4063,9 @@ export default function StudyPlannerApp() {
     const syncStudyTimeEntries = async () => {
       try {
         setIsLoadingTimeEntries(true);
-        const rows = await loadStudyTimeEntries(session.user.id, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
+        const rows = await loadStudyTimeEntries(session.user.id, { semesterId: selectedSemesterId, subjectIds: [...semesterSubjectIds] });
         if (!cancelled) {
-          setStudyTimeEntries(rows.filter((entry) => activeSemesterSubjectIds.has(entry.subjectId)));
+          setStudyTimeEntries(rows.filter((entry) => semesterSubjectIds.has(entry.subjectId)));
         }
       } catch (error) {
         console.error("Study time entries sync error:", error);
@@ -4078,7 +4084,7 @@ export default function StudyPlannerApp() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, activeSemesterSubjectIds]);
+  }, [session?.user?.id, isCloudHydrated, selectedSemesterId, semesterSubjectIds]);
 
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
@@ -5683,7 +5689,7 @@ export default function StudyPlannerApp() {
         }
         
         // Reload study time entries
-        const rows = await loadStudyTimeEntries(userId, { semesterId: selectedSemesterId, subjectIds: [...activeSemesterSubjectIds] });
+        const rows = await loadStudyTimeEntries(userId, { semesterId: selectedSemesterId, subjectIds: [...semesterSubjectIds] });
         setStudyTimeEntries(rows);
         if (!planSyncError) {
           setCloudSyncError(null);

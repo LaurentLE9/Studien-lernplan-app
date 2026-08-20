@@ -189,6 +189,19 @@ describe("Semesterwechsel", () => {
     });
   });
 
+  it("blendet offene Aufgaben archivierter Fächer aus aktiven Ansichten aus", async () => {
+    localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
+    await renderPlannerApp({
+      semesters: semesterOptions.semesters,
+      subjects: [
+        { ...testSubjectRow, semester_id: "semester-a", is_archived: true },
+      ],
+    });
+
+    await openNavigationPage("Aufgaben");
+    expect(screen.queryByText("Refactoring vorbereiten")).not.toBeInTheDocument();
+  });
+
   it("ignoriert verspätete Fachantworten eines zuvor ausgewählten Semesters", async () => {
     localStorage.setItem(`${ACTIVE_SEMESTER_STORAGE_KEY}:${TEST_USER_ID}`, "semester-a");
     await renderPlannerApp(semesterOptions);
