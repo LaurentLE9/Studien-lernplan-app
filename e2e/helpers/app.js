@@ -37,8 +37,8 @@ export async function login(page) {
   await page.goto('/');
   const loginHeading = page.getByRole('heading', { name: 'Anmelden' });
   if (await loginHeading.isVisible().catch(() => false)) {
-    await page.getByLabel('E-Mail').fill(process.env.E2E_TEST_EMAIL);
-    await page.getByLabel('Passwort').fill(process.env.E2E_TEST_PASSWORD);
+    await page.getByPlaceholder('deine@email.de').fill(process.env.E2E_TEST_EMAIL);
+    await page.locator('input[type="password"]').fill(process.env.E2E_TEST_PASSWORD);
     await page.getByRole('button', { name: 'Anmelden', exact: true }).click();
   }
   await expect(page.getByRole('button', { name: 'Aufgaben' }).first()).toBeVisible();
