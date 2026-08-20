@@ -57,6 +57,24 @@ Schema:
 - Keine unnötigen Dateien verändern.
 - Keine Tests abschwächen, überspringen oder löschen, nur damit Prüfungen grün werden.
 
+### Kontext- und Nutzerlimit-Effizienz
+
+> Jede Aufgabe muss mit dem kleinstmöglichen notwendigen Kontext durchgeführt werden. Vollständige Repository-Analysen dürfen nur erfolgen, wenn die Aufgabe sie tatsächlich erfordert.
+
+- Vor jeder Analyse zuerst Scope, Nicht-Ziele, betroffene Schichten und benötigte Nachweise bestimmen.
+- Standardmäßig mit `git status`, Git-Diff beziehungsweise den seit dem bestätigten Ausgangs-HEAD geänderten Dateien beginnen. Ein vollständiger Repository-Scan braucht eine konkrete Begründung aus dem Ticket.
+- Unveränderte Dateien und bereits geklärte Architektur nicht erneut analysieren. Weiterhin gültige Dokumentation und belegte Ergebnisse aus demselben Arbeitslauf wiederverwenden.
+- Große Dateien nur über Suche, Symbole, relevante Zeilenbereiche und direkte Abhängigkeiten untersuchen. Das gilt besonders für `src/App.jsx`; eine vollständige Verarbeitung ist nur bei dateiweitem Scope zulässig.
+- Zuerst lokale, deterministische Mittel wie `rg`, Git-Diff, Typecheck, Lint, gezielte Tests oder vorhandene Skripte nutzen, wenn sie dieselbe Frage zuverlässig beantworten.
+- Prompts und Tool-Ausgaben auf Ticket, geänderte Dateien, fehlende Evidenz und konkrete Fehler begrenzen. Große unveränderte Inhalte nicht wiederholt übertragen.
+- Tests anhand des tatsächlichen Änderungsumfangs auswählen: zuerst kleine relevante Prüfungen, danach die nach Definition of Done erforderlichen vollständigen Regressionstests für den finalen Kandidaten.
+- Build, Typecheck, Lint, Test- und Analysebefehle nicht ohne technischen Grund identisch wiederholen. Ein Prüfergebnis darf nur wiederverwendet werden, wenn geprüfter Commit beziehungsweise Arbeitsbaum und alle dafür relevanten Quellen, Konfigurationen und Abhängigkeiten unverändert sind.
+- Nach einer Reparatur nur die dadurch ungültig gewordenen gezielten Nachweise sofort erneuern. Vor Veröffentlichung bleiben alle vollständigen Pflichtprüfungen für den finalen Stand verbindlich.
+- Ressourcenoptimierung darf niemals notwendige Sicherheits-, Qualitäts-, Datenintegritäts-, Browser- oder Regressionstests auslassen oder deren Aussagekraft verringern.
+- Der Abschlussbericht nennt kurz die untersuchten Dateien/Bereiche, ausgeführten Prüfungen, wiederverwendeten Nachweise und die Begründung für jeden vollständigen Repository-Scan.
+
+Die wiederverwendbare Repository-Kontextkarte und die Regeln zur Gültigkeit von Prüfnachweisen stehen in `docs/CONTEXT_EFFICIENCY.md`.
+
 ## 4. Kontrollierter Entwicklungs-Loop
 
 Für nicht-triviale Änderungen gilt:
@@ -96,6 +114,8 @@ npm run build
 ```
 
 Bei UI-/Interaktionsänderungen zusätzlich Preview-/Browserprüfung durchführen und Branch + Commit des geprüften Deployments eindeutig bestätigen.
+
+Die vollständigen Pflichtprüfungen werden einmal für den finalen Kandidaten ausgeführt. Ändert sich der Stand danach, werden alle durch die Änderung ungültig gewordenen Prüfungen erneut ausgeführt; unveränderte, eindeutig einem Stand zuordenbare Nachweise werden nicht ohne Grund wiederholt.
 
 ### EVALUATE
 
@@ -171,6 +191,18 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - Commit und Pull Request den Jira-Key enthalten,
 - Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind.
 - bei aktiviertem `[COPILOT-FALLBACK]` Jira-Scope und Akzeptanzkriterien vor der ersten Codeänderung vollständig geladen und geprüft wurden; fehlender Kontext führt zwingend zu `ASK_USER`, und bei später fehlendem Atlassian-Schreibzugriff wurde eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt.
+
+### Ressourcen- und Kontext-Effizienz
+
+- [ ] Es wurden nur die für die Aufgabe notwendigen Dateien und Bereiche analysiert.
+- [ ] Es wurde kein unnötiger vollständiger Repository-Scan durchgeführt.
+- [ ] Bereits vorhandener und weiterhin gültiger Kontext wurde wiederverwendet.
+- [ ] Wiederholte identische Analysen wurden vermieden.
+- [ ] Tests wurden entsprechend dem tatsächlichen Änderungsumfang ausgewählt.
+- [ ] Große Dateien wurden möglichst gezielt statt vollständig verarbeitet.
+- [ ] Die Optimierung des Nutzerlimits beeinträchtigt weder Qualität noch Sicherheit.
+- [ ] Neue Funktionen führen nicht ohne nachvollziehbaren Grund zu deutlich höherem Kontext- oder Nutzerverbrauch.
+- [ ] Bei auffällig hohem Ressourcenverbrauch wurde die Ursache dokumentiert.
 
 **Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden.
 

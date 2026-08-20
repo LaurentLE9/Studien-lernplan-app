@@ -92,9 +92,12 @@ Der Standard-Loop für jede Jira-Aufgabe ist:
 3. `AGENTS.md`, `README.md`, `package.json` und diese Datei lesen.
 4. Git-Status, aktuellen Branch, Remote und Ausgangs-HEAD prüfen.
 5. Scope und Nicht-Ziele festhalten.
-6. Betroffene Dateien und Abhängigkeiten identifizieren.
-7. Risiken bestimmen.
-8. Benötigte Tests festlegen.
+6. Ausgehend von Git-Diff, geänderten Dateien und der Kontextkarte in `docs/CONTEXT_EFFICIENCY.md` betroffene Dateien und Abhängigkeiten identifizieren.
+7. Vorhandene, weiterhin gültige Kontext- und Prüfnachweise erfassen; fehlende Evidenz gezielt bestimmen.
+8. Risiken bestimmen.
+9. Benötigte gezielte Tests und vollständige Abschlussprüfungen festlegen.
+
+Ein vollständiger Repository-Scan ist eine begründungspflichtige Ausnahme. Große Dateien werden über Symbole, Suchtreffer und relevante Zeilenbereiche erschlossen, sofern das Ticket nicht die gesamte Datei betrifft.
 
 **Ausgabe:** überprüfbarer Umsetzungsplan.
 
@@ -118,6 +121,8 @@ npm run test:coverage
 npx tsc --noEmit
 npm run build
 ```
+
+Die Baseline wird einmal für den finalen Kandidaten vollständig ausgeführt. Jeder Nachweis wird dem geprüften Commit beziehungsweise Arbeitsbaum und dem konkreten Befehl zugeordnet. Nach späteren Änderungen werden nur ungültig gewordene gezielte Nachweise sofort wiederholt; vor `PUBLISH` müssen sämtliche Pflichtprüfungen den finalen Stand abdecken.
 
 Zusätzlich bei sichtbaren/interaktiven Änderungen:
 
@@ -158,7 +163,7 @@ Bei `RETRY` gilt:
 2. Keine identische, bereits fehlgeschlagene Strategie wiederholen.
 3. Nur die kleinste nötige Korrektur vornehmen.
 4. Betroffene Prüfungen erneut ausführen.
-5. Danach vollständige Pflichtprüfungen wiederholen.
+5. Die vollständigen Pflichtprüfungen nach Abschluss der Reparaturserie für den finalen Kandidaten ausführen. Eine einzelne Pflichtprüfung schon vorher erneut ausführen, wenn die Reparatur genau deren bisherigen Nachweis ungültig macht und sie zur nächsten Entscheidung benötigt wird.
 
 **Maximal drei Reparaturversuche pro zusammenhängender Fehlerursache.**
 
@@ -246,6 +251,10 @@ Eine Agenten-Änderung darf nur als für Review bereit gelten, wenn:
 - [ ] Änderungen auf einem Aufgaben-Branch liegen, nicht direkt auf `main`.
 - [ ] Review-Hinweise geklärt sind.
 - [ ] Merge nach `main` bestätigt wurde, bevor Jira auf `Erledigt` gesetzt wird.
+- [ ] nur die notwendigen Dateien und Bereiche analysiert und große Dateien gezielt erschlossen wurden.
+- [ ] vorhandener gültiger Kontext und gültige Prüfnachweise wiederverwendet sowie identische Analysen vermieden wurden.
+- [ ] Testauswahl und vollständige Abschlussprüfungen dem tatsächlichen Änderungsumfang entsprechen, ohne Qualität oder Sicherheit zu beeinträchtigen.
+- [ ] untersuchte Bereiche, ausgeführte Prüfungen und auffälliger Ressourcenverbrauch im Abschlussnachweis dokumentiert sind.
 
 Wichtig: **Loop-PASS ist nicht dasselbe wie Jira Done.** Ein Loop kann technisch erfolgreich beendet sein, während der Jira-Vorgang bis Review, Test und Merge weiterhin offen bleibt.
 
