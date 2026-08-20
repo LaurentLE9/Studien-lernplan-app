@@ -15,6 +15,7 @@ Verbindliche Repository-Dokumente:
 
 - [`AGENTS.md`](AGENTS.md) – Arbeits-, Sicherheits-, Test-, Branch- und Abschlussregeln für Entwicklungs-Agenten
 - [`docs/LOOP_ENGINEERING.md`](docs/LOOP_ENGINEERING.md) – kontrollierter Entwicklungs-Loop, Evaluator, Retry-/Stop-Regeln sowie Zielarchitektur für die spätere KI-Integration
+- [`docs/CONTEXT_EFFICIENCY.md`](docs/CONTEXT_EFFICIENCY.md) – kompakte Repository-Kontextkarte, Analyse-Routing und Regeln zur Wiederverwendung gültiger Prüfnachweise
 - [`docs/TYPESCRIPT_STRATEGY.md`](docs/TYPESCRIPT_STRATEGY.md) – verbindliche Reihenfolge, Grenzen und Qualitäts-Gates für die schrittweise TypeScript-Migration
 - [`.github/copilot-instructions.md`](.github/copilot-instructions.md) – GitHub-Copilot-spezifische Anweisungen
 

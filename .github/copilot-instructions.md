@@ -34,6 +34,17 @@ Dann gilt zusätzlich:
 - Bestehendes Verhalten und Design erhalten, soweit das Ticket keine Änderung verlangt.
 - Keine Secrets, Tokens, Passwörter oder produktiven Zugangsdaten erzeugen oder in Code/Logs/Dokumentation aufnehmen.
 
+## Kontext- und Nutzerlimit-Effizienz
+
+- Jede Aufgabe mit dem kleinstmöglichen notwendigen Kontext durchführen; vollständige Repository-Analysen nur bei tatsächlich repositoryweitem Scope.
+- Mit Scope, `git status`, Git-Diff und geänderten Dateien beginnen. Unveränderte Dateien oder bereits geklärte Architektur nicht erneut analysieren.
+- `docs/CONTEXT_EFFICIENCY.md` als kompakte Kontextkarte verwenden und weiterhin gültige Nachweise desselben Arbeitslaufs wiederverwenden.
+- Große Dateien, insbesondere `src/App.jsx`, über Suche, Symbole und relevante Zeilenbereiche untersuchen.
+- Lokale deterministische Prüfungen gegenüber KI-Analyse bevorzugen, wenn sie dieselbe Aussage zuverlässig liefern.
+- Zuerst gezielte Tests ausführen, danach alle Pflichtprüfungen einmal für den finalen Kandidaten. Nach Änderungen nur die dadurch ungültig gewordenen Nachweise erneuern.
+- Keine Ressourcenoptimierung darf notwendige Qualitäts-, Sicherheits-, Browser- oder Regressionstests auslassen.
+- Im Abschlussbericht untersuchte Bereiche, Prüfungen, wiederverwendete Nachweise und begründete Vollscans nennen.
+
 ## Entwicklungs-Loop
 
 Bei nicht-trivialen Aufgaben nach folgendem Muster arbeiten:
@@ -50,6 +61,7 @@ PLAN → IMPLEMENT → VERIFY → EVALUATE
 - Nach jeder Implementierungsrunde das Ergebnis gegen Akzeptanzkriterien prüfen.
 - Maximal drei Reparaturversuche pro zusammenhängender Fehlerursache.
 - Eine bereits fehlgeschlagene Strategie nicht unverändert wiederholen.
+- Identische Analysen oder vollständige Prüfläufe nicht ohne geänderten Stand oder neue technische Begründung wiederholen.
 - Bei Auth-/RLS-/destruktiven Datenbank-/Secret-Risiken stoppen und menschliche Entscheidung verlangen.
 
 Die vollständigen Regeln stehen in `docs/LOOP_ENGINEERING.md`.
