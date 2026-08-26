@@ -175,7 +175,10 @@ export async function pauseAndResumeTimer(page) {
 }
 
 export async function assertRunningTimer(page) {
-  const timerText = page.getByText(/\b\d{1,2}:\d{2}(?::\d{2})?\b/).first();
+  const timerBar = page
+    .getByRole('button', { name: 'Beenden', exact: true })
+    .locator('xpath=ancestor::div[contains(@class, "fixed")][1]');
+  const timerText = timerBar.getByText(/\b\d{1,2}:\d{2}:\d{2}\b/).first();
   await expect(timerText).toBeVisible();
   const before = (await timerText.textContent())?.trim();
   await expect.poll(
