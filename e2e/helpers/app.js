@@ -60,6 +60,7 @@ export async function installBrowserGuards(page) {
       try {
         await page.reload();
         await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
       } finally {
         intentionalReload = false;
       }
