@@ -302,6 +302,29 @@ beforeEach(() => {
   Object.values(cloudMocks).forEach((mock) => mock.mockReset());
 });
 
+describe("Cloud-Sync beim Seitenwechsel", () => {
+  it("sichert den aktuellen Snapshot lokal, ohne beim pagehide einen neuen Cloud-Request zu starten", async () => {
+    await renderPlannerApp();
+    const userCacheKey = `${PLANNER_STORAGE_KEY}:user:${TEST_USER_ID}`;
+    await waitFor(() => {
+      expect(localStorage.getItem(userCacheKey)).not.toBeNull();
+    });
+    localStorage.removeItem(userCacheKey);
+    cloudMocks.saveUserPlannerData.mockClear();
+
+    fireEvent(window, new Event("pagehide"));
+
+    expect(cloudMocks.saveUserPlannerData).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem(userCacheKey))).toEqual(
+      expect.objectContaining({
+        tasks: expect.arrayContaining([
+          expect.objectContaining({ id: "task-regression" }),
+        ]),
+      }),
+    );
+  });
+});
+
 describe("bestehende Aufgabenabläufe", () => {
   it("lädt Aufgabeneigenschaften und speichert eine Bearbeitung lokal sowie über die Cloud-Grenze", async () => {
     await renderPlannerApp();

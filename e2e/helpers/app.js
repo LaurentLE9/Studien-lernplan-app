@@ -17,8 +17,6 @@ export function requireE2EEnvironment() {
 
 export async function installBrowserGuards(page) {
   const errors = [];
-  const expectedNavigationAborts = [];
-  let intentionalReload = false;
 
   await page.route('**/_vercel/speed-insights/script.js', (route) => route.fulfill({
     status: 200,
@@ -29,21 +27,11 @@ export async function installBrowserGuards(page) {
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', (request) => {
     const entry = `requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`;
-    if (intentionalReload && request.failure()?.errorText === 'net::ERR_ABORTED') {
-      expectedNavigationAborts.push(entry);
-      return;
-    }
     errors.push(entry);
   });
   page.on('console', (message) => {
     if (message.type() !== 'error') return;
     const text = message.text();
-    const expectedSyncAbort = intentionalReload
-      && /^(?:Save planner data|Immediate cloud sync|Study time entries sync|Exam sync) error:.*Failed to fetch/s.test(text);
-    if (expectedSyncAbort) {
-      expectedNavigationAborts.push(`console.error: ${text}`);
-      return;
-    }
     errors.push(`console.error: ${text}`);
   });
   page.on('response', (response) => {
@@ -54,16 +42,10 @@ export async function installBrowserGuards(page) {
   });
   return {
     errors,
-    expectedNavigationAborts,
     async reload() {
-      intentionalReload = true;
-      try {
-        await page.reload();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(500);
-      } finally {
-        intentionalReload = false;
-      }
+      await page.reload();
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(500);
     },
   };
 }

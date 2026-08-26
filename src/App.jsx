@@ -3682,22 +3682,22 @@ export default function StudyPlannerApp() {
   useEffect(() => {
     if (!session?.user?.id || !isCloudHydrated) return;
 
+    const persistLocalSnapshot = () => {
+      writeUserCache(session.user.id, data);
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        flushCloudSaveNow(data);
+        persistLocalSnapshot();
       }
     };
 
-    const handlePageHide = () => {
-      flushCloudSaveNow(data);
-    };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pagehide", persistLocalSnapshot);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pagehide", persistLocalSnapshot);
     };
   }, [data, session?.user?.id, isCloudHydrated]);
 
