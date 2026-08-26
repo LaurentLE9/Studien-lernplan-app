@@ -162,6 +162,11 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
 
     await assertNoBrowserErrors(browserGuard.errors);
 
+    await testInfo.attach('completed-request-anomalies', {
+      body: Buffer.from(JSON.stringify(browserGuard.completedRequestAnomalies, null, 2)),
+      contentType: 'application/json',
+    });
+
     await testInfo.attach('e2e-run-id', {
       body: Buffer.from(runId),
       contentType: 'text/plain',

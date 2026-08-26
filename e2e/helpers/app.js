@@ -17,6 +17,8 @@ export function requireE2EEnvironment() {
 
 export async function installBrowserGuards(page) {
   const errors = [];
+  const completedRequestAnomalies = [];
+  const successfulResponses = new WeakSet();
 
   await page.route('**/_vercel/speed-insights/script.js', (route) => route.fulfill({
     status: 200,
@@ -27,6 +29,10 @@ export async function installBrowserGuards(page) {
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', (request) => {
     const entry = `requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`;
+    if (successfulResponses.has(request) && request.failure()?.errorText === 'net::ERR_ABORTED') {
+      completedRequestAnomalies.push(entry);
+      return;
+    }
     errors.push(entry);
   });
   page.on('console', (message) => {
@@ -35,6 +41,9 @@ export async function installBrowserGuards(page) {
     errors.push(`console.error: ${text}`);
   });
   page.on('response', (response) => {
+    if (response.status() >= 200 && response.status() < 400) {
+      successfulResponses.add(response.request());
+    }
     const isApiResponse = /\/auth\/v1\/|\/rest\/v1\//.test(response.url());
     if (response.status() >= 500 || (isApiResponse && response.status() >= 400)) {
       errors.push(`HTTP ${response.status()}: ${response.url()}`);
@@ -42,7 +51,9 @@ export async function installBrowserGuards(page) {
   });
   return {
     errors,
+    completedRequestAnomalies,
     async reload() {
+      await page.waitForLoadState('networkidle');
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
