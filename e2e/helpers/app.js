@@ -15,14 +15,36 @@ export function requireE2EEnvironment() {
   }
 }
 
-export function installBrowserGuards(page) {
+export async function installBrowserGuards(page) {
   const errors = [];
+  const expectedNavigationAborts = [];
+  let intentionalReload = false;
+
+  await page.route('**/_vercel/speed-insights/script.js', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: '',
+  }));
+
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
   page.on('requestfailed', (request) => {
-    errors.push(`requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`);
+    const entry = `requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`;
+    if (intentionalReload && request.failure()?.errorText === 'net::ERR_ABORTED') {
+      expectedNavigationAborts.push(entry);
+      return;
+    }
+    errors.push(entry);
   });
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console.error: ${message.text()}`);
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    const expectedSyncAbort = intentionalReload
+      && /^(?:Save planner data|Immediate cloud sync|Study time entries sync|Exam sync) error:.*Failed to fetch/s.test(text);
+    if (expectedSyncAbort) {
+      expectedNavigationAborts.push(`console.error: ${text}`);
+      return;
+    }
+    errors.push(`console.error: ${text}`);
   });
   page.on('response', (response) => {
     const isApiResponse = /\/auth\/v1\/|\/rest\/v1\//.test(response.url());
@@ -30,7 +52,19 @@ export function installBrowserGuards(page) {
       errors.push(`HTTP ${response.status()}: ${response.url()}`);
     }
   });
-  return errors;
+  return {
+    errors,
+    expectedNavigationAborts,
+    async reload() {
+      intentionalReload = true;
+      try {
+        await page.reload();
+        await page.waitForLoadState('domcontentloaded');
+      } finally {
+        intentionalReload = false;
+      }
+    },
+  };
 }
 
 export async function login(page) {

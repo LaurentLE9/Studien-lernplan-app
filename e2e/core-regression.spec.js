@@ -58,7 +58,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
       useUi: false,
     });
 
-    const browserErrors = installBrowserGuards(page);
+    const browserGuard = await installBrowserGuards(page);
     await login(page);
 
     await test.step('Semester A und B anlegen', async () => {
@@ -103,7 +103,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
     });
 
     await test.step('Reload bei laufendem Timer prüfen', async () => {
-      await page.reload();
+      await browserGuard.reload();
       await expect(page.getByRole('button', { name: 'Aufgaben' }).first()).toBeVisible();
       await assertRunningTimer(page);
     });
@@ -141,7 +141,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
     });
 
     await test.step('Persistenz nach erneutem Reload prüfen', async () => {
-      await page.reload();
+      await browserGuard.reload();
       await navigate(page, 'Fächer');
       await expect(page.getByText(subjectA, { exact: true })).toBeVisible();
       await navigate(page, 'Aufgaben');
@@ -160,7 +160,12 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
       await expect(page.getByText('Lernzeiten', { exact: true })).toBeVisible();
     });
 
-    await assertNoBrowserErrors(browserErrors);
+    await assertNoBrowserErrors(browserGuard.errors);
+
+    await testInfo.attach('expected-navigation-aborts', {
+      body: Buffer.from(JSON.stringify(browserGuard.expectedNavigationAborts, null, 2)),
+      contentType: 'application/json',
+    });
 
     await testInfo.attach('e2e-run-id', {
       body: Buffer.from(runId),
