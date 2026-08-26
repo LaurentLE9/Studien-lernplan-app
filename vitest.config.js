@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from "vitest/config";
+import { configDefaults, defineConfig, mergeConfig } from "vitest/config";
 import viteConfig from "./vite.config.js";
 
 export default mergeConfig(viteConfig, defineConfig({
@@ -6,6 +6,7 @@ export default mergeConfig(viteConfig, defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.js",
+    exclude: [...configDefaults.exclude, "e2e/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.{js,jsx}"],

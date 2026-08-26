@@ -605,7 +605,7 @@ export default function DashboardQuickActions({
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className={cn("text-xs font-semibold uppercase tracking-[0.2em]", mutedTextClass)}>Timer</p>
-                  <h3 className="mt-1 text-xl font-semibold">Lernsitzung starten</h3>
+                  <DialogTitle className="mt-1 text-xl font-semibold">Lernsitzung starten</DialogTitle>
                   <p className={cn("mt-1 text-sm", mutedTextClass)}>Stoppuhr oder Pomodoro vorbereiten und anschließend Fach und Aufgabe wählen.</p>
                 </div>
                 <Button type="button" variant="ghost" size="icon" className="rounded-[1rem]" onClick={() => setTimerOpen(false)} aria-label="Timer schließen">
