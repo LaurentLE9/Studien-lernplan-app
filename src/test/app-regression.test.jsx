@@ -412,3 +412,21 @@ describe("bestehende Projektabläufe", () => {
     );
   });
 });
+
+describe("Einstellungen & Backup", () => {
+  it("öffnet die Einstellungsseite und zeigt die Datenzähler", async () => {
+    await renderPlannerApp();
+
+    const sidebar = await screen.findByRole("complementary");
+    fireEvent.click(within(sidebar).getByRole("button", { name: "Einstellungen & Backup" }));
+
+    expect(await screen.findByRole("heading", { name: "Datenverwaltung & Backup", level: 2 })).toBeInTheDocument();
+    const dataCard = screen.getByRole("heading", { name: "Deine Daten" }).closest('[data-slot="card"]');
+    expect(within(dataCard).getByText("Fächer")).toBeInTheDocument();
+    expect(within(dataCard).getByText("Aufgaben")).toBeInTheDocument();
+    expect(within(dataCard).getByText("Lernzeiten")).toBeInTheDocument();
+    expect(within(dataCard).getByText("1")).toBeInTheDocument();
+    expect(within(dataCard).getByText("5")).toBeInTheDocument();
+    expect(within(dataCard).getByText("0")).toBeInTheDocument();
+  });
+});

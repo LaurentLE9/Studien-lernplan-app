@@ -2649,7 +2649,9 @@ function SettingsBackupPage({
   session,
   lastCloudLoadAt,
   lastCloudSaveAt,
-  data,
+  subjectCount,
+  taskCount,
+  studySessionCount,
   onStartDashboardEdit,
   dashboardSelectedPreset,
   onDashboardPresetChange,
@@ -2770,15 +2772,15 @@ function SettingsBackupPage({
               <div className="grid grid-cols-3 gap-3 text-xs sm:text-sm">
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Fächer</p>
-                  <p className="mt-1 text-lg font-bold">{activeSubjects.length}</p>
+                  <p className="mt-1 text-lg font-bold">{subjectCount}</p>
                 </div>
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Aufgaben</p>
-                  <p className="mt-1 text-lg font-bold">{data.tasks.length}</p>
+                  <p className="mt-1 text-lg font-bold">{taskCount}</p>
                 </div>
                 <div className={cn("rounded-xl p-3", darkMode ? "bg-slate-800/60" : "bg-slate-100") }>
                   <p className="text-muted-foreground">Lernzeiten</p>
-                  <p className="mt-1 text-lg font-bold">{activeStudySessions.length}</p>
+                  <p className="mt-1 text-lg font-bold">{studySessionCount}</p>
                 </div>
               </div>
             </CardContent>
@@ -6934,7 +6936,9 @@ export default function StudyPlannerApp() {
               session={session}
               lastCloudLoadAt={lastCloudLoadAt}
               lastCloudSaveAt={lastCloudSaveAt}
-              data={data}
+              subjectCount={activeSubjects.length}
+              taskCount={data.tasks.length}
+              studySessionCount={activeStudySessions.length}
               onStartDashboardEdit={handleStartDashboardEdit}
               dashboardSelectedPreset={dashboardSelectedPreset}
               onDashboardPresetChange={applyDashboardPreset}
