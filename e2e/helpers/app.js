@@ -150,7 +150,7 @@ export async function startGlobalTimer(page, subjectName) {
   await page.getByRole('button', { name: 'Timer', exact: true }).click();
   const dialog = page.getByRole('dialog').last();
   await expect(dialog).toBeVisible();
-  await dialog.getByRole('button', { name: subjectName, exact: true }).click();
+  await dialog.getByText(subjectName, { exact: true }).locator('xpath=ancestor::button[1]').click();
   await dialog.getByRole('button', { name: 'Ohne Aufgabe starten', exact: true }).click();
   await expect(page.getByText(subjectName, { exact: true }).first()).toBeVisible();
 }

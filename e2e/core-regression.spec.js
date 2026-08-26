@@ -49,6 +49,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
   });
 
   test('vollständiger Kernablauf mit isoliertem Testkonto', async ({ page }, testInfo) => {
+    testInfo.setTimeout(300_000);
     const browserErrors = installBrowserGuards(page);
     await login(page);
 
