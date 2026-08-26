@@ -97,7 +97,45 @@ async function deleteSemester(page, name) {
   await expect(marker).toHaveCount(0);
 }
 
-async function purgePlannerSnapshot(page, prefix) {
+async function deleteOwnedRows(baseUrl, table, userId, semesterId, headers) {
+  const endpoint = `${baseUrl}/rest/v1/${table}?user_id=eq.${encodeURIComponent(userId)}&semester_id=eq.${encodeURIComponent(semesterId)}`;
+  const response = await fetch(endpoint, { method: 'DELETE', headers });
+  if (!response.ok) throw new Error(`Cleanup für ${table} fehlgeschlagen: HTTP ${response.status}`);
+}
+
+async function purgeNormalizedPlannerData(baseUrl, session, prefix, headers) {
+  const userId = session.user.id;
+  const semesterEndpoint = `${baseUrl}/rest/v1/semesters?user_id=eq.${encodeURIComponent(userId)}&select=id,name`;
+  const loadResponse = await fetch(semesterEndpoint, { headers });
+  if (!loadResponse.ok) throw new Error(`Semester-Cleanup konnte Daten nicht laden: HTTP ${loadResponse.status}`);
+
+  const semesters = (await loadResponse.json()).filter((semester) => semester.name?.startsWith(prefix));
+  for (const semester of semesters) {
+    await Promise.all([
+      deleteOwnedRows(baseUrl, 'study_time_entries', userId, semester.id, headers),
+      deleteOwnedRows(baseUrl, 'timer_sessions', userId, semester.id, headers),
+      deleteOwnedRows(baseUrl, 'topics', userId, semester.id, headers),
+      deleteOwnedRows(baseUrl, 'exams', userId, semester.id, headers),
+    ]);
+    await deleteOwnedRows(baseUrl, 'subjects', userId, semester.id, headers);
+
+    const deleteSemesterResponse = await fetch(
+      `${baseUrl}/rest/v1/semesters?id=eq.${encodeURIComponent(semester.id)}&user_id=eq.${encodeURIComponent(userId)}`,
+      { method: 'DELETE', headers },
+    );
+    if (!deleteSemesterResponse.ok) {
+      throw new Error(`Semester-Cleanup konnte ${semester.id} nicht löschen: HTTP ${deleteSemesterResponse.status}`);
+    }
+  }
+
+  const verifyResponse = await fetch(semesterEndpoint, { headers });
+  if (!verifyResponse.ok) throw new Error(`Semester-Cleanup konnte Read-back nicht laden: HTTP ${verifyResponse.status}`);
+  const residual = (await verifyResponse.json()).filter((semester) => semester.name?.startsWith(prefix));
+  expect(residual, `E2E-Semester mit Präfix ${prefix} blieben in normalisierten Tabellen zurück.`).toEqual([]);
+  return { removed: semesters.length };
+}
+
+async function purgePlannerData(page, prefix) {
   await page.waitForTimeout(1500);
   const session = await page.evaluate(() => JSON.parse(localStorage.getItem('sb-auth-session') || 'null'));
   if (!session?.access_token || !session?.user?.id) {
@@ -107,12 +145,15 @@ async function purgePlannerSnapshot(page, prefix) {
   // Close first so pagehide/visibility handlers have flushed their final snapshot.
   await page.close();
 
+  const baseUrl = process.env.VITE_SUPABASE_URL.replace(/\/$/, '');
   const headers = {
     apikey: process.env.VITE_SUPABASE_ANON_KEY,
     Authorization: `Bearer ${session.access_token}`,
     'Content-Type': 'application/json',
   };
-  const endpoint = `${process.env.VITE_SUPABASE_URL.replace(/\/$/, '')}/rest/v1/user_plans?user_id=eq.${encodeURIComponent(session.user.id)}`;
+  await purgeNormalizedPlannerData(baseUrl, session, prefix, headers);
+
+  const endpoint = `${baseUrl}/rest/v1/user_plans?user_id=eq.${encodeURIComponent(session.user.id)}`;
   const loadResponse = await fetch(`${endpoint}&select=data`, { headers });
   if (!loadResponse.ok) throw new Error(`Snapshot-Cleanup konnte Daten nicht laden: HTTP ${loadResponse.status}`);
   const rows = await loadResponse.json();
@@ -168,7 +209,7 @@ async function purgePlannerSnapshot(page, prefix) {
   return { removed };
 }
 
-export async function cleanupE2EData(page, { prefix, semesters }) {
+export async function cleanupE2EData(page, { prefix, semesters, useUi = true }) {
   if (page.isClosed()) return;
   const sidebar = page.getByRole('complementary');
   const canUseUi = await sidebar.isVisible().catch(() => false);
@@ -176,7 +217,7 @@ export async function cleanupE2EData(page, { prefix, semesters }) {
   // UI cleanup exercises the normal deletion paths. The authenticated,
   // user-scoped snapshot purge below remains authoritative so a failed
   // assertion cannot leave data behind or poison a Playwright retry.
-  if (canUseUi) {
+  if (useUi && canUseUi) {
     try {
       await discardActiveTimer(page);
 
@@ -196,5 +237,5 @@ export async function cleanupE2EData(page, { prefix, semesters }) {
     }
   }
 
-  await purgePlannerSnapshot(page, prefix);
+  await purgePlannerData(page, prefix);
 }

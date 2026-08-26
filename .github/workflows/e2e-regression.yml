@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: browser-e2e-isolated-test-account
+  cancel-in-progress: false
+
 jobs:
   e2e:
     runs-on: ubuntu-latest

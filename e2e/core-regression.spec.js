@@ -50,6 +50,14 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
 
   test('vollständiger Kernablauf mit isoliertem Testkonto', async ({ page }, testInfo) => {
     testInfo.setTimeout(300_000);
+    const staleDataPage = await page.context().newPage();
+    await login(staleDataPage);
+    await cleanupE2EData(staleDataPage, {
+      prefix: 'E2E-',
+      semesters: [],
+      useUi: false,
+    });
+
     const browserErrors = installBrowserGuards(page);
     await login(page);
 
@@ -118,7 +126,7 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
       const subjectRow = page.getByText(subjectA, { exact: true }).first().locator('xpath=../..');
       await expect(subjectRow.getByText('2min', { exact: true })).toBeVisible();
       const taskRow = page.getByText(taskA, { exact: true }).first().locator('xpath=ancestor::tr[1]');
-      await expect(taskRow.getByText('1min', { exact: true })).toBeVisible();
+      await expect(taskRow.getByText('1min', { exact: true }).first()).toBeVisible();
       const body = await page.locator('body').innerText();
       expect(body).not.toMatch(/NaN|undefined/);
     });
