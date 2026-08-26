@@ -44,11 +44,11 @@ export async function login(page) {
   await expect(page.getByRole('button', { name: 'Aufgaben' }).first()).toBeVisible();
 }
 
-export async function navigate(page, name) {
+export async function navigate(page, name, headingName = name) {
   const sidebar = page.getByRole('complementary');
   await expect(sidebar).toBeVisible();
   await sidebar.getByRole('button', { name, exact: true }).click();
-  await expect(page.getByRole('heading', { name, level: 2 }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: headingName, level: 2 }).first()).toBeVisible();
 }
 
 export async function clickAny(scope, patterns) {

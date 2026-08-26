@@ -152,6 +152,14 @@ test.describe.serial('KAN-109 Kernregression im echten Browser', () => {
       await expect(page.getByText(subtaskA, { exact: true })).toBeVisible();
     });
 
+    await test.step('Einstellungen & Backup ohne Renderingfehler öffnen', async () => {
+      await navigate(page, 'Einstellungen & Backup', 'Datenverwaltung & Backup');
+      await expect(page.getByRole('heading', { name: 'Deine Daten' })).toBeVisible();
+      await expect(page.getByText('Fächer', { exact: true }).last()).toBeVisible();
+      await expect(page.getByText('Aufgaben', { exact: true }).last()).toBeVisible();
+      await expect(page.getByText('Lernzeiten', { exact: true })).toBeVisible();
+    });
+
     await assertNoBrowserErrors(browserErrors);
 
     await testInfo.attach('e2e-run-id', {
