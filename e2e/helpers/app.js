@@ -178,9 +178,10 @@ export async function assertRunningTimer(page) {
   const timerText = page.getByText(/\b\d{1,2}:\d{2}(?::\d{2})?\b/).first();
   await expect(timerText).toBeVisible();
   const before = (await timerText.textContent())?.trim();
-  await page.waitForTimeout(1300);
-  const after = (await timerText.textContent())?.trim();
-  expect(after).not.toBe(before);
+  await expect.poll(
+    async () => (await timerText.textContent())?.trim(),
+    { message: 'Der laufende Timer muss weiterzählen.', timeout: 5000 },
+  ).not.toBe(before);
 }
 
 export async function assertTimerAcrossPages(page, pages) {
