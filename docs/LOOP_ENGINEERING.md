@@ -91,11 +91,12 @@ Der Standard-Loop für jede Jira-Aufgabe ist:
 2. Relevante Confluence-Seiten lesen.
 3. `AGENTS.md`, `README.md`, `package.json` und diese Datei lesen.
 4. Git-Status, aktuellen Branch, Remote und Ausgangs-HEAD prüfen.
-5. Scope und Nicht-Ziele festhalten.
-6. Ausgehend von Git-Diff, geänderten Dateien und der Kontextkarte in `docs/CONTEXT_EFFICIENCY.md` betroffene Dateien und Abhängigkeiten identifizieren.
-7. Vorhandene, weiterhin gültige Kontext- und Prüfnachweise erfassen; fehlende Evidenz gezielt bestimmen.
-8. Risiken bestimmen.
-9. Benötigte gezielte Tests und vollständige Abschlussprüfungen festlegen.
+5. `npm run integrity:start` ausführen; bei einem blockierten Ausgangszustand nicht implementieren.
+6. Scope und Nicht-Ziele festhalten.
+7. Ausgehend von Git-Diff, geänderten Dateien und der Kontextkarte in `docs/CONTEXT_EFFICIENCY.md` betroffene Dateien und Abhängigkeiten identifizieren.
+8. Vorhandene, weiterhin gültige Kontext- und Prüfnachweise erfassen; fehlende Evidenz gezielt bestimmen.
+9. Risiken bestimmen.
+10. Benötigte gezielte Tests und vollständige Abschlussprüfungen festlegen.
 
 Ein vollständiger Repository-Scan ist eine begründungspflichtige Ausnahme. Große Dateien werden über Symbole, Suchtreffer und relevante Zeilenbereiche erschlossen, sofern das Ticket nicht die gesamte Datei betrifft.
 
@@ -111,7 +112,7 @@ Ein vollständiger Repository-Scan ist eine begründungspflichtige Ausnahme. Gro
 
 ### Phase C – VERIFY
 
-Zuerst gezielt den betroffenen Bereich prüfen, danach die vollständigen Pflichtprüfungen.
+Zuerst `npm run integrity:verify`, dann gezielt den betroffenen Bereich und anschließend die vollständigen Pflichtprüfungen ausführen. Das Integritäts-Gate erlaubt einen veränderten Worktree nur auf einem Aufgaben-Branch und blockiert ungelöste Indexkonflikte, Konfliktmarker sowie Fehler aus `git diff --check`.
 
 Aktuelle Baseline:
 
@@ -169,6 +170,8 @@ Bei `RETRY` gilt:
 
 Nach drei erfolglosen Versuchen: `ABORT` oder `ASK_USER`, Ursache und Belege dokumentieren.
 
+Bei `ABORT` wird `npm run integrity:abort` ausgeführt. Der JSON-Bericht enthält Branch, HEAD, Zustandsmerkmale und SHA-256-Fingerprints, aber keine Diff-Inhalte. Er wird im Jira-Vorgang dokumentiert. Der Befehl ist read-only, verändert weder Worktree noch Index oder Stash und darf bei erkannten Integritätsverletzungen mit Exit-Code `1` enden.
+
 ### Phase F – PUBLISH
 
 Wenn der Stand technisch prüfbar ist:
@@ -176,9 +179,10 @@ Wenn der Stand technisch prüfbar ist:
 1. `git diff` und `git status` prüfen.
 2. nur Ticket-Scope committen.
 3. Commit-Nachricht mit Jira-Key verwenden.
-4. ausschließlich Aufgaben-Branch pushen.
-5. nicht direkt nach `main` pushen.
-6. Pull Request und Merge nach dem in Confluence definierten Freigabeprozess durchführen.
+4. `npm run integrity:finish` ausführen; nur ein sauberer Aufgaben-Branch darf `PASS` ergeben.
+5. ausschließlich Aufgaben-Branch pushen.
+6. nicht direkt nach `main` pushen.
+7. Pull Request und Merge nach dem in Confluence definierten Freigabeprozess durchführen.
 
 ---
 
@@ -247,6 +251,7 @@ Eine Agenten-Änderung darf nur als für Review bereit gelten, wenn:
 - [ ] Evaluator-Ergebnis `PASS` lautet oder offene Punkte ausdrücklich dokumentiert sind.
 - [ ] Anzahl und Ergebnis aller Repair-Loops nachvollziehbar sind.
 - [ ] finaler Diff ausschließlich zum Ticket gehört.
+- [ ] `integrity:verify` für den finalen Arbeitsstand und `integrity:finish` nach dem Commit erfolgreich sind.
 - [ ] Commit und Pull Request den Jira-Key enthalten.
 - [ ] Änderungen auf einem Aufgaben-Branch liegen, nicht direkt auf `main`.
 - [ ] Review-Hinweise geklärt sind.
@@ -327,6 +332,7 @@ KONTEXT
 Lies zuerst AGENTS.md, README.md, docs/LOOP_ENGINEERING.md und die relevanten Dateien.
 
 PLAN
+- führe npm run integrity:start aus
 - formuliere Ziel und Akzeptanzkriterien
 - identifiziere Scope/Nicht-Ziele
 - identifiziere Risiken
@@ -349,6 +355,7 @@ Maximal drei Korrekturversuche pro Fehlerursache. Wiederhole keine nachweislich
 fehlgeschlagene Strategie unverändert.
 
 PFLICHTPRÜFUNGEN
+npm run integrity:verify
 npm test
 npm run test:coverage
 npx tsc --noEmit
@@ -358,6 +365,9 @@ npm run build
 ABSCHLUSS
 Berichte Branch, Commit, Dateien, Tests, Browserprüfung, Repair-Loops,
 Risiken und offene Punkte.
+
+Führe nach dem Commit und vor Push/PR npm run integrity:finish aus.
+Bei ABORT erzeuge mit npm run integrity:abort einen read-only JSON-Nachweis.
 
 Am Schluss musst du die fertigen Änderungen mit einer Commit-Nachricht mit
 Jira-Key committen und ausschließlich den Aufgaben-Branch auf GitHub pushen.
