@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url'
 
 const PHASES = new Set(['start', 'verify', 'finish', 'abort'])
 const PROTECTED_BRANCHES = new Set(['main', 'master'])
+const TASK_BRANCH = /^(?:feature|fix|refactor|test|docs)\/KAN-\d+-[a-z0-9]+(?:-[a-z0-9]+)*$/
 const CONFLICT_MARKER = /^(?:<{7}|>{7}|\|{7})(?: |$)/m
 
 function sha256(value) {
@@ -71,6 +72,33 @@ export function containsConflictMarker(contents) {
   return CONFLICT_MARKER.test(contents)
 }
 
+export function isTaskBranch(branch) {
+  return TASK_BRANCH.test(branch)
+}
+
+export function combineConflictMarkerFiles(worktreeFiles, indexFiles) {
+  return [...new Set([...worktreeFiles, ...indexFiles])].sort()
+}
+
+function findIndexConflictMarkerFiles(repositoryRoot, paths) {
+  const files = []
+
+  for (const repositoryPath of paths) {
+    const result = runGit(['show', `:${repositoryPath}`], {
+      cwd: repositoryRoot,
+      binary: true,
+      allowFailure: true,
+    })
+    if (result.status !== 0 || result.stdout.includes(0)) continue
+
+    if (containsConflictMarker(result.stdout.toString('utf8'))) {
+      files.push(repositoryPath.replaceAll('\\', '/'))
+    }
+  }
+
+  return files.sort()
+}
+
 export function evaluateIntegrity(snapshot, phase) {
   if (!PHASES.has(phase)) {
     throw new Error(`Unknown integrity phase: ${phase}`)
@@ -101,6 +129,9 @@ export function evaluateIntegrity(snapshot, phase) {
   if (phase === 'finish') {
     if (isProtectedBranch) {
       violations.push({ code: 'PROTECTED_BRANCH_FINISH', message: 'The loop must finish on a task branch.' })
+    }
+    if (snapshot.branch && !isTaskBranch(snapshot.branch)) {
+      violations.push({ code: 'INVALID_TASK_BRANCH', message: 'The branch does not match the documented Jira task-branch schema.' })
     }
     if (snapshot.dirty) {
       violations.push({ code: 'DIRTY_FINISH', message: 'The loop must finish with a clean worktree.' })
@@ -140,6 +171,12 @@ export function captureIntegritySnapshot(cwd = process.cwd()) {
       }).stdout,
     ),
   ])
+  const stagedFiles = splitNullTerminated(
+    runGit(['diff', '--cached', '--name-only', '--diff-filter=ACMRTUXB', '-z', '--'], {
+      cwd: repositoryRoot,
+      binary: true,
+    }).stdout,
+  )
   const diffCheck = runGit(['diff', '--check', 'HEAD', '--'], {
     cwd: repositoryRoot,
     allowFailure: true,
@@ -149,6 +186,9 @@ export function captureIntegritySnapshot(cwd = process.cwd()) {
     binary: true,
   }).stdout
 
+  const worktreeConflictMarkerFiles = findConflictMarkerFiles(repositoryRoot, changedFiles)
+  const indexConflictMarkerFiles = findIndexConflictMarkerFiles(repositoryRoot, stagedFiles)
+
   return {
     repositoryRoot,
     branch,
@@ -156,7 +196,9 @@ export function captureIntegritySnapshot(cwd = process.cwd()) {
     dirty: status.length > 0,
     changedFileCount: changedFiles.size,
     unmergedFiles: unmergedFiles.map((path) => path.replaceAll('\\', '/')).sort(),
-    conflictMarkerFiles: findConflictMarkerFiles(repositoryRoot, changedFiles),
+    worktreeConflictMarkerFiles,
+    indexConflictMarkerFiles,
+    conflictMarkerFiles: combineConflictMarkerFiles(worktreeConflictMarkerFiles, indexConflictMarkerFiles),
     diffCheckPassed: diffCheck.status === 0,
     statusSha256: sha256(status),
     trackedDiffSha256: sha256(binaryDiff),
@@ -178,6 +220,8 @@ export function buildIntegrityReport(snapshot, phase) {
       changedFileCount: snapshot.changedFileCount,
       unmergedFiles: snapshot.unmergedFiles,
       conflictMarkerFiles: snapshot.conflictMarkerFiles,
+      worktreeConflictMarkerFiles: snapshot.worktreeConflictMarkerFiles ?? [],
+      indexConflictMarkerFiles: snapshot.indexConflictMarkerFiles ?? [],
       diffCheckPassed: snapshot.diffCheckPassed,
       statusSha256: snapshot.statusSha256,
       trackedDiffSha256: snapshot.trackedDiffSha256,
