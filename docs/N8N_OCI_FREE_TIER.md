@@ -1,0 +1,68 @@
+# n8n auf OCI Always Free
+
+## Entscheidung
+
+Für das persönliche Lernprojekt wird n8n Community Edition auf einer OCI-
+Always-Free-Compute-Instanz betrieben. Oracle beschreibt die Always-Free-
+Ressourcen als unbegrenzt nutzbar; die 300-USD-Testguthaben sind davon getrennt
+und laufen nach spätestens 30 Tagen ab. Die Entscheidung bedeutet 0 EUR
+laufende Hostingkosten innerhalb der veröffentlichten Limits, aber keinen SLA.
+
+Quellen (zuletzt geprüft am 28.08.2026):
+
+- [OCI Always Free Resources](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
+- [OCI Free Tier FAQ](https://www.oracle.com/cloud/free/)
+- [n8n Hosting-Dokumentation](https://docs.n8n.io/hosting/)
+- [GitHub Repository Webhooks](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks)
+
+## Grenzen und Gegenmaßnahmen
+
+- Always-Free-Compute ist auf die veröffentlichten OCPU-, RAM-, Storage- und
+  Netzwerkgrenzen beschränkt. Es darf nur eine als Always Free gekennzeichnete
+  Ressource verwendet werden.
+- Oracle kann freie Kapazität bei der Erstellung nicht verfügbar haben.
+  Die Region wird deshalb bei der Kontoerstellung bewusst gewählt und die
+  Terraform-/Provisionierungsparameter werden versioniert dokumentiert.
+- Oracle kann inaktive Always-Free-Compute-Instanzen zurückfordern. n8n wird
+  deshalb mit Monitoring, täglichem Datenbank-/Volume-Backup und einem
+  getesteten Wiederherstellungsablauf betrieben.
+- Es gibt keinen SLA und nur Community-Support. OCI ist damit für Lernen und
+  einen persönlichen PoC geeignet, nicht für geschäftskritische Verfügbarkeit.
+
+## Sicherheitsbaseline
+
+`ops/n8n/docker-compose.yml` bindet den n8n-Port nur an `127.0.0.1`. Ein
+Reverse Proxy terminiert TLS; Port 5678 wird nicht direkt öffentlich geöffnet.
+Die Domain, der Image-Tag und der persistente `N8N_ENCRYPTION_KEY` werden nur
+auf dem Server in `.env` gesetzt. `.env` und n8n-Credentials werden niemals in
+Git, Client-Code, Jira oder Confluence gespeichert.
+
+Vor dem ersten öffentlichen Betrieb sind zusätzlich abzuschließen:
+
+1. OCI Security List/Network Security Group: nur SSH (mit Schlüssel) und
+   HTTPS am Reverse Proxy erlauben.
+2. TLS-Zertifikat und automatische Erneuerung einrichten.
+3. OCI-Volume-Backup und Restore auf einer frischen Instanz testen.
+4. n8n-Sicherheitsaudit (`n8n audit`) ausführen.
+5. Image-Tag pinnen, Updates zunächst auf einer Kopie prüfen und danach mit
+   `docker compose pull && docker compose up -d` ausrollen.
+
+## Proof of Concept
+
+Der erste reale Workflow empfängt ein GitHub-`workflow_run`-Webhook-Ereignis,
+prüft die Webhook-Signatur, extrahiert einen Jira-Key aus Branch oder Commit-
+Metadaten und beendet sich bei fehlendem/ungültigem Key ohne Schreibzugriff.
+Nur bei erfolgreicher Validierung wird ein strukturierter Jira-Kommentar mit
+Run-URL, Ergebnis und Commit erzeugt. Alle Schritte sind regelbasiert; der PoC
+ruft kein LLM und keine kostenpflichtige KI-API auf.
+
+Webhook-Secret, Jira-Token und n8n-API-Credentials werden ausschließlich als
+n8n-Credentials bzw. Server-Secrets verwaltet. Exportierte Workflows werden vor
+dem Commit auf Credential- und Secret-Inhalte geprüft.
+
+## Messung der Einsparung
+
+Für jeden PoC-Lauf werden mindestens GitHub-Run-ID, Jira-Key, Ergebnis,
+Zeitstempel und `ai_calls=0` erfasst. Damit lässt sich gegenüber dem bisherigen
+manuellen Codex-Statusnachweis die Zahl der entfallenen KI-Aufrufe zählen,
+ohne Payloads oder Secrets zu protokollieren.
