@@ -30,6 +30,22 @@ Verknüpfte Vorgänge:
 - Aufgaben-Branch vom aktuellen `main` erstellen.
 - Branch-Namen enthalten den Jira-Key.
 
+### Worktree-Integritätskontrollen
+
+Die Phasenübergänge des Entwicklungs-Loops werden zusätzlich durch read-only Prüfungen abgesichert:
+
+```bash
+npm run integrity:start
+npm run integrity:verify
+npm run integrity:finish
+```
+
+- `integrity:start` vor der ersten Änderung ausführen. Der Ausgangs-Worktree muss sauber sein.
+- `integrity:verify` vor Tests und Evaluation ausführen. Änderungen auf `main`/`master`, ungelöste Indexkonflikte, Konfliktmarker und ein fehlgeschlagenes `git diff --check` blockieren den Loop.
+- `integrity:finish` nach dem ticketbezogenen Commit und vor Push/PR ausführen. Erlaubt ist nur ein sauberer Aufgaben-Branch.
+- Bei einer irregulären Beendigung `npm run integrity:abort` ausführen und dessen JSON-Nachweis im Jira-Vorgang dokumentieren. Der Befehl verändert weder Worktree noch Index oder Stash und kann bei einem unsicheren Zustand erwartungsgemäß mit Exit-Code `1` enden.
+- Ein blockiertes Gate darf nicht durch Stash, Reset, Checkout, Löschen oder Überschreiben fremder Änderungen umgangen werden. Zustand zuerst sichern, Herkunft und Scope klären und gemäß `ASK_USER` oder `ABORT` dokumentieren.
+
 Schema:
 
 - Feature: `feature/KAN-XX-kurzer-name`
@@ -92,6 +108,7 @@ Details stehen in `docs/LOOP_ENGINEERING.md`.
 
 ### PLAN
 
+- `npm run integrity:start` ausführen und nur bei `PASS` fortfahren.
 - Ticket, Scope, Akzeptanzkriterien und Nicht-Ziele erfassen.
 - relevante Dateien und Abhängigkeiten identifizieren.
 - Risiken und benötigte Tests bestimmen.
@@ -104,6 +121,8 @@ Details stehen in `docs/LOOP_ENGINEERING.md`.
 - Architektur- und Modulgrenzen respektieren.
 
 ### VERIFY
+
+Vor den fachlichen Prüfungen `npm run integrity:verify` ausführen.
 
 Zuerst gezielte Tests, danach grundsätzlich:
 
@@ -140,6 +159,7 @@ Entscheidung muss `PASS`, `RETRY`, `ASK_USER` oder `ABORT` sein.
 - Keine bereits nachweislich fehlgeschlagene Strategie unverändert wiederholen.
 - Nach jeder Reparatur relevante Tests erneut ausführen.
 - Nach drei erfolglosen Versuchen stoppen und Ursache dokumentieren.
+- Bei `ABORT` zusätzlich `npm run integrity:abort` ausführen und den unveränderten Zustandsnachweis im Jira-Vorgang hinterlegen.
 
 ## 5. Sicherheits- und Stop-Regeln
 

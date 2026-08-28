@@ -54,6 +54,17 @@ Wichtig: Ein technisch erfolgreicher Agenten-Loop bedeutet nicht automatisch, da
 - Testausführung mit Coverage: `npm run test:coverage`
 - TypeScript-Baseline prüfen: `npx tsc --noEmit`
 
+## Worktree-Integrität
+
+Die read-only Gates schützen die Übergänge des Entwicklungs-Loops und verändern weder Worktree noch Index oder Stash:
+
+- vor der ersten Änderung: `npm run integrity:start`
+- vor Verifikation und Evaluation: `npm run integrity:verify`
+- nach dem Commit, vor Push/PR: `npm run integrity:finish`
+- bei irregulärem Abbruch als JSON-Nachweis: `npm run integrity:abort`
+
+Ein Gate blockiert bei ungelösten Indexkonflikten, Konfliktmarkern oder einem fehlgeschlagenen `git diff --check`. Änderungen auf `main`/`master` sind während der Verifikation ebenfalls blockiert. Die vollständige Einordnung steht in [`docs/LOOP_ENGINEERING.md`](docs/LOOP_ENGINEERING.md).
+
 ## TypeScript
 
 Das Repository verwendet TypeScript derzeit als `noEmit`-Prüfwerkzeug neben

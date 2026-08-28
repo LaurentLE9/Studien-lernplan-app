@@ -63,6 +63,8 @@ PLAN → IMPLEMENT → VERIFY → EVALUATE
 - Eine bereits fehlgeschlagene Strategie nicht unverändert wiederholen.
 - Identische Analysen oder vollständige Prüfläufe nicht ohne geänderten Stand oder neue technische Begründung wiederholen.
 - Bei Auth-/RLS-/destruktiven Datenbank-/Secret-Risiken stoppen und menschliche Entscheidung verlangen.
+- Vor der ersten Änderung `npm run integrity:start`, vor Tests/Evaluation `npm run integrity:verify` und nach dem Commit vor Push/PR `npm run integrity:finish` ausführen. Ein blockiertes Gate nicht durch verändernde Git-Befehle umgehen.
+- Bei `ABORT` `npm run integrity:abort` ausführen und den read-only JSON-Nachweis in Jira dokumentieren. Exit-Code `1` ist bei einem erkannten unsicheren Zustand erwartbar.
 
 Die vollständigen Regeln stehen in `docs/LOOP_ENGINEERING.md`.
 
