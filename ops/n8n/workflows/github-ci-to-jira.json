@@ -1,0 +1,82 @@
+{
+  "name": "GitHub CI zu Jira – deterministischer Nachweis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-ci-to-jira",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "kan134-webhook",
+      "name": "GitHub workflow_run Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "kan134-github-ci-to-jira"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst headers = $json.headers ?? {};\nconst body = $json.body ?? {};\nconst rawBody = typeof body === 'string' ? body : JSON.stringify(body);\nconst signature = String(headers['x-hub-signature-256'] ?? headers['X-Hub-Signature-256'] ?? '');\nconst secret = String($env.GITHUB_WEBHOOK_SECRET ?? '');\nlet valid = false;\nif (secret && signature.startsWith('sha256=')) {\n  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\n  valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));\n}\nconst head = body.workflow_run?.head_branch ?? body.workflow_run?.head_commit?.message ?? body.workflow_run?.head_sha ?? '';\nconst jiraKey = String(head).match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { valid, jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
+      },
+      "id": "kan134-validate",
+      "name": "Signatur und Jira-Key deterministisch prüfen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json.valid}}", "operation": "isTrue" }]
+        }
+      },
+      "id": "kan134-valid-if",
+      "name": "Signatur gültig?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{!!$json.jiraKey}}", "operation": "isTrue" }]
+        }
+      },
+      "id": "kan134-key-if",
+      "name": "Jira-Key vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [760, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://studien-lernplan-app.atlassian.net/rest/api/3/issue/{{$json.jiraKey}}/comment",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Accept", "value": "application/json" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { body: { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Deterministischer GitHub-CI-Nachweis: ' + ($json.conclusion ?? 'unknown') + ' | Run: ' + ($json.runUrl ?? 'n/a') + ' | Commit: ' + ($json.commitSha ?? 'n/a') + ' | ai_calls=0' }] }] } } }}",
+        "options": {}
+      },
+      "id": "kan134-jira-comment",
+      "name": "Strukturierten Jira-Nachweis schreiben",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1020, -80],
+      "credentials": { "httpHeaderAuth": { "name": "jiraApiToken" } }
+    }
+  ],
+  "connections": {
+    "GitHub workflow_run Webhook": { "main": [[{ "node": "Signatur und Jira-Key deterministisch prüfen", "type": "main", "index": 0 }]] },
+    "Signatur und Jira-Key deterministisch prüfen": { "main": [[{ "node": "Signatur gültig?", "type": "main", "index": 0 }]] },
+    "Signatur gültig?": { "main": [[{ "node": "Jira-Key vorhanden?", "type": "main", "index": 0 }], []] },
+    "Jira-Key vorhanden?": { "main": [[{ "node": "Strukturierten Jira-Nachweis schreiben", "type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}

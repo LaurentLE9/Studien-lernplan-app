@@ -10,6 +10,7 @@ services:
       - WEBHOOK_URL=https://${N8N_HOST}/
       - N8N_EDITOR_BASE_URL=https://${N8N_HOST}/
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set a persistent secret}
+      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - N8N_BASIC_AUTH_ACTIVE=false
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Berlin}
       - TZ=${GENERIC_TIMEZONE:-Europe/Berlin}
