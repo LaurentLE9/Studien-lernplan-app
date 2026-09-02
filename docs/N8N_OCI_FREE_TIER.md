@@ -71,11 +71,16 @@ ohne Payloads oder Secrets zu protokollieren.
 
 1. Auf dem OCI-Host `GITHUB_WEBHOOK_SECRET` und `N8N_ENCRYPTION_KEY` nur in
    der nicht versionierten `.env` setzen.
-2. `NODE_FUNCTION_ALLOW_BUILTIN=crypto` ist im Compose-Setup aktiviert, damit
-   die Signaturprüfung im Code-Knoten HMAC-SHA-256 verwenden kann.
+2. Das Compose-Setup reicht `GITHUB_WEBHOOK_SECRET` ausdrücklich an den
+   n8n-Container durch und aktiviert `NODE_FUNCTION_ALLOW_BUILTIN=crypto`,
+   damit die Signaturprüfung im Code-Knoten HMAC-SHA-256 verwenden kann.
 3. `ops/n8n/workflows/github-ci-to-jira.json` in n8n importieren.
 4. Im HTTP-Request-Knoten serverseitig das n8n-Credential `jiraApiToken`
    hinterlegen; niemals Tokenwerte exportieren oder committen.
 5. Den GitHub-Webhook auf den n8n-Webhook-Endpunkt mit `workflow_run` und
    Secret konfigurieren. Der Workflow bleibt zunächst inaktiv, bis der
    Signatur-, gültige-Key- und fehlende-Key-Test erfolgreich durchgeführt sind.
+
+Die Webhook-Option `Raw Body` bleibt aktiviert. Die HMAC-Prüfung verwendet die
+unveränderten Request-Bytes aus dem binären Webhook-Feld; ein erneut
+serialisiertes JSON-Objekt ist für GitHub-Signaturen nicht ausreichend.
