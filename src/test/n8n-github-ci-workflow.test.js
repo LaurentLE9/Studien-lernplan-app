@@ -40,6 +40,20 @@ function runValidation({ rawPayload, secret, signature }) {
 }
 
 describe("KAN-134 GitHub CI to Jira workflow", () => {
+  it("uses scoped Jira Basic Auth through Atlassian's API gateway", () => {
+    const workflow = loadWorkflow();
+    const jiraRequest = workflow.nodes.find((node) => node.id === "kan134-jira-comment");
+
+    expect(jiraRequest.parameters).toMatchObject({
+      authentication: "genericCredentialType",
+      genericAuthType: "httpBasicAuth",
+    });
+    expect(jiraRequest.parameters.url).toContain("https://api.atlassian.com/ex/jira/");
+    expect(jiraRequest.credentials).toEqual({
+      httpBasicAuth: { name: "jiraApiToken" },
+    });
+  });
+
   it("validates GitHub's signature against the exact raw body", () => {
     const secret = "test-only-secret";
     const rawPayload = '{\n  "workflow_run": {"head_branch":"feature/KAN-134-poc","id":42}\n}';

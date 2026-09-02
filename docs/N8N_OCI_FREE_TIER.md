@@ -75,8 +75,12 @@ ohne Payloads oder Secrets zu protokollieren.
    n8n-Container durch und aktiviert `NODE_FUNCTION_ALLOW_BUILTIN=crypto`,
    damit die Signaturprüfung im Code-Knoten HMAC-SHA-256 verwenden kann.
 3. `ops/n8n/workflows/github-ci-to-jira.json` in n8n importieren.
-4. Im HTTP-Request-Knoten serverseitig das n8n-Credential `jiraApiToken`
-   hinterlegen; niemals Tokenwerte exportieren oder committen.
+4. Einen Atlassian-API-Token mit Ablaufdatum und dem klassischen Scope
+   `write:jira-work` erstellen. Im HTTP-Request-Knoten serverseitig das
+   n8n-Basic-Auth-Credential `jiraApiToken` hinterlegen (Benutzername:
+   Atlassian-Konto-E-Mail, Passwort: Token); niemals Tokenwerte exportieren
+   oder committen. Der Workflow verwendet dafür den für Scoped Tokens
+   vorgeschriebenen Endpoint `api.atlassian.com/ex/jira/<cloud-id>`.
 5. Den GitHub-Webhook auf den n8n-Webhook-Endpunkt mit `workflow_run` und
    Secret konfigurieren. Der Workflow bleibt zunächst inaktiv, bis der
    Signatur-, gültige-Key- und fehlende-Key-Test erfolgreich durchgeführt sind.
