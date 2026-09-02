@@ -31,8 +31,9 @@ Quellen (zuletzt geprüft am 28.08.2026):
 
 ## Sicherheitsbaseline
 
-`ops/n8n/docker-compose.yml` bindet den n8n-Port nur an `127.0.0.1`. Ein
-Reverse Proxy terminiert TLS; Port 5678 wird nicht direkt öffentlich geöffnet.
+`ops/n8n/docker-compose.yml` veröffentlicht den n8n-Port nicht am Host. Ein
+Reverse Proxy terminiert TLS; Port 5678 bleibt ausschließlich im privaten
+Compose-Netz erreichbar.
 Die Domain, der Image-Tag und der persistente `N8N_ENCRYPTION_KEY` werden nur
 auf dem Server in `.env` gesetzt. `.env` und n8n-Credentials werden niemals in
 Git, Client-Code, Jira oder Confluence gespeichert.
@@ -49,16 +50,20 @@ Vor dem ersten öffentlichen Betrieb sind zusätzlich abzuschließen:
 
 ## Proof of Concept
 
-Der erste reale Workflow empfängt ein GitHub-`workflow_run`-Webhook-Ereignis,
-prüft die Webhook-Signatur, extrahiert einen Jira-Key aus Branch oder Commit-
-Metadaten und beendet sich bei fehlendem/ungültigem Key ohne Schreibzugriff.
+Der isolierte Webhook-Verifier empfängt ein GitHub-`workflow_run`-Ereignis,
+prüft dessen Signatur gegen die unveränderten Request-Bytes und leitet nur
+abgeschlossene Läufe intern an n8n weiter. Der Workflow extrahiert anschließend
+einen Jira-Key aus Branch oder Commit-Metadaten und beendet sich bei fehlendem
+Key ohne Schreibzugriff.
 Nur bei erfolgreicher Validierung wird ein strukturierter Jira-Kommentar mit
 Run-URL, Ergebnis und Commit erzeugt. Alle Schritte sind regelbasiert; der PoC
 ruft kein LLM und keine kostenpflichtige KI-API auf.
 
-Webhook-Secret, Jira-Token und n8n-API-Credentials werden ausschließlich als
-n8n-Credentials bzw. Server-Secrets verwaltet. Exportierte Workflows werden vor
-dem Commit auf Credential- und Secret-Inhalte geprüft.
+Das Webhook-Secret ist ausschließlich im Verifier-Container verfügbar. Der
+n8n-Container erhält weder dieses Secret noch allgemeinen Zugriff auf
+Umgebungsvariablen aus Code-Knoten. Jira-Token und n8n-API-Credentials werden
+als n8n-Credentials bzw. Server-Secrets verwaltet. Exportierte Workflows werden
+vor dem Commit auf Credential- und Secret-Inhalte geprüft.
 
 ## Messung der Einsparung
 
@@ -71,9 +76,10 @@ ohne Payloads oder Secrets zu protokollieren.
 
 1. Auf dem OCI-Host `GITHUB_WEBHOOK_SECRET` und `N8N_ENCRYPTION_KEY` nur in
    der nicht versionierten `.env` setzen.
-2. Das Compose-Setup reicht `GITHUB_WEBHOOK_SECRET` ausdrücklich an den
-   n8n-Container durch und aktiviert `NODE_FUNCTION_ALLOW_BUILTIN=crypto`,
-   damit die Signaturprüfung im Code-Knoten HMAC-SHA-256 verwenden kann.
+2. Das Compose-Setup reicht `GITHUB_WEBHOOK_SECRET` ausschließlich an den
+   gehärteten `webhook-verifier`-Container durch. Caddy leitet nur den Pfad
+   `/webhook/github-ci-to-jira` an diesen Dienst. Nach erfolgreicher HMAC-
+   Prüfung wird der unveränderte JSON-Body intern an n8n weitergegeben.
 3. `ops/n8n/workflows/github-ci-to-jira.json` in n8n importieren.
 4. Einen Atlassian-API-Token mit Ablaufdatum und dem klassischen Scope
    `write:jira-work` erstellen. Im HTTP-Request-Knoten serverseitig das
@@ -85,6 +91,9 @@ ohne Payloads oder Secrets zu protokollieren.
    Secret konfigurieren. Der Workflow bleibt zunächst inaktiv, bis der
    Signatur-, gültige-Key- und fehlende-Key-Test erfolgreich durchgeführt sind.
 
-Die Webhook-Option `Raw Body` bleibt aktiviert. Die HMAC-Prüfung verwendet die
-unveränderten Request-Bytes aus dem binären Webhook-Feld; ein erneut
-serialisiertes JSON-Objekt ist für GitHub-Signaturen nicht ausreichend.
+Die HMAC-Prüfung verwendet die unveränderten Request-Bytes im isolierten
+Verifier; ein erneut serialisiertes JSON-Objekt ist für GitHub-Signaturen nicht
+ausreichend. Von den signierten `workflow_run`-Lebenszyklusereignissen wird
+ausschließlich `action=completed` an n8n und Jira weitergeleitet. `requested`,
+`in_progress`, ungültige Signaturen und andere Ereignistypen enden ohne
+Schreibzugriff.

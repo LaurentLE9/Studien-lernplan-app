@@ -2,21 +2,58 @@ services:
   n8n:
     image: n8nio/n8n:${N8N_IMAGE_TAG:?set N8N_IMAGE_TAG to a pinned n8n version}
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:5678:5678"
+    expose:
+      - "5678"
     environment:
       - N8N_HOST=${N8N_HOST:?set N8N_HOST}
       - N8N_PROTOCOL=https
       - WEBHOOK_URL=https://${N8N_HOST}/
       - N8N_EDITOR_BASE_URL=https://${N8N_HOST}/
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:?set a persistent secret}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:?set the GitHub webhook secret}
-      - NODE_FUNCTION_ALLOW_BUILTIN=crypto
       - N8N_BASIC_AUTH_ACTIVE=false
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Berlin}
       - TZ=${GENERIC_TIMEZONE:-Europe/Berlin}
     volumes:
       - n8n_data:/home/node/.n8n
 
+  webhook-verifier:
+    image: node:22.19.0-alpine3.22
+    restart: unless-stopped
+    command: ["node", "/app/webhook-verifier.mjs"]
+    expose:
+      - "3000"
+    environment:
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:?set the GitHub webhook secret}
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/github-ci-to-jira
+    volumes:
+      - ./webhook-verifier.mjs:/app/webhook-verifier.mjs:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - n8n
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    depends_on:
+      - n8n
+      - webhook-verifier
+    environment:
+      - N8N_HOST=${N8N_HOST:?set N8N_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   n8n_data:
+  caddy_data:
+  caddy_config:

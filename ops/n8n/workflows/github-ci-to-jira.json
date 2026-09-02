@@ -6,7 +6,7 @@
         "httpMethod": "POST",
         "path": "github-ci-to-jira",
         "responseMode": "onReceived",
-        "options": { "rawBody": true }
+        "options": {}
       },
       "id": "kan134-webhook",
       "name": "GitHub workflow_run Webhook",
@@ -17,25 +17,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst headers = $json.headers ?? {};\nconst body = $json.body ?? {};\nconst rawBody = $binary?.data?.data ? Buffer.from($binary.data.data, 'base64') : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));\nconst signature = String(headers['x-hub-signature-256'] ?? headers['X-Hub-Signature-256'] ?? '');\nconst secret = String($env.GITHUB_WEBHOOK_SECRET ?? '');\nlet valid = false;\nif (secret && signature.startsWith('sha256=')) {\n  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\n  valid = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));\n}\nconst head = body.workflow_run?.head_branch ?? body.workflow_run?.head_commit?.message ?? body.workflow_run?.head_sha ?? '';\nconst jiraKey = String(head).match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { valid, jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
+        "jsCode": "const body = $json.body ?? {};\nconst head = body.workflow_run?.head_branch ?? body.workflow_run?.head_commit?.message ?? body.workflow_run?.head_sha ?? '';\nconst jiraKey = String(head).match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
       },
       "id": "kan134-validate",
-      "name": "Signatur und Jira-Key deterministisch prüfen",
+      "name": "Jira-Key deterministisch extrahieren",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [260, 0]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [{ "value1": "={{$json.valid}}", "operation": "isTrue" }]
-        }
-      },
-      "id": "kan134-valid-if",
-      "name": "Signatur gültig?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [520, 0]
     },
     {
       "parameters": {
@@ -47,7 +35,7 @@
       "name": "Jira-Key vorhanden?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [760, -80]
+      "position": [520, 0]
     },
     {
       "parameters": {
@@ -66,14 +54,13 @@
       "name": "Strukturierten Jira-Nachweis schreiben",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1020, -80],
+      "position": [780, 0],
       "credentials": { "httpBasicAuth": { "name": "jiraApiToken" } }
     }
   ],
   "connections": {
-    "GitHub workflow_run Webhook": { "main": [[{ "node": "Signatur und Jira-Key deterministisch prüfen", "type": "main", "index": 0 }]] },
-    "Signatur und Jira-Key deterministisch prüfen": { "main": [[{ "node": "Signatur gültig?", "type": "main", "index": 0 }]] },
-    "Signatur gültig?": { "main": [[{ "node": "Jira-Key vorhanden?", "type": "main", "index": 0 }], []] },
+    "GitHub workflow_run Webhook": { "main": [[{ "node": "Jira-Key deterministisch extrahieren", "type": "main", "index": 0 }]] },
+    "Jira-Key deterministisch extrahieren": { "main": [[{ "node": "Jira-Key vorhanden?", "type": "main", "index": 0 }]] },
     "Jira-Key vorhanden?": { "main": [[{ "node": "Strukturierten Jira-Nachweis schreiben", "type": "main", "index": 0 }], []] }
   },
   "active": false,

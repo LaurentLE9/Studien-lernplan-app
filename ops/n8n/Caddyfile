@@ -1,0 +1,9 @@
+{$N8N_HOST} {
+	handle /webhook/github-ci-to-jira {
+		reverse_proxy webhook-verifier:3000
+	}
+
+	handle {
+		reverse_proxy n8n:5678
+	}
+}
