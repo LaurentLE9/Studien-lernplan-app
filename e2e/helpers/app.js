@@ -15,10 +15,35 @@ export function requireE2EEnvironment() {
   }
 }
 
+export async function waitForTrackedRequestsToSettle(
+  pendingRequests,
+  waitForTimeout,
+  { quietPeriodMs = 800, pollIntervalMs = 50, timeoutMs = 10000 } = {},
+) {
+  let elapsedMs = 0;
+  let quietMs = 0;
+
+  while (elapsedMs <= timeoutMs) {
+    if (pendingRequests.size === 0) {
+      if (quietMs >= quietPeriodMs) return;
+      quietMs += pollIntervalMs;
+    } else {
+      quietMs = 0;
+    }
+
+    await waitForTimeout(pollIntervalMs);
+    elapsedMs += pollIntervalMs;
+  }
+
+  throw new Error(`Supabase-Requests wurden vor dem Reload nicht abgeschlossen (${pendingRequests.size} offen).`);
+}
+
 export async function installBrowserGuards(page) {
   const errors = [];
   const completedRequestAnomalies = [];
   const successfulResponses = new WeakSet();
+  const pendingApiRequests = new Set();
+  const isApiRequest = (request) => /\/auth\/v1\/|\/rest\/v1\//.test(request.url());
 
   await page.route('**/_vercel/speed-insights/script.js', (route) => route.fulfill({
     status: 200,
@@ -27,7 +52,12 @@ export async function installBrowserGuards(page) {
   }));
 
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('request', (request) => {
+    if (isApiRequest(request)) pendingApiRequests.add(request);
+  });
+  page.on('requestfinished', (request) => pendingApiRequests.delete(request));
   page.on('requestfailed', (request) => {
+    pendingApiRequests.delete(request);
     const entry = `requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || 'unknown'})`;
     if (successfulResponses.has(request) && request.failure()?.errorText === 'net::ERR_ABORTED') {
       completedRequestAnomalies.push(entry);
@@ -53,7 +83,10 @@ export async function installBrowserGuards(page) {
     errors,
     completedRequestAnomalies,
     async reload() {
-      await page.waitForLoadState('networkidle');
+      await waitForTrackedRequestsToSettle(
+        pendingApiRequests,
+        (milliseconds) => page.waitForTimeout(milliseconds),
+      );
       await page.reload();
       await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(500);
