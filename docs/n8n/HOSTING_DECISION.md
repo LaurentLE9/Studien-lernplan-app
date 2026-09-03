@@ -1,6 +1,6 @@
 # KAN-132 – Hostingentscheidung für n8n
 
-Stand: 2026-08-28
+Stand: 2026-09-03
 
 ## Entscheidung
 
@@ -48,13 +48,22 @@ Für den ersten Betrieb darf n8n SQLite auf persistentem Storage verwenden. Bei 
 
 ## Reproduzierbarkeit
 
-Die Repository-Konfiguration unter `n8n/` enthält:
+Die Repository-Konfiguration unter `ops/n8n/` enthält:
 - Docker-Compose-Basis
 - Environment-Template ohne Secrets
 - persistente Volumes
 - Healthcheck
-- dokumentierte Betriebs- und Recovery-Schritte
+- Caddy-Konfiguration für HTTPS
+- isolierten GitHub-Webhook-Verifier
+- versionierten PoC-Workflow
 
-## Offener externer Schritt
+Die ausführliche Betriebs- und Recovery-Dokumentation steht in
+`docs/N8N_OCI_FREE_TIER.md`.
 
-Die tatsächliche OCI-Instanz kann erst angelegt werden, wenn ein berechtigter OCI-Account verfügbar ist. Dieser Schritt benötigt keine Codeentscheidung, aber Zugriff auf das externe Hostingkonto.
+## Verifizierter Betrieb
+
+Die OCI-Always-Free-Instanz wurde bereitgestellt und der Grundbetrieb unter
+KAN-129 verifiziert. Nachgewiesen sind HTTPS-Erreichbarkeit, Zugriffsschutz,
+Healthcheck, kontrollierter Neustart, Workflow-Persistenz, Backup/Restore,
+Monitoring sowie bestätigter E-Mail-Transport der OCI-Alarmierung. Innerhalb
+der verwendeten Always-Free-Ressourcen entstehen keine laufenden Hostingkosten.

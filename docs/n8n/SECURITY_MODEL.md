@@ -1,6 +1,6 @@
 # KAN-128 – n8n Sicherheits-, Secret- und Berechtigungskonzept
 
-Stand: 2026-08-28
+Stand: 2026-09-03
 
 ## Grundsätze
 
@@ -42,6 +42,10 @@ PoC: Repository-Metadaten und Commit/Status lesen; Schreibrecht nur für explizi
 ### Jira/Confluence
 PoC: konkreten Vorgang lesen und definierte Kommentare/Statusänderungen schreiben. Keine globale Administration.
 
+Codex greift für Jira und Confluence ausschließlich über die verfügbare
+Atlassian-Rovo-API bzw. das Atlassian-Plugin zu. Die Browseroberfläche ist kein
+Ersatz für diese Schnittstelle.
+
 ### Supabase
 Default read-only gegen isolierte Testdaten. Keine Service-Role im Browser. Änderungen an RLS/Auth/Berechtigungen sind nicht automatisiert freigegeben.
 
@@ -67,3 +71,11 @@ Nicht erlaubt: Access Tokens, Refresh Tokens, Cookies, Authorization Header, vol
 - Restore regelmäßig in isolierter Umgebung testen
 - n8n-Versionen pinnen und Updates kontrolliert durchführen
 - bei kompromittiertem Credential: widerrufen → neu ausstellen → n8n-Credential aktualisieren → Audit durchführen
+
+## Umsetzungsstand
+
+Die produktive n8n-Basis verwendet getrennte Container für Reverse Proxy,
+Webhook-Verifikation und n8n. Das GitHub-Webhook-Secret ist nur im
+Verifier-Container verfügbar; n8n erhält es nicht. Der Jira-Zugriff verwendet
+ein serverseitiges, zeitlich begrenztes Credential mit dem benötigten Scope.
+Die versionierte Konfiguration liegt unter `ops/n8n/`.

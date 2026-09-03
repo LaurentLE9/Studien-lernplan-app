@@ -1,6 +1,6 @@
 # KAN-130 – n8n Automatisierungsinventur und Baseline
 
-Stand: 2026-08-28
+Stand: 2026-09-03
 
 ## Ziel
 
@@ -21,19 +21,24 @@ Wiederkehrende Entwicklungsarbeit so klassifizieren, dass deterministische Schri
 | unbekannten Fehler diagnostizieren | intelligent | Repository | ja | Review | ungeeignet |
 | Secrets/Tokens erzeugen oder Rechte erweitern | risikoreich | Integrationen | nein | zwingend menschlich | ungeeignet |
 
-## Ausgewählter erster PoC
+## Umgesetzter erster PoC
 
-**Deterministischer Abschlussnachweis für eine Jira-Aufgabe.**
+**Deterministischer GitHub-CI-zu-Jira-Nachweis.**
 
-Trigger: expliziter n8n-Webhook oder manueller Testlauf mit Jira-Key, Branch und Commit-SHA.
+Trigger: signiertes GitHub-`workflow_run`-Webhook-Ereignis mit Jira-Key in
+Branch- oder Commit-Metadaten.
 
 Ablauf:
 1. Eingaben syntaktisch validieren.
-2. Commit/Branch gegen GitHub prüfen.
-3. definierte Qualitätschecks auswerten.
-4. Ergebnis idempotent als Jira-Kommentar hinterlegen.
-5. nur bei vollständig grünen Gates einen erlaubten Statusübergang vorbereiten/ausführen.
-6. Laufmetrik ohne Inhalts-/Secretdaten erfassen.
+2. ausschließlich abgeschlossene Workflow-Läufe weiterleiten.
+3. Jira-Key deterministisch aus Branch- oder Commit-Metadaten extrahieren.
+4. bei gültigem Schlüssel einen strukturierten Jira-Kommentar hinterlegen.
+5. bei fehlendem Schlüssel oder ungültiger Signatur ohne Jira-Schreibzugriff enden.
+6. Laufmetrik mit `ai_calls=0` ohne Inhalts-/Secretdaten erfassen.
+
+Der Live-Nachweis wurde mit einer erfolgreichen n8n-Ausführung und einem
+automatisch erzeugten Jira-Kommentar erbracht. Die technische Umsetzung liegt
+unter `ops/n8n/`; Details stehen in `docs/N8N_OCI_FREE_TIER.md`.
 
 Nicht Bestandteil des deterministischen Pfads: Codeanalyse, Fehlerdiagnose, Architekturentscheidungen, Auth-/RLS-Änderungen.
 
