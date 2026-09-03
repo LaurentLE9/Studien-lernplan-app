@@ -1,0 +1,69 @@
+{
+  "name": "GitHub CI zu Jira – deterministischer Nachweis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github-ci-to-jira",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "kan134-webhook",
+      "name": "GitHub workflow_run Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "kan134-github-ci-to-jira"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? {};\nconst head = body.workflow_run?.head_branch ?? body.workflow_run?.head_commit?.message ?? body.workflow_run?.head_sha ?? '';\nconst jiraKey = String(head).match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
+      },
+      "id": "kan134-validate",
+      "name": "Jira-Key deterministisch extrahieren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{!!$json.jiraKey}}", "operation": "isTrue" }]
+        }
+      },
+      "id": "kan134-key-if",
+      "name": "Jira-Key vorhanden?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.atlassian.com/ex/jira/52a04c96-acde-40fe-b0a0-59f70bb5c19d/rest/api/3/issue/{{$json.jiraKey}}/comment",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Accept", "value": "application/json" }, { "name": "Content-Type", "value": "application/json" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { body: { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Deterministischer GitHub-CI-Nachweis: ' + ($json.conclusion ?? 'unknown') + ' | Run: ' + ($json.runUrl ?? 'n/a') + ' | Commit: ' + ($json.commitSha ?? 'n/a') + ' | ai_calls=0' }] }] } } }}",
+        "options": {}
+      },
+      "id": "kan134-jira-comment",
+      "name": "Strukturierten Jira-Nachweis schreiben",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [780, 0],
+      "credentials": { "httpBasicAuth": { "name": "jiraApiToken" } }
+    }
+  ],
+  "connections": {
+    "GitHub workflow_run Webhook": { "main": [[{ "node": "Jira-Key deterministisch extrahieren", "type": "main", "index": 0 }]] },
+    "Jira-Key deterministisch extrahieren": { "main": [[{ "node": "Jira-Key vorhanden?", "type": "main", "index": 0 }]] },
+    "Jira-Key vorhanden?": { "main": [[{ "node": "Strukturierten Jira-Nachweis schreiben", "type": "main", "index": 0 }], []] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}
