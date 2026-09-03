@@ -53,7 +53,8 @@ Default read-only gegen isolierte Testdaten. Keine Service-Role im Browser. Änd
 
 - nur HTTPS
 - zufälliges Secret bzw. signierte Requests
-- Replay-/Duplikatschutz über Run-ID + Commit-SHA/Jira-Key
+- der aktuelle, prozesslokale Duplikatschutz verwendet die optionale
+  GitHub-Delivery-ID
 - Payload-Schema validieren
 - unbekannte Felder ignorieren oder Request ablehnen
 - keine Secrets in Fehlerantworten
@@ -78,4 +79,6 @@ Die produktive n8n-Basis verwendet getrennte Container für Reverse Proxy,
 Webhook-Verifikation und n8n. Das GitHub-Webhook-Secret ist nur im
 Verifier-Container verfügbar; n8n erhält es nicht. Der Jira-Zugriff verwendet
 ein serverseitiges, zeitlich begrenztes Credential mit dem benötigten Scope.
-Die versionierte Konfiguration liegt unter `ops/n8n/`.
+Die versionierte Konfiguration liegt unter `ops/n8n/`. Dauerhafte atomare
+Idempotenz ist noch nicht umgesetzt: Nach einem Verifier-Neustart oder bei
+parallelen identischen Anfragen können doppelte Jira-Kommentare entstehen.

@@ -52,7 +52,7 @@ Die Repository-Konfiguration unter `ops/n8n/` enthält:
 - Docker-Compose-Basis
 - Environment-Template ohne Secrets
 - persistente Volumes
-- Healthcheck
+- dokumentierten externen HTTP-Healthcheck (kein Docker-Compose-`healthcheck`)
 - Caddy-Konfiguration für HTTPS
 - isolierten GitHub-Webhook-Verifier
 - versionierten PoC-Workflow
@@ -64,6 +64,7 @@ Die ausführliche Betriebs- und Recovery-Dokumentation steht in
 
 Die OCI-Always-Free-Instanz wurde bereitgestellt und der Grundbetrieb unter
 KAN-129 verifiziert. Nachgewiesen sind HTTPS-Erreichbarkeit, Zugriffsschutz,
-Healthcheck, kontrollierter Neustart, Workflow-Persistenz, Backup/Restore,
-Monitoring sowie bestätigter E-Mail-Transport der OCI-Alarmierung. Innerhalb
-der verwendeten Always-Free-Ressourcen entstehen keine laufenden Hostingkosten.
+ein externer HTTP-Healthcheck, kontrollierter Neustart, Workflow-Persistenz,
+Backup/Restore, Monitoring sowie bestätigter E-Mail-Transport der
+OCI-Alarmierung. Innerhalb der verwendeten Always-Free-Ressourcen entstehen
+keine laufenden Hostingkosten.
