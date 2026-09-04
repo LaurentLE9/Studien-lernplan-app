@@ -14,8 +14,6 @@ Die Eskalationsleiter lautet grundsätzlich:
 2. **GPT-5.6 Terra** – wenn mehr Zuverlässigkeit oder Reasoning nötig ist, aber Sol noch nicht erforderlich ist.
 3. **GPT-5.6 Sol** – für komplexes Reasoning, anspruchsvolle Programmierung, Architektur, schwierige Debugging-Aufgaben und erhöhte Sicherheits-/Risikofälle.
 
-Die Einordnung folgt der offiziellen OpenAI-Modellpositionierung: Luna ist das schnellste und kostengünstigste GPT-5.6-Modell, Terra balanciert Leistungsfähigkeit und Kosten für alltägliche Arbeit, Sol ist das Flagship-Modell für komplexe professionelle Arbeit, Reasoning und Coding.
-
 ## Routing nach Aufgabenart
 
 ### Luna
@@ -36,6 +34,7 @@ Luna ist der Standardstart und bleibt aktiv, wenn die Aufgabe zuverlässig damit
 Auf Terra eskalieren, wenn Luna den nächsten Schritt nicht mit ausreichender Zuverlässigkeit ausführen kann, insbesondere bei:
 
 - Änderungen über mehrere zusammenhängende Dateien mit überschaubaren Abhängigkeiten,
+- Integrationslogik zwischen mehreren Systemen oder Verträgen,
 - mittlerem Refactoring,
 - nichttrivialer Fehleranalyse,
 - komplexerer Testauswertung,
@@ -59,49 +58,55 @@ Auf Sol eskalieren, wenn hohe Zuverlässigkeit oder komplexes Reasoning nötig i
 
 Diese Übergangsregel gilt ausschließlich für den direkten Codex-Entwicklungschat während der Umsetzung des KAN-110-Epics. Solange Codex das Modell in diesem Chat nicht selbst zuverlässig umschalten kann, erfolgt ein erforderlicher Modellwechsel manuell durch den Benutzer.
 
-Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, muss es **vor dem betreffenden Arbeitsschritt stoppen**. Die Benutzerhinweiszeile enthält ausschließlich den benötigten Modellnamen:
+### Verbindliches Pre-Write-Gate
+
+Read-only-Arbeit ist vor dem Gate erlaubt: Jira-/GitHub-/Confluence-Kontext lesen, `git status`/Diff prüfen, Scope bestimmen und gezielt Dateien inspizieren.
+
+**Vor dem ersten Edit/Patch/Write eines Implementierungsblocks muss das Modell-Gate abgeschlossen sein.** Dazu ist der deterministische Guard auszuführen:
+
+```bash
+npm run model:gate -- --current <luna|terra|sol> --files <anzahl> --complexity <low|medium|high> [Signale]
+```
+
+Verfügbare Signale sind insbesondere `--integration`, `--refactor`, `--uncertainty`, `--architecture`, `--security`, `--auth`, `--rls`, `--secrets`, `--migration` und `--data-loss`.
+
+Der Guard liefert nur einen der folgenden fachlichen Zustände:
+
+- `CONTINUE` – der geplante Implementierungsblock darf mit dem aktuellen Modell geschrieben werden.
+- `MODEL_SWITCH_REQUIRED` – der Block ist gesperrt. Die CLI gibt ausschließlich `Jetzt brauchen wir Terra.` oder `Jetzt brauchen wir Sol.` aus und beendet sich ungleich null.
+
+Bis `CONTINUE` für den konkreten Implementierungsblock vorliegt, sind **keine Dateiänderungen, Patches, Writes oder Commits** zulässig. Der Guard wird erneut ausgeführt, wenn sich Scope, Dateianzahl, Komplexität, Risiko oder Unsicherheit deutlich erhöht.
+
+Konservative Mindeststufen für die Übergangsphase:
+
+- genau eine klar abgegrenzte, risikoarme Datei mit niedriger Komplexität → Luna möglich,
+- mehrere zusammenhängende Dateien, Integrationslogik, mittleres Refactoring oder erhöhte Unsicherheit → mindestens Terra,
+- Architektur, Security, Auth, Session/RLS/Secrets, riskante Migrationen oder Datenverlustrisiko → Sol.
+
+Sobald das aktuelle Modell erkennt oder der Guard feststellt, dass die nächste Stufe erforderlich ist, muss es **vor dem betreffenden Arbeitsschritt stoppen**. Die Benutzerhinweiszeile enthält ausschließlich den benötigten Modellnamen:
 
 - `Jetzt brauchen wir Terra.`
 - `Jetzt brauchen wir Sol.`
-- falls künftig ein anderes im Projekt freigegebenes Modell gezielt erforderlich ist: `Jetzt brauchen wir <Modellname>.`
 
 Dabei keine Begründung, keinen Modellvergleich und keine lange Erklärung ausgeben. Nach der manuellen Umschaltung wird im bestehenden Arbeitskontext fortgesetzt; der Benutzer muss den Auftrag nicht erneut erklären.
 
-### Temporäre technische Kontrollschicht
+### Technische Grenze der Übergangslösung
 
-`ops/n8n/model-router.mjs` bildet diese Entscheidung für den direkten Codex-Modus
-als separates Pre-Step-Gate ab. Vor dem vorgesehenen Executor entstehen nur die
-Modell-Routingzustände `CONTINUE` oder `MODEL_SWITCH_REQUIRED`. Bei
-`MODEL_SWITCH_REQUIRED` wird der Arbeitsschritt nicht aufgerufen; der sichere
-Task-State bleibt für die Fortsetzung erhalten. Die Benutzeroberfläche gibt nur
-`Jetzt brauchen wir Terra.` beziehungsweise `Jetzt brauchen wir Sol.` aus.
+`scripts/codex-prewrite-model-gate.mjs` ist der deterministische Pre-Write-Guard für den direkten Codex-Modus. Er ersetzt keine Codex-Sandbox und kann einen Agenten, der die Repository-Regel absichtlich umgeht, nicht auf Betriebssystemebene am Schreiben hindern. Seine Ausführung ist deshalb zusammen mit `AGENTS.md` verbindlicher Bestandteil des direkten Entwicklungsprozesses.
 
-Diese Zustände sind ausdrücklich von den Loop-Zuständen `PASS`, `RETRY`,
-`ASK_USER` und `ABORT` getrennt. Ein Modellwechsel ist weder `ASK_USER` noch ein
-allgemeiner `ESCALATE`-Zustand. Routing-Audits enthalten nur Modellstufen,
-Grundkategorie, Jira-Key und State-Revision, keine Aufgabeninhalte oder Secrets.
+Der n8n-Runtime-Router ist davon getrennt. `ops/n8n/model-router.mjs` und `/controlled-execute` gehören nicht zur manuellen Benutzerumschaltung.
 
 ## Automated Runtime Routing
 
-Der spätere n8n-/KAN-127-/KAN-147-Pfad verwendet **nicht** die manuelle
-Codex-Übergangslösung. Er bewertet Scope, Risiko, Komplexität, Confidence und
-Budget, setzt intern `requiredModel` und wählt automatisch die ausführende
-Route. Der Runtime-Zustand lautet `ROUTE_SELECTED`; ein `currentModel` oder eine
-Benutzer-Modellwahl ist dafür nicht erforderlich.
+Der spätere n8n-/KAN-127-/KAN-147-Pfad verwendet **nicht** die manuelle Codex-Übergangslösung. Er bewertet Scope, Risiko, Komplexität, Confidence und Budget, setzt intern `requiredModel` und wählt automatisch die ausführende Route. Der Runtime-Zustand lautet `ROUTE_SELECTED`; ein `currentModel` oder eine Benutzer-Modellwahl ist dafür nicht erforderlich.
 
-- `requiredModel=luna|terra` führt automatisch in den dafür vorgesehenen
-  Modell-/Providerpfad, sofern die Aufgabenpolicy den Modellpfad erlaubt.
-- `requiredModel=sol` führt automatisch zur Sol-/Codex-Route; der günstige
-  Provider wird nicht aufgerufen.
+- `requiredModel=luna|terra` führt automatisch in den dafür vorgesehenen Modell-/Providerpfad, sofern die Aufgabenpolicy den Modellpfad erlaubt.
+- `requiredModel=sol` führt automatisch zur Sol-/Codex-Route; der günstige Provider wird nicht aufgerufen.
 - Deterministische Aufgaben bleiben ohne LLM-Aufruf.
-- Modellbedarf allein erzeugt weder `MODEL_SWITCH_REQUIRED`, `userMessage` noch
-  `ASK_USER`.
-- `ASK_USER` ist ausschließlich für eine ausdrücklich markierte echte
-  menschliche Sachentscheidung oder Freigabe zulässig.
+- Modellbedarf allein erzeugt weder `MODEL_SWITCH_REQUIRED`, `userMessage` noch `ASK_USER`.
+- `ASK_USER` ist ausschließlich für eine ausdrücklich markierte echte menschliche Sachentscheidung oder Freigabe zulässig.
 
-Der interne n8n-Endpunkt `/controlled-execute` nutzt ausschließlich Automated
-Runtime Routing. Die manuelle Terra-/Sol-Zeile darf in seiner Antwort weder
-direkt noch verschachtelt vorkommen.
+Der interne n8n-Endpunkt `/controlled-execute` nutzt ausschließlich Automated Runtime Routing. Die manuelle Terra-/Sol-Zeile darf in seiner Antwort weder direkt noch verschachtelt vorkommen.
 
 ## Anti-Verschwendungs-Regeln
 
@@ -116,6 +121,7 @@ direkt noch verschachtelt vorkommen.
 Für Aufgaben, bei denen Modellrouting relevant war, muss vor `technisch reviewbereit` geprüft werden:
 
 - [ ] Mit dem kleinsten geeigneten verfügbaren Modell gestartet.
+- [ ] Vor dem ersten Write jedes Implementierungsblocks wurde das Pre-Write-Gate ausgeführt.
 - [ ] Luna, Terra und Sol nur entsprechend dem tatsächlichen Bedarf verwendet.
 - [ ] Vor einer notwendigen Eskalation wurde der aktuelle Arbeitsschritt gestoppt.
 - [ ] Der Modellwechsel-Hinweis enthielt nur `Jetzt brauchen wir <Modellname>.`
