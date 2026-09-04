@@ -47,7 +47,7 @@ Der Standardfluss ist:
 
 Nicht jede Aufgabe benötigt `README.md`, `docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md` oder vollständige Confluence-Seiten im Voraus. Diese Quellen werden nur geladen, wenn der Root-/Domänen-Router oder das Ticket sie für den aktuellen Schritt verlangt. Sicherheits-, Git-, Test- und DoD-Gates bleiben unabhängig davon verbindlich.
 
-Fehlt erforderlicher Kontext, wird gezielt nachgeladen. Kann nicht bestimmt werden, welche Quelle erforderlich ist, gilt `ESCALATE` beziehungsweise der bestehende Stop-/ASK_USER-Prozess statt einer Annahme.
+Fehlt erforderlicher Kontext, wird gezielt nachgeladen. Kann nicht bestimmt werden, welche Quelle erforderlich ist, wird gemäß `docs/MODEL_ROUTING.md` auf die notwendige Modellstufe eskaliert oder – wenn eine menschliche Entscheidung erforderlich ist – mit `ASK_USER` nach `AGENTS.md` gestoppt; Annahmen sind unzulässig.
 
 ## 4. Minimaler Analyseablauf
 
