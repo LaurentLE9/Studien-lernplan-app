@@ -165,7 +165,7 @@ export function createTemporaryManualCodexExecutor({
 
 function assertNoManualRoutingOutput(value, seen = new Set()) {
   if (typeof value === "string") {
-    if (/^Jetzt brauchen wir (Terra|Sol)\.$/.test(value)) {
+    if (/Jetzt brauchen wir (Terra|Sol)\./.test(value)) {
       throw new Error("automated_runtime_must_not_emit_manual_switch_message");
     }
     return;

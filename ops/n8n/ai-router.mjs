@@ -183,6 +183,22 @@ export function classifyTask(task = {}) {
   return { route: "codex", risk: risk === "low" ? "medium" : risk, reason: "unsupported_or_complex" };
 }
 
+function automaticRuntimeDecision(task, provider) {
+  const policyDecision = classifyTask(task);
+  if (policyDecision.route === "deterministic") return policyDecision;
+  if (task.requiredModel === "sol") {
+    return { route: "codex", risk: "high", reason: "required_model_sol" };
+  }
+  if (task.requiredModel === "terra" && provider?.modelLevel !== "terra") {
+    return {
+      route: "codex",
+      risk: "medium",
+      reason: "required_model_provider_unavailable",
+    };
+  }
+  return policyDecision;
+}
+
 function publicMetrics(state, monthlyBudgetEur, warningRatio) {
   const metrics = state.metrics;
   const completedRuns = Math.max(metrics.runsTotal - metrics.errors, 0);
@@ -284,7 +300,7 @@ export function createRouterEngine({
   }
 
   async function route(task) {
-    const decision = classifyTask(task);
+    const decision = automaticRuntimeDecision(task, provider);
     return {
       status: decision.route === "codex" ? "escalate" : "completed",
       route: decision.route,
@@ -299,11 +315,7 @@ export function createRouterEngine({
 
   async function execute(task = {}) {
     const startedAt = Date.now();
-    const policyDecision = classifyTask(task);
-    const decision =
-      task.requiredModel === "sol" && policyDecision.route !== "deterministic"
-        ? { route: "codex", risk: "high", reason: "required_model_sol" }
-        : policyDecision;
+    const decision = automaticRuntimeDecision(task, provider);
 
     if (decision.route === "deterministic") {
       await recordDecision(decision, Date.now() - startedAt);
@@ -466,6 +478,7 @@ export function createOpenAiCompatibleProvider({
   apiKey,
   baseUrl,
   model,
+  modelLevel = "luna",
   inputEurPerMillionTokens,
   outputEurPerMillionTokens,
   maxOutputTokens = 512,
@@ -477,6 +490,9 @@ export function createOpenAiCompatibleProvider({
   const outputLimit = Number(maxOutputTokens);
   const requestTimeout = Number(timeoutMs);
   if (!apiKey || !baseUrl || !model) throw new Error("provider configuration is incomplete");
+  if (!["luna", "terra"].includes(modelLevel)) {
+    throw new Error("provider modelLevel must be luna or terra");
+  }
   if (![inputRate, outputRate].every((rate) => Number.isFinite(rate) && rate >= 0)) {
     throw new Error("provider price configuration is invalid");
   }
@@ -493,6 +509,7 @@ export function createOpenAiCompatibleProvider({
 
   return {
     model,
+    modelLevel,
     estimateMaximumCost(task) {
       return (
         (estimatedInputTokens(task) * inputRate + outputLimit * outputRate) /
