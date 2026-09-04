@@ -141,9 +141,6 @@ export function classifyTask(task = {}) {
   const signals = new Set((task.riskSignals ?? []).map((value) => String(value)));
   const risk = task.risk ?? (signals.size > 0 ? "high" : "low");
 
-  if (task.contextComplete === false) {
-    return { route: "codex", risk: "medium", reason: "missing_context" };
-  }
   if (task.conflictingResults === true) {
     return { route: "codex", risk: "medium", reason: "conflicting_results" };
   }
@@ -169,10 +166,15 @@ export function classifyTask(task = {}) {
   if (DETERMINISTIC_TYPES.has(task.type)) {
     return { route: "deterministic", risk: "low", reason: "deterministic_rule" };
   }
+  if (task.contextComplete !== true) {
+    return { route: "codex", risk: "medium", reason: "missing_context" };
+  }
+  if (task.readOnly !== true) {
+    return { route: "codex", risk: "medium", reason: "read_only_not_confirmed" };
+  }
   if (
     CHEAP_MODEL_TYPES.has(task.type) &&
     task.complexity !== "high" &&
-    task.readOnly !== false &&
     risk === "low"
   ) {
     return { route: "cheap_model", risk: "low", reason: "simple_model_task" };
@@ -264,7 +266,10 @@ export function createRouterEngine({
       const modelRouting = state.metrics.modelRouting;
       modelRouting.decisionsTotal += 1;
       if (decision.status === "CONTINUE") modelRouting.continueCount += 1;
-      if (decision.status === "MODEL_SWITCH_REQUIRED") modelRouting.switchRequiredCount += 1;
+      if (decision.status === "MODEL_SWITCH_REQUIRED") {
+        modelRouting.switchRequiredCount += 1;
+        state.metrics.manualInterventions += 1;
+      }
       modelRouting.currentModels[decision.currentModel] =
         (modelRouting.currentModels[decision.currentModel] ?? 0) + 1;
       modelRouting.requiredModels[decision.requiredModel] =
@@ -375,7 +380,11 @@ export function createRouterEngine({
         throw new Error("provider_cost_outside_reservation");
       }
 
-      const lowConfidence = Number(response.confidence) < minConfidence;
+      const confidence = Number(response.confidence);
+      if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+        throw new Error("provider_confidence_invalid");
+      }
+      const lowConfidence = confidence < minConfidence;
       await updateState((state) => {
         const reservation = state.reservations[reservationId] ?? 0;
         delete state.reservations[reservationId];
@@ -395,7 +404,7 @@ export function createRouterEngine({
           status: "escalate",
           route: "codex",
           model: provider.model,
-          confidence: Number(response.confidence) || 0,
+          confidence,
           risk: "medium",
           reason: "low_confidence",
           result: {},
@@ -407,7 +416,7 @@ export function createRouterEngine({
         status: "completed",
         route: "cheap_model",
         model: provider.model,
-        confidence: Number(response.confidence),
+        confidence,
         risk: decision.risk,
         reason: decision.reason,
         result: response.result ?? {},
@@ -418,10 +427,16 @@ export function createRouterEngine({
         const reservation = state.reservations[reservationId] ?? 0;
         delete state.reservations[reservationId];
         state.reservedEur = roundMoney(Math.max(state.reservedEur - reservation, 0));
+        // The provider may have accepted and billed the request before failing.
+        // Conservatively charge the full reservation until billing can be reconciled.
+        state.spentEur = roundMoney(state.spentEur + reservation);
         state.metrics.runsTotal += 1;
         state.metrics.routeCounts.cheap_model += 1;
+        state.metrics.modelCalls += 1;
         state.metrics.escalations += 1;
         state.metrics.errors += 1;
+        state.metrics.durationMsTotal += Date.now() - startedAt;
+        state.metrics.models[provider.model] = (state.metrics.models[provider.model] ?? 0) + 1;
       });
       return {
         status: "escalate",
@@ -431,7 +446,7 @@ export function createRouterEngine({
         risk: "medium",
         reason: error?.name === "AbortError" ? "provider_timeout" : "provider_failure",
         result: {},
-        estimated_cost: 0,
+        estimated_cost: estimatedCost,
       };
     }
   }

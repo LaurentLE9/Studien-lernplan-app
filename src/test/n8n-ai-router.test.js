@@ -64,6 +64,13 @@ describe("KAN-127 routing policy", () => {
   });
 
   it.each([
+    [{ contextComplete: undefined }, "missing_context"],
+    [{ readOnly: undefined }, "read_only_not_confirmed"],
+  ])("fails closed when affirmative delegation metadata is missing: %#", (overrides, reason) => {
+    expect(classifyTask(cheapTask(overrides))).toMatchObject({ route: "codex", reason });
+  });
+
+  it.each([
     "architecture",
     "authentication",
     "authorization",
@@ -157,7 +164,7 @@ describe("KAN-127 execution, budget, and metrics", () => {
     });
   });
 
-  it("fails closed on provider errors and releases the reservation", async () => {
+  it("fails closed on provider errors and conservatively charges the reservation", async () => {
     const engine = createRouterEngine({
       stateStore: createMemoryStateStore(),
       provider: provider({ complete: vi.fn(async () => { throw new Error("timeout"); }) }),
@@ -168,7 +175,47 @@ describe("KAN-127 execution, budget, and metrics", () => {
       route: "codex",
       reason: "provider_failure",
     });
-    await expect(engine.metrics()).resolves.toMatchObject({ reservedEur: 0, errors: 1 });
+    await expect(engine.metrics()).resolves.toMatchObject({
+      reservedEur: 0,
+      spentEur: 0.1,
+      modelCalls: 1,
+      errors: 1,
+    });
+  });
+
+  it.each([undefined, "not-a-number", Number.NaN, -0.1, 1.1])(
+    "fails closed for invalid provider confidence %s",
+    async (confidence) => {
+      const engine = createRouterEngine({
+        stateStore: createMemoryStateStore(),
+        provider: provider({
+          complete: vi.fn(async () => ({ confidence, result: { unsafe: true }, costEur: 0.01 })),
+        }),
+      });
+
+      await expect(engine.execute(cheapTask())).resolves.toMatchObject({
+        status: "escalate",
+        route: "codex",
+        reason: "provider_failure",
+        result: {},
+        estimated_cost: 0.1,
+      });
+    },
+  );
+
+  it("records a required manual model switch as an intervention", async () => {
+    const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: provider() });
+    await engine.recordModelDecision({
+      status: "MODEL_SWITCH_REQUIRED",
+      currentModel: "luna",
+      requiredModel: "terra",
+      reasonCategory: "complexity_or_uncertainty",
+    });
+
+    await expect(engine.metrics()).resolves.toMatchObject({
+      manualInterventions: 1,
+      modelRouting: { switchRequiredCount: 1 },
+    });
   });
 
   it("turns a provider timeout into a controlled escalation", async () => {

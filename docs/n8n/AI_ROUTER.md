@@ -50,6 +50,8 @@ Der versionierte Task-State enthält nur freigegebene technische Felder. Felder
 für Tokens, Passwörter, Secrets, Credentials, Cookies oder Authorization werden
 vor Audit und Ausführung abgewiesen. Das Audit speichert nur Routingstatus,
 aktuelle/benötigte Modellstufe, Grundkategorie, Jira-Key und State-Revision.
+Ein erforderlicher manueller Modellwechsel erhöht zugleich die Metrik
+`manualInterventions`.
 
 ## Eingabe
 
@@ -72,7 +74,8 @@ Policy erforderlichen Metadaten:
 
 `containsSensitiveData`, `repositoryWrite`, `multipleDependentFiles`,
 `destructive`, `conflictingResults` oder ein unvollständiger Kontext schließen
-den günstigen Modellpfad aus. Unbekannte beziehungsweise komplexe Typen
+den günstigen Modellpfad aus. `contextComplete` und `readOnly` müssen für diesen
+Pfad ausdrücklich `true` sein. Unbekannte beziehungsweise komplexe Typen
 eskalieren standardmäßig.
 
 ## Ergebnisvertrag
