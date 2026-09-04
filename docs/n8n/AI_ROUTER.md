@@ -14,6 +14,43 @@ Die Implementierung liegt in `ops/n8n/ai-router.mjs`. Der n8n-Workflow
 Ergebnisvertrag auf. KAN-147 kann denselben internen Vertrag später für
 Delegation und Progress verwenden, ohne Routinglogik zu duplizieren.
 
+Vor diesem Aufgabenrouting erzwingt `ops/n8n/model-router.mjs` eine getrennte
+Modellentscheidung für Luna, Terra und Sol. Der n8n-Workflow verwendet dafür
+den Endpunkt `/controlled-execute`; der eigentliche Task-Executor wird erst
+nach einem erfolgreichen `CONTINUE` aufgerufen. Das Gate akzeptiert sowohl die
+Stufennamen als auch konfigurierte Modellbezeichner wie `gpt-5.6-luna` und
+normalisiert sie vor der Entscheidung auf die jeweilige Stufe.
+
+## Technisches Modell-Gate
+
+Das Modell-Gate bewertet vor dem nächsten Arbeitsschritt Komponenten,
+Abhängigkeiten, Komplexität, Debugging-Aufwand, Confidence, frühere Fehler,
+widersprüchliche Ergebnisse sowie Architektur-, Security-, Auth-, Session-,
+RLS-, Secret-, Berechtigungs-, Migrations- und Datenverlustrisiken.
+
+Es kennt ausschließlich diese separaten Routingzustände:
+
+- `CONTINUE`: Das aktuelle Modell erfüllt mindestens die benötigte Stufe.
+- `MODEL_SWITCH_REQUIRED`: Der Executor wird nicht aufgerufen und der sichere
+  Task-State unverändert für die Fortsetzung zurückgegeben.
+
+Bei `MODEL_SWITCH_REQUIRED` enthält `userMessage` ausschließlich
+`Jetzt brauchen wir Terra.` oder `Jetzt brauchen wir Sol.`. Die aufrufende
+Codex-Bridge darf dem Benutzer in diesem Zustand keine weitere Erklärung oder
+Ausgabe anhängen. Ein Wechsel auf Sol erfolgt nur für tatsächlich Sol-pflichtige
+Architektur-, Security-, riskante Daten- oder wiederholt widersprüchliche
+Fehlerfälle. Mittlere Komplexität verlangt höchstens Terra.
+
+Die Loop-Zustände bleiben davon getrennt: `PASS`, `RETRY`, `ASK_USER`, `ABORT`.
+`ASK_USER` wird nur nach bestandenem Modell-Gate für eine menschliche
+Sachentscheidung verwendet. Ein Zustand `ESCALATE` gehört zu keinem dieser
+beiden Verträge.
+
+Der versionierte Task-State enthält nur freigegebene technische Felder. Felder
+für Tokens, Passwörter, Secrets, Credentials, Cookies oder Authorization werden
+vor Audit und Ausführung abgewiesen. Das Audit speichert nur Routingstatus,
+aktuelle/benötigte Modellstufe, Grundkategorie, Jira-Key und State-Revision.
+
 ## Eingabe
 
 Eine Teilaufgabe enthält nur den minimal notwendigen Inhalt und die für die

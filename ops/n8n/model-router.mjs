@@ -1,0 +1,159 @@
+export const MODEL_LEVELS = Object.freeze(["luna", "terra", "sol"]);
+export const MODEL_ROUTING_STATES = Object.freeze([
+  "CONTINUE",
+  "MODEL_SWITCH_REQUIRED",
+]);
+export const LOOP_STATES = Object.freeze(["PASS", "RETRY", "ASK_USER", "ABORT"]);
+
+const CRITICAL_MODEL_SIGNALS = new Set([
+  "authentication",
+  "authorization",
+  "database_migration",
+  "data_loss",
+  "destructive_change",
+  "permissions",
+  "rls",
+  "secret",
+  "security",
+  "session",
+]);
+
+const TASK_STATE_FIELDS = [
+  "jiraKey",
+  "status",
+  "completedSteps",
+  "currentStep",
+  "nextSteps",
+  "risks",
+  "blockers",
+  "branch",
+  "commits",
+  "checks",
+  "routers",
+  "revision",
+];
+
+const SECRET_KEY = /(authorization|cookie|credential|password|secret|token|api.?key)/i;
+
+function rank(model) {
+  const value = MODEL_LEVELS.indexOf(normalizeModelLevel(model));
+  if (value === -1) throw new Error(`unsupported current model: ${model}`);
+  return value;
+}
+
+export function normalizeModelLevel(model) {
+  const normalized = String(model ?? "").trim().toLowerCase();
+  return MODEL_LEVELS.find(
+    (level) => normalized === level || normalized.endsWith(`-${level}`),
+  );
+}
+
+function assertNoSecretKeys(value, seen = new Set()) {
+  if (value === null || typeof value !== "object" || seen.has(value)) return;
+  seen.add(value);
+  for (const [key, child] of Object.entries(value)) {
+    if (SECRET_KEY.test(key)) throw new Error("task_state_contains_secret_field");
+    assertNoSecretKeys(child, seen);
+  }
+}
+
+export function createSafeTaskState(input = {}) {
+  assertNoSecretKeys(input);
+  return Object.fromEntries(
+    TASK_STATE_FIELDS
+      .filter((field) => Object.hasOwn(input, field))
+      .map((field) => [field, structuredClone(input[field])]),
+  );
+}
+
+export function requiredModelForStep(step = {}) {
+  const signals = new Set(
+    (step.riskSignals ?? []).map((value) => String(value).trim().toLowerCase()),
+  );
+  if ([...signals].some((signal) => CRITICAL_MODEL_SIGNALS.has(signal))) {
+    return { requiredModel: "sol", reasonCategory: "security_or_data_risk" };
+  }
+  if (
+    step.architectureChange === true ||
+    step.databaseMigration === true ||
+    step.dataLossRisk === true
+  ) {
+    return { requiredModel: "sol", reasonCategory: "architecture_or_migration" };
+  }
+  if (
+    step.conflictingResults === true ||
+    ((step.previousFailedAttempts ?? 0) >= 2 && step.debuggingComplexity === "high")
+  ) {
+    return { requiredModel: "sol", reasonCategory: "repeated_or_conflicting_failure" };
+  }
+  if (
+    step.complexity === "medium" ||
+    step.complexity === "high" ||
+    step.debuggingComplexity === "medium" ||
+    step.debuggingComplexity === "high" ||
+    (step.componentCount ?? 1) > 1 ||
+    (step.dependencyCount ?? 0) > 2 ||
+    (step.confidence ?? 1) < 0.8 ||
+    (step.previousFailedAttempts ?? 0) > 0
+  ) {
+    return { requiredModel: "terra", reasonCategory: "complexity_or_uncertainty" };
+  }
+  return { requiredModel: "luna", reasonCategory: "bounded_low_risk" };
+}
+
+export function evaluateModelGate({ currentModel, step = {}, taskState = {} }) {
+  const safeTaskState = createSafeTaskState(taskState);
+  const requirement = requiredModelForStep(step);
+  const currentModelLevel = normalizeModelLevel(currentModel);
+  const status =
+    rank(currentModelLevel) >= rank(requirement.requiredModel)
+      ? "CONTINUE"
+      : "MODEL_SWITCH_REQUIRED";
+  return {
+    status,
+    currentModel: currentModelLevel,
+    requiredModel: requirement.requiredModel,
+    reasonCategory: requirement.reasonCategory,
+    taskState: safeTaskState,
+  };
+}
+
+export function modelSwitchMessage(requiredModel) {
+  if (!MODEL_LEVELS.includes(requiredModel) || requiredModel === "luna") {
+    throw new Error("a switch message requires Terra or Sol");
+  }
+  const displayName = requiredModel[0].toUpperCase() + requiredModel.slice(1);
+  return `Jetzt brauchen wir ${displayName}.`;
+}
+
+export function createModelGatedExecutor({ executeStep, auditDecision = async () => {} }) {
+  if (typeof executeStep !== "function") throw new Error("executeStep is required");
+  return async function executeModelGated(input) {
+    const decision = evaluateModelGate(input);
+    await auditDecision({
+      status: decision.status,
+      currentModel: decision.currentModel,
+      requiredModel: decision.requiredModel,
+      reasonCategory: decision.reasonCategory,
+      jiraKey: decision.taskState.jiraKey ?? null,
+      taskStateRevision: decision.taskState.revision ?? null,
+    });
+
+    if (decision.status === "MODEL_SWITCH_REQUIRED") {
+      return {
+        ...decision,
+        userMessage: modelSwitchMessage(decision.requiredModel),
+      };
+    }
+
+    if (input.step?.requiresHumanDecision === true) {
+      return { ...decision, loopStatus: "ASK_USER" };
+    }
+
+    const execution = await executeStep(input.task ?? {});
+    if (execution?.loopStatus && !LOOP_STATES.includes(execution.loopStatus)) {
+      throw new Error(`unsupported loop state: ${execution.loopStatus}`);
+    }
+    return { ...decision, loopStatus: execution?.loopStatus ?? "PASS", execution };
+  };
+}

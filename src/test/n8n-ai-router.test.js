@@ -272,7 +272,7 @@ describe("KAN-127 provider and n8n contracts", () => {
     const envTemplate = fs.readFileSync(envPath, "utf8");
     const request = workflow.nodes.find((node) => node.id === "kan127-router-request");
 
-    expect(request.parameters.url).toBe("http://ai-router:3001/execute");
+    expect(request.parameters.url).toBe("http://ai-router:3001/controlled-execute");
     expect(request.credentials).toEqual({ httpHeaderAuth: { name: "aiRouterInternalAuth" } });
     expect(compose).toContain("LLM_MONTHLY_BUDGET_EUR=20");
     expect(compose).toContain("router_data:/var/lib/ai-router");
@@ -295,19 +295,41 @@ describe("KAN-127 provider and n8n contracts", () => {
 
     try {
       expect((await fetch(`http://127.0.0.1:${port}/metrics`)).status).toBe(401);
-      const response = await fetch(`http://127.0.0.1:${port}/execute`, {
+      const response = await fetch(`http://127.0.0.1:${port}/controlled-execute`, {
         method: "POST",
         headers: {
           authorization: "Bearer test-only-secret",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ type: "ci_status_sync", contextComplete: true }),
+        body: JSON.stringify({
+          currentModel: "luna",
+          step: { complexity: "low", componentCount: 1 },
+          taskState: { jiraKey: "KAN-127", revision: 1 },
+          task: { type: "ci_status_sync", contextComplete: true },
+        }),
       });
       expect(response.status).toBe(200);
       await expect(response.json()).resolves.toMatchObject({
-        status: "completed",
-        route: "deterministic",
-        model: null,
+        status: "CONTINUE",
+        requiredModel: "luna",
+        execution: {
+          status: "completed",
+          route: "deterministic",
+          model: null,
+        },
+      });
+      const metricsResponse = await fetch(`http://127.0.0.1:${port}/metrics`, {
+        headers: { authorization: "Bearer test-only-secret" },
+      });
+      await expect(metricsResponse.json()).resolves.toMatchObject({
+        modelRouting: {
+          decisionsTotal: 1,
+          continueCount: 1,
+          switchRequiredCount: 0,
+          currentModels: { luna: 1 },
+          requiredModels: { luna: 1 },
+          reasonCategories: { bounded_low_risk: 1 },
+        },
       });
     } finally {
       await new Promise((resolve, reject) =>

@@ -59,13 +59,48 @@ function initialState(month) {
       manualInterventions: 0,
       durationMsTotal: 0,
       models: {},
+      modelRouting: {
+        decisionsTotal: 0,
+        continueCount: 0,
+        switchRequiredCount: 0,
+        currentModels: {},
+        requiredModels: {},
+        reasonCategories: {},
+      },
     },
   };
 }
 
 function normalizeState(state, month) {
   if (!state || state.month !== month) return initialState(month);
-  return state;
+  const baseline = initialState(month);
+  return {
+    ...baseline,
+    ...state,
+    reservations: { ...baseline.reservations, ...state.reservations },
+    metrics: {
+      ...baseline.metrics,
+      ...state.metrics,
+      routeCounts: { ...baseline.metrics.routeCounts, ...state.metrics?.routeCounts },
+      models: { ...baseline.metrics.models, ...state.metrics?.models },
+      modelRouting: {
+        ...baseline.metrics.modelRouting,
+        ...state.metrics?.modelRouting,
+        currentModels: {
+          ...baseline.metrics.modelRouting.currentModels,
+          ...state.metrics?.modelRouting?.currentModels,
+        },
+        requiredModels: {
+          ...baseline.metrics.modelRouting.requiredModels,
+          ...state.metrics?.modelRouting?.requiredModels,
+        },
+        reasonCategories: {
+          ...baseline.metrics.modelRouting.reasonCategories,
+          ...state.metrics?.modelRouting?.reasonCategories,
+        },
+      },
+    },
+  };
 }
 
 export function createMemoryStateStore(seed) {
@@ -170,6 +205,7 @@ function publicMetrics(state, monthlyBudgetEur, warningRatio) {
     averageDurationMs: completedRuns
       ? Math.round(metrics.durationMsTotal / completedRuns)
       : 0,
+    modelRouting: metrics.modelRouting,
   };
 }
 
@@ -221,6 +257,21 @@ export function createRouterEngine({
 
   async function metrics() {
     return updateState((state) => publicMetrics(state, monthlyBudgetEur, warningRatio));
+  }
+
+  async function recordModelDecision(decision) {
+    return updateState((state) => {
+      const modelRouting = state.metrics.modelRouting;
+      modelRouting.decisionsTotal += 1;
+      if (decision.status === "CONTINUE") modelRouting.continueCount += 1;
+      if (decision.status === "MODEL_SWITCH_REQUIRED") modelRouting.switchRequiredCount += 1;
+      modelRouting.currentModels[decision.currentModel] =
+        (modelRouting.currentModels[decision.currentModel] ?? 0) + 1;
+      modelRouting.requiredModels[decision.requiredModel] =
+        (modelRouting.requiredModels[decision.requiredModel] ?? 0) + 1;
+      modelRouting.reasonCategories[decision.reasonCategory] =
+        (modelRouting.reasonCategories[decision.reasonCategory] ?? 0) + 1;
+    });
   }
 
   async function route(task) {
@@ -385,7 +436,7 @@ export function createRouterEngine({
     }
   }
 
-  return { execute, metrics, route };
+  return { execute, metrics, recordModelDecision, route };
 }
 
 export function createOpenAiCompatibleProvider({
