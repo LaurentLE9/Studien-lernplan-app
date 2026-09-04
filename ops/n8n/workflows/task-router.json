@@ -1,0 +1,48 @@
+{
+  "name": "KAN-127 – kontrollierter KI-Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "internal-task-router",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "kan127-webhook",
+      "name": "Interne Delegation empfangen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "kan127-internal-task-router"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-router:3001/execute",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body ?? {}) }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "kan127-router-request",
+      "name": "Policy und Provider ausführen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [280, 0],
+      "credentials": {
+        "httpHeaderAuth": { "name": "aiRouterInternalAuth" }
+      }
+    }
+  ],
+  "connections": {
+    "Interne Delegation empfangen": {
+      "main": [[{ "node": "Policy und Provider ausführen", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}

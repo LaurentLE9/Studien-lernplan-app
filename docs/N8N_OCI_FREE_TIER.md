@@ -34,6 +34,10 @@ Quellen (zuletzt geprüft am 28.08.2026):
 `ops/n8n/docker-compose.yml` veröffentlicht den n8n-Port nicht am Host. Ein
 Reverse Proxy terminiert TLS; Port 5678 bleibt ausschließlich im privaten
 Compose-Netz erreichbar.
+Der KAN-127-KI-Router läuft als zusätzlicher, ebenfalls nicht veröffentlichter
+Dienst im privaten Compose-Netz. Sein persistentes Volume enthält nur
+aggregierte Budget- und Laufmetriken; Aufgabeninhalte werden dort nicht
+gespeichert. Details und Testablauf stehen in `docs/n8n/AI_ROUTER.md`.
 Die Domain, der Image-Tag und der persistente `N8N_ENCRYPTION_KEY` werden nur
 auf dem Server in `.env` gesetzt. `.env` und n8n-Credentials werden niemals in
 Git, Client-Code, Jira oder Confluence gespeichert.
