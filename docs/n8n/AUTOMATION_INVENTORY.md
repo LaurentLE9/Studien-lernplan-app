@@ -23,6 +23,9 @@ Secrets/Tokens erzeugen oder Rechte erweitern | risikoreich | Integrationen | ne
 
 ## Umgesetzter erster PoC
 
+Die verbindlichen, kostenfreien Integrationsverträge für GitHub, Jira,
+Confluence und Supabase stehen in `docs/n8n/INTEGRATION_CONTRACTS.md`.
+
 **Deterministischer GitHub-CI-zu-Jira-Nachweis.**
 
 Trigger: signiertes GitHub-`workflow_run`-Webhook-Ereignis. Der aktuelle PoC
