@@ -13,7 +13,7 @@ Vor einer Aufgabe nur laden:
 3. diese Router-Datei,
 4. danach ausschließlich die für den ermittelten Scope notwendigen Domänen-Router und Quellen.
 
-Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn der Ticket-Scope ihn ausdrücklich erfordert. Fehlender notwendiger Kontext wird gezielt nachgeladen; bei weiterhin unklarem oder riskantem Kontext gilt `ESCALATE`/`ASK_USER` nach `AGENTS.md`.
+Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn der Ticket-Scope ihn ausdrücklich erfordert. Fehlender notwendiger Kontext wird gezielt nachgeladen; wenn weiterhin unklar ist, wie sicher fortzufahren ist, wird gemäß `docs/MODEL_ROUTING.md` auf die erforderliche Modellstufe eskaliert oder – falls eine menschliche Entscheidung nötig ist – mit `ASK_USER` nach `AGENTS.md` gestoppt.
 
 ## Routing
 
