@@ -8,10 +8,9 @@ Vor Änderungen müssen Agenten mindestens lesen:
 
 1. den aktiven Jira-Vorgang mit Akzeptanzkriterien,
 2. `AGENTS.md`,
-3. `README.md`,
-4. `docs/LOOP_ENGINEERING.md`,
-5. `docs/MODEL_ROUTING.md`,
-6. relevante Quell- und Testdateien.
+3. `docs/agent-context/README.md`.
+
+Danach wird der notwendige Kontext **progressiv** über den zentralen Agent Context Router geladen. `README.md`, `docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md`, Confluence-Seiten sowie Quell- und Testdateien werden nur geladen, wenn Ticket-Scope, Router oder direkte Abhängigkeiten sie für den aktuellen Schritt benötigen. Sicherheits-, Stop-, Test- und Definition-of-Done-Regeln dürfen dadurch niemals übersprungen werden.
 
 Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope.
 
@@ -23,6 +22,7 @@ Verknüpfte Vorgänge:
 - KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
 - KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
 - KAN-110 – n8n-Automatisierungs- und KI-Routing-Schicht mit Codex-Orchestrierung einführen
+- KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
 
 ## 2. Git- und Branch-Regeln
 
@@ -92,7 +92,7 @@ Schema:
 - Ressourcenoptimierung darf niemals notwendige Sicherheits-, Qualitäts-, Datenintegritäts-, Browser- oder Regressionstests auslassen oder deren Aussagekraft verringern.
 - Der Abschlussbericht nennt kurz die untersuchten Dateien/Bereiche, ausgeführten Prüfungen, wiederverwendeten Nachweise und die Begründung für jeden vollständigen Repository-Scan.
 
-Die wiederverwendbare Repository-Kontextkarte und die Regeln zur Gültigkeit von Prüfnachweisen stehen in `docs/CONTEXT_EFFICIENCY.md`.
+Der zentrale Router steht in `docs/agent-context/README.md`. Die wiederverwendbare Repository-Kontextkarte und die Regeln zur Gültigkeit von Prüfnachweisen stehen ergänzend in `docs/CONTEXT_EFFICIENCY.md`.
 
 ### Verbindliches Modell-Routing
 
