@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createModelGatedExecutor,
+  AUTOMATED_RUNTIME_ROUTING_STATES,
+  createAutomatedRuntimeExecutor,
   createSafeTaskState,
-  evaluateModelGate,
+  createTemporaryManualCodexExecutor,
+  evaluateAutomatedRuntimeRoute,
+  evaluateTemporaryManualCodexGate,
   LOOP_STATES,
-  MODEL_ROUTING_STATES,
-  modelSwitchMessage,
+  TEMPORARY_MANUAL_CODEX_ROUTING_STATES,
   normalizeModelLevel,
   requiredModelForStep,
+  temporaryManualModelSwitchMessage,
 } from "../../ops/n8n/model-router.mjs";
 
 const taskState = {
@@ -20,10 +23,10 @@ const taskState = {
 };
 
 function gate(currentModel, step = {}) {
-  return evaluateModelGate({ currentModel, step, taskState });
+  return evaluateTemporaryManualCodexGate({ currentModel, step, taskState });
 }
 
-describe("KAN-127 technical model gate", () => {
+describe("Temporary Manual Codex Routing", () => {
   it("allows Luna to continue for a bounded low-risk step", () => {
     expect(gate("luna", { complexity: "low", componentCount: 1 })).toMatchObject({
       status: "CONTINUE",
@@ -99,12 +102,27 @@ describe("KAN-127 technical model gate", () => {
     expect(requiredModelForStep({ riskSignals: [riskSignal] }).requiredModel).toBe("sol");
   });
 
-  it("hard-stops before executing the next step and emits the exact Sol line", async () => {
+  it("hard-stops Luna before a Terra-level step and emits the exact Terra line", async () => {
     const executeStep = vi.fn();
-    const executor = createModelGatedExecutor({ executeStep });
+    const executor = createTemporaryManualCodexExecutor({ executeStep });
     const result = await executor({
       currentModel: "luna",
-      step: { riskSignals: ["rls"] },
+      step: { complexity: "medium" },
+      taskState,
+      task: { operation: "must-not-run" },
+    });
+
+    expect(result.status).toBe("MODEL_SWITCH_REQUIRED");
+    expect(result.userMessage).toBe("Jetzt brauchen wir Terra.");
+    expect(executeStep).not.toHaveBeenCalled();
+  });
+
+  it("hard-stops Terra before a security step and emits the exact Sol line", async () => {
+    const executeStep = vi.fn();
+    const executor = createTemporaryManualCodexExecutor({ executeStep });
+    const result = await executor({
+      currentModel: "terra",
+      step: { riskSignals: ["security"] },
       taskState,
       task: { operation: "must-not-run" },
     });
@@ -112,10 +130,7 @@ describe("KAN-127 technical model gate", () => {
     expect(result.status).toBe("MODEL_SWITCH_REQUIRED");
     expect(result.userMessage).toBe("Jetzt brauchen wir Sol.");
     expect(executeStep).not.toHaveBeenCalled();
-  });
-
-  it("emits the exact Terra switch line", () => {
-    expect(modelSwitchMessage("terra")).toBe("Jetzt brauchen wir Terra.");
+    expect(temporaryManualModelSwitchMessage("sol")).toBe("Jetzt brauchen wir Sol.");
   });
 
   it("preserves the same safe task-state data for continuation", () => {
@@ -125,14 +140,19 @@ describe("KAN-127 technical model gate", () => {
   });
 
   it("keeps model routing separate from the defined loop states", () => {
-    expect(MODEL_ROUTING_STATES).toEqual(["CONTINUE", "MODEL_SWITCH_REQUIRED"]);
+    expect(TEMPORARY_MANUAL_CODEX_ROUTING_STATES).toEqual([
+      "CONTINUE",
+      "MODEL_SWITCH_REQUIRED",
+    ]);
     expect(LOOP_STATES).toEqual(["PASS", "RETRY", "ASK_USER", "ABORT"]);
-    expect([...MODEL_ROUTING_STATES, ...LOOP_STATES]).not.toContain("ESCALATE");
+    expect([...TEMPORARY_MANUAL_CODEX_ROUTING_STATES, ...LOOP_STATES]).not.toContain(
+      "ESCALATE",
+    );
   });
 
   it("uses ASK_USER only for a human decision after the model gate passes", async () => {
     const executeStep = vi.fn();
-    const executor = createModelGatedExecutor({ executeStep });
+    const executor = createTemporaryManualCodexExecutor({ executeStep });
     const humanDecision = await executor({
       currentModel: "luna",
       step: { complexity: "low", requiresHumanDecision: true },
@@ -155,7 +175,7 @@ describe("KAN-127 technical model gate", () => {
     );
     const auditDecision = vi.fn();
     const executeStep = vi.fn();
-    const executor = createModelGatedExecutor({ executeStep, auditDecision });
+    const executor = createTemporaryManualCodexExecutor({ executeStep, auditDecision });
 
     await expect(
       executor({
@@ -170,7 +190,7 @@ describe("KAN-127 technical model gate", () => {
 
   it("audits only routing metadata and never task content", async () => {
     const auditDecision = vi.fn();
-    const executor = createModelGatedExecutor({
+    const executor = createTemporaryManualCodexExecutor({
       executeStep: vi.fn(async () => ({ result: { ok: true } })),
       auditDecision,
     });
@@ -182,6 +202,7 @@ describe("KAN-127 technical model gate", () => {
     });
 
     expect(auditDecision).toHaveBeenCalledWith({
+      mode: "temporary_manual_codex",
       status: "CONTINUE",
       currentModel: "luna",
       requiredModel: "luna",
@@ -190,5 +211,118 @@ describe("KAN-127 technical model gate", () => {
       taskStateRevision: 3,
     });
     expect(JSON.stringify(auditDecision.mock.calls)).not.toContain("private task content");
+  });
+});
+
+describe("Automated Runtime Routing", () => {
+  it("selects Terra automatically without a user message or manual intervention", async () => {
+    const executeStep = vi.fn(async (task) => ({
+      status: "completed",
+      route: "cheap_model",
+      model: "test/cheap-model",
+      confidence: 0.9,
+      risk: "low",
+      reason: "simple_model_task",
+      result: { ok: true },
+      estimated_cost: 0,
+    }));
+    const executor = createAutomatedRuntimeExecutor({ executeStep });
+
+    const result = await executor({
+      step: { complexity: "medium", componentCount: 2 },
+      taskState,
+      task: { type: "read_only_analysis" },
+    });
+
+    expect(result).toMatchObject({
+      mode: "automated_runtime",
+      routingStatus: "ROUTE_SELECTED",
+      requiredModel: "terra",
+      status: "completed",
+      route: "cheap_model",
+      model: "test/cheap-model",
+    });
+    expect(result).not.toHaveProperty("userMessage");
+    expect(result).not.toHaveProperty("loopStatus", "ASK_USER");
+    expect(executeStep).toHaveBeenCalledWith(
+      expect.objectContaining({ requiredModel: "terra" }),
+    );
+  });
+
+  it("selects the Sol/Codex route automatically without asking the user", async () => {
+    const executeStep = vi.fn(async () => ({
+      status: "escalate",
+      route: "codex",
+      model: null,
+      confidence: 0,
+      risk: "high",
+      reason: "required_model_sol",
+      result: {},
+      estimated_cost: 0,
+    }));
+    const executor = createAutomatedRuntimeExecutor({ executeStep });
+    const result = await executor({
+      step: { riskSignals: ["security"] },
+      taskState,
+      task: { type: "read_only_analysis" },
+    });
+
+    expect(result).toMatchObject({
+      requiredModel: "sol",
+      status: "escalate",
+      route: "codex",
+    });
+    expect(result).not.toHaveProperty("userMessage");
+    expect(result).not.toHaveProperty("loopStatus", "ASK_USER");
+    expect(executeStep).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses ASK_USER only for an actual human decision", async () => {
+    const executeStep = vi.fn();
+    const executor = createAutomatedRuntimeExecutor({ executeStep });
+    const result = await executor({
+      step: { riskSignals: ["database_migration"], requiresHumanDecision: true },
+      taskState,
+    });
+
+    expect(result).toMatchObject({
+      requiredModel: "sol",
+      loopStatus: "ASK_USER",
+      reason: "human_decision_required",
+    });
+    expect(result).not.toHaveProperty("userMessage");
+    expect(executeStep).not.toHaveBeenCalled();
+  });
+
+  it("rejects any runtime executor output that contains a manual switch message", async () => {
+    const executor = createAutomatedRuntimeExecutor({
+      executeStep: vi.fn(async () => ({
+        result: { nested: { notice: "Jetzt brauchen wir Sol." } },
+      })),
+    });
+
+    await expect(executor({ step: {}, taskState })).rejects.toThrow(
+      "automated_runtime_must_not_emit_manual_switch_message",
+    );
+  });
+
+  it("rejects ASK_USER from an executor when no human decision was requested", async () => {
+    const executor = createAutomatedRuntimeExecutor({
+      executeStep: vi.fn(async () => ({ loopStatus: "ASK_USER" })),
+    });
+
+    await expect(executor({ step: {}, taskState })).rejects.toThrow(
+      "automated_runtime_ask_user_requires_human_decision",
+    );
+  });
+
+  it("keeps automated routing states distinct from manual and loop states", () => {
+    expect(AUTOMATED_RUNTIME_ROUTING_STATES).toEqual(["ROUTE_SELECTED"]);
+    expect(evaluateAutomatedRuntimeRoute({ step: {}, taskState })).toMatchObject({
+      routingStatus: "ROUTE_SELECTED",
+      requiredModel: "luna",
+    });
+    expect(TEMPORARY_MANUAL_CODEX_ROUTING_STATES).not.toContain("ROUTE_SELECTED");
+    expect(LOOP_STATES).not.toContain("ROUTE_SELECTED");
   });
 });

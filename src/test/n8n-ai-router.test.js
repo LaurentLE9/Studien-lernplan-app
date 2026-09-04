@@ -123,6 +123,23 @@ describe("KAN-127 execution, budget, and metrics", () => {
     expect(model.complete).not.toHaveBeenCalled();
   });
 
+  it("routes an automatically selected Sol task to Codex without calling a provider", async () => {
+    const model = provider();
+    const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: model });
+    const result = await engine.execute({
+      ...cheapTask(),
+      requiredModel: "sol",
+    });
+
+    expect(result).toMatchObject({
+      status: "escalate",
+      route: "codex",
+      reason: "required_model_sol",
+    });
+    expect(result).not.toHaveProperty("userMessage");
+    expect(model.complete).not.toHaveBeenCalled();
+  });
+
   it("normalizes a successful cheap-model result and reports safe metrics", async () => {
     const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: provider() });
     const result = await engine.execute(cheapTask());
@@ -203,7 +220,7 @@ describe("KAN-127 execution, budget, and metrics", () => {
     },
   );
 
-  it("records a required manual model switch as an intervention", async () => {
+  it("records manual switches separately from automatic runtime selections", async () => {
     const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: provider() });
     await engine.recordModelDecision({
       status: "MODEL_SWITCH_REQUIRED",
@@ -211,10 +228,21 @@ describe("KAN-127 execution, budget, and metrics", () => {
       requiredModel: "terra",
       reasonCategory: "complexity_or_uncertainty",
     });
+    await engine.recordModelDecision({
+      status: "ROUTE_SELECTED",
+      currentModel: null,
+      requiredModel: "sol",
+      reasonCategory: "security_or_data_risk",
+    });
 
     await expect(engine.metrics()).resolves.toMatchObject({
       manualInterventions: 1,
-      modelRouting: { switchRequiredCount: 1 },
+      modelRouting: {
+        decisionsTotal: 2,
+        switchRequiredCount: 1,
+        automaticSelections: 1,
+        requiredModels: { terra: 1, sol: 1 },
+      },
     });
   });
 
@@ -327,6 +355,8 @@ describe("KAN-127 provider and n8n contracts", () => {
     expect(envTemplate).not.toMatch(/LLM_API_KEY=\S+/);
     expect(JSON.stringify(workflow)).not.toContain("LLM_API_KEY");
     expect(JSON.stringify(workflow)).not.toContain("ROUTER_SHARED_SECRET");
+    expect(JSON.stringify(workflow)).not.toContain("MODEL_SWITCH_REQUIRED");
+    expect(JSON.stringify(workflow)).not.toContain("Jetzt brauchen wir");
   });
 
   it("authenticates the internal HTTP contract and returns normalized decisions", async () => {
@@ -349,33 +379,71 @@ describe("KAN-127 provider and n8n contracts", () => {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          currentModel: "luna",
-          step: { complexity: "low", componentCount: 1 },
+          step: { complexity: "medium", componentCount: 2 },
           taskState: { jiraKey: "KAN-127", revision: 1 },
-          task: { type: "ci_status_sync", contextComplete: true },
+          task: {
+            type: "summarization",
+            complexity: "low",
+            risk: "low",
+            readOnly: true,
+            contextComplete: true,
+          },
         }),
       });
       expect(response.status).toBe(200);
-      await expect(response.json()).resolves.toMatchObject({
-        status: "CONTINUE",
-        requiredModel: "luna",
-        execution: {
-          status: "completed",
-          route: "deterministic",
-          model: null,
-        },
+      const body = await response.json();
+      expect(body).toMatchObject({
+        mode: "automated_runtime",
+        routingStatus: "ROUTE_SELECTED",
+        requiredModel: "terra",
+        status: "escalate",
+        route: "codex",
+        reason: "provider_unavailable",
       });
+      expect(body).not.toHaveProperty("userMessage");
+      expect(body).not.toHaveProperty("loopStatus", "ASK_USER");
+
+      const securityResponse = await fetch(`http://127.0.0.1:${port}/controlled-execute`, {
+        method: "POST",
+        headers: {
+          authorization: "Bearer test-only-secret",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          step: { riskSignals: ["security"] },
+          taskState: { jiraKey: "KAN-147", revision: 1 },
+          task: {
+            ...cheapTask({ jobId: "security-route" }),
+            riskSignals: ["security"],
+          },
+        }),
+      });
+      const securityBody = await securityResponse.json();
+      expect(securityBody).toMatchObject({
+        mode: "automated_runtime",
+        routingStatus: "ROUTE_SELECTED",
+        requiredModel: "sol",
+        status: "escalate",
+        route: "codex",
+      });
+      expect(securityBody).not.toHaveProperty("userMessage");
+      expect(securityBody).not.toHaveProperty("loopStatus", "ASK_USER");
+
       const metricsResponse = await fetch(`http://127.0.0.1:${port}/metrics`, {
         headers: { authorization: "Bearer test-only-secret" },
       });
       await expect(metricsResponse.json()).resolves.toMatchObject({
         modelRouting: {
-          decisionsTotal: 1,
-          continueCount: 1,
+          decisionsTotal: 2,
+          continueCount: 0,
           switchRequiredCount: 0,
-          currentModels: { luna: 1 },
-          requiredModels: { luna: 1 },
-          reasonCategories: { bounded_low_risk: 1 },
+          automaticSelections: 2,
+          currentModels: {},
+          requiredModels: { terra: 1, sol: 1 },
+          reasonCategories: {
+            complexity_or_uncertainty: 1,
+            security_or_data_risk: 1,
+          },
         },
       });
     } finally {
