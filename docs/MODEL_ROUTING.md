@@ -2,9 +2,11 @@
 
 Diese Regel gilt für Codex und andere Entwicklungs-Agenten im normalen Entwicklungsworkflow. Ziel ist, Nutzerlimit und Rechenbudget zu schonen, ohne Qualität oder Sicherheit zu verschlechtern.
 
+**Integrationsanforderung:** `AGENTS.md` muss diese Datei verbindlich referenzieren. Die zentrale Definition of Done muss die unten aufgeführten Routing-Prüfungen enthalten. Ohne beide Verankerungen ist diese Regel nicht vollständig integriert.
+
 ## Grundprinzip
 
-Jede neue Aufgabe startet mit dem kleinsten verfügbaren geeigneten Modell. Das Startmodell liest zuerst den aktiven Jira-Vorgang, `AGENTS.md`, den aktuellen Task-State sowie nur den für den Scope notwendigen Repository-Kontext. Es soll zunächst Scope, Risiken, betroffene Dateien und den nächsten Arbeitsschritt bestimmen.
+Jede neue Aufgabe startet mit dem kleinsten verfügbaren geeigneten Modell. Das Startmodell liest zuerst den aktiven Jira-Vorgang, `AGENTS.md`, den aktuellen dokumentierten Arbeitsstand sowie nur den für den Scope notwendigen Repository-Kontext. Es soll zunächst Scope, Risiken, betroffene Dateien und den nächsten Arbeitsschritt bestimmen.
 
 Die Eskalationsleiter lautet grundsätzlich:
 
@@ -55,7 +57,7 @@ Auf Sol eskalieren, wenn hohe Zuverlässigkeit oder komplexes Reasoning nötig i
 
 ## Verbindliche manuelle Modellumschaltung
 
-Solange Codex das Modell im laufenden Chat nicht selbst zuverlässig umschalten kann, erfolgt ein erforderlicher Modellwechsel manuell durch Laurent.
+Solange Codex das Modell im laufenden Chat nicht selbst zuverlässig umschalten kann, erfolgt ein erforderlicher Modellwechsel manuell durch den Benutzer.
 
 Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, muss es **vor dem betreffenden Arbeitsschritt stoppen**. Die Benutzerhinweiszeile enthält ausschließlich den benötigten Modellnamen:
 
@@ -63,7 +65,7 @@ Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, mu
 - `Jetzt brauchen wir Sol.`
 - falls künftig ein anderes im Projekt freigegebenes Modell gezielt erforderlich ist: `Jetzt brauchen wir <Modellname>.`
 
-Dabei keine Begründung, keinen Modellvergleich und keine lange Erklärung ausgeben. Nach der manuellen Umschaltung wird im bestehenden Arbeitskontext fortgesetzt; Laurent muss den Auftrag nicht erneut erklären.
+Dabei keine Begründung, keinen Modellvergleich und keine lange Erklärung ausgeben. Nach der manuellen Umschaltung wird im bestehenden Arbeitskontext fortgesetzt; der Benutzer muss den Auftrag nicht erneut erklären.
 
 ## Anti-Verschwendungs-Regeln
 
