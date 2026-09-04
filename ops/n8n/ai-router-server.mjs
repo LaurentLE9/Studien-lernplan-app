@@ -7,7 +7,10 @@ import {
   createRouterEngine,
   MONTHLY_BUDGET_EUR,
 } from "./ai-router.mjs";
-import { createModelGatedExecutor, evaluateModelGate } from "./model-router.mjs";
+import {
+  createAutomatedRuntimeExecutor,
+  evaluateAutomatedRuntimeRoute,
+} from "./model-router.mjs";
 
 export const MAX_REQUEST_BYTES = 64 * 1024;
 
@@ -72,7 +75,7 @@ export function createRouterServer({ env = process.env, fetchImpl = fetch } = {}
   });
   const expectedToken = env.ROUTER_SHARED_SECRET;
   if (!expectedToken) throw new Error("ROUTER_SHARED_SECRET is required");
-  const executeModelGated = createModelGatedExecutor({
+  const executeAutomatedRuntime = createAutomatedRuntimeExecutor({
     executeStep: engine.execute,
     auditDecision: engine.recordModelDecision,
   });
@@ -91,11 +94,11 @@ export function createRouterServer({ env = process.env, fetchImpl = fetch } = {}
       if (request.url === "/route" && request.method === "POST") {
         return json(response, 200, await engine.route(await readJson(request)));
       }
-      if (request.url === "/model-gate" && request.method === "POST") {
-        return json(response, 200, evaluateModelGate(await readJson(request)));
+      if (request.url === "/runtime-route" && request.method === "POST") {
+        return json(response, 200, evaluateAutomatedRuntimeRoute(await readJson(request)));
       }
       if (request.url === "/controlled-execute" && request.method === "POST") {
-        return json(response, 200, await executeModelGated(await readJson(request)));
+        return json(response, 200, await executeAutomatedRuntime(await readJson(request)));
       }
       return json(response, 404, { status: "failed", reason: "not_found" });
     } catch (error) {

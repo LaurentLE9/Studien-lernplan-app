@@ -14,37 +14,35 @@ Die Implementierung liegt in `ops/n8n/ai-router.mjs`. Der n8n-Workflow
 Ergebnisvertrag auf. KAN-147 kann denselben internen Vertrag später für
 Delegation und Progress verwenden, ohne Routinglogik zu duplizieren.
 
-Vor diesem Aufgabenrouting erzwingt `ops/n8n/model-router.mjs` eine getrennte
-Modellentscheidung für Luna, Terra und Sol. Der n8n-Workflow verwendet dafür
-den Endpunkt `/controlled-execute`; der eigentliche Task-Executor wird erst
-nach einem erfolgreichen `CONTINUE` aufgerufen. Das Gate akzeptiert sowohl die
-Stufennamen als auch konfigurierte Modellbezeichner wie `gpt-5.6-luna` und
-normalisiert sie vor der Entscheidung auf die jeweilige Stufe.
+`ops/n8n/model-router.mjs` trennt zwei Betriebsmodi. Der direkte Codex-Chat
+verwendet vorübergehend ein manuelles Pre-Step-Gate. Der n8n-Workflow verwendet
+dagegen über `/controlled-execute` ausschließlich die automatische
+Runtime-Route und benötigt kein aktuelles Benutzer-Modell.
 
-## Technisches Modell-Gate
+## Temporary Manual Codex Routing
 
 Das Modell-Gate bewertet vor dem nächsten Arbeitsschritt Komponenten,
 Abhängigkeiten, Komplexität, Debugging-Aufwand, Confidence, frühere Fehler,
 widersprüchliche Ergebnisse sowie Architektur-, Security-, Auth-, Session-,
 RLS-, Secret-, Berechtigungs-, Migrations- und Datenverlustrisiken.
 
-Es kennt ausschließlich diese separaten Routingzustände:
+Dieser Modus gilt nur im direkten Codex-Entwicklungschat während KAN-110. Er
+kennt ausschließlich diese Routingzustände:
 
 - `CONTINUE`: Das aktuelle Modell erfüllt mindestens die benötigte Stufe.
 - `MODEL_SWITCH_REQUIRED`: Der Executor wird nicht aufgerufen und der sichere
   Task-State unverändert für die Fortsetzung zurückgegeben.
 
 Bei `MODEL_SWITCH_REQUIRED` enthält `userMessage` ausschließlich
-`Jetzt brauchen wir Terra.` oder `Jetzt brauchen wir Sol.`. Die aufrufende
-Codex-Bridge darf dem Benutzer in diesem Zustand keine weitere Erklärung oder
+`Jetzt brauchen wir Terra.` oder `Jetzt brauchen wir Sol.`. Die direkte
+Codex-Ausgabe darf dem Benutzer in diesem Zustand keine weitere Erklärung oder
 Ausgabe anhängen. Ein Wechsel auf Sol erfolgt nur für tatsächlich Sol-pflichtige
 Architektur-, Security-, riskante Daten- oder wiederholt widersprüchliche
 Fehlerfälle. Mittlere Komplexität verlangt höchstens Terra.
 
 Die Loop-Zustände bleiben davon getrennt: `PASS`, `RETRY`, `ASK_USER`, `ABORT`.
 `ASK_USER` wird nur nach bestandenem Modell-Gate für eine menschliche
-Sachentscheidung verwendet. Ein Zustand `ESCALATE` gehört zu keinem dieser
-beiden Verträge.
+Sachentscheidung verwendet.
 
 Der versionierte Task-State enthält nur freigegebene technische Felder. Felder
 für Tokens, Passwörter, Secrets, Credentials, Cookies oder Authorization werden
@@ -53,6 +51,26 @@ aktuelle/benötigte Modellstufe, Grundkategorie, Jira-Key und State-Revision.
 Ein erforderlicher manueller Modellwechsel erhöht zugleich die Metrik
 `manualInterventions`.
 
+## Automated Runtime Routing
+
+Der n8n-/KAN-147-Pfad verwendet den separaten Zustand `ROUTE_SELECTED`. Die
+Runtime bestimmt `requiredModel=luna|terra|sol` intern und führt den Task danach
+automatisch über `deterministic`, `cheap_model` oder `codex` weiter.
+
+- Luna/Terra werden ohne Benutzerintervention an den erlaubten Modellpfad
+  weitergegeben.
+- Sol-pflichtige nicht-deterministische Aufgaben gehen automatisch an die
+  Codex-/Sol-Route; ein günstiger Provider wird dafür nicht aufgerufen.
+- Ein Modellwechsel erzeugt keine `userMessage` und kein `ASK_USER`.
+- Nur `requiresHumanDecision=true` darf `ASK_USER` auslösen. Das kennzeichnet
+  eine echte fachliche Freigabe und nicht die Auswahl einer Modellstufe.
+- Der Runtime-Executor weist Ergebnisse zurück, die dennoch eine manuelle
+  Modellwechsel-Nachricht enthalten.
+
+Audit und Task-State verwenden dieselben Secret-Schutzregeln wie der direkte
+Modus. Automatische Auswahlen werden als `automaticSelections` gezählt und
+erhöhen `manualInterventions` nicht.
+
 ## Eingabe
 
 Eine Teilaufgabe enthält nur den minimal notwendigen Inhalt und die für die
@@ -60,15 +78,25 @@ Policy erforderlichen Metadaten:
 
 ```json
 {
-  "jobId": "eindeutige-id",
-  "type": "summarization",
-  "complexity": "low",
-  "risk": "low",
-  "readOnly": true,
-  "contextComplete": true,
-  "riskSignals": [],
-  "instructions": "Kurze Zusammenfassung erzeugen",
-  "content": "Minimal notwendiger Inhalt"
+  "step": {
+    "complexity": "medium",
+    "componentCount": 2,
+    "riskSignals": []
+  },
+  "taskState": {
+    "jiraKey": "KAN-147",
+    "revision": 1
+  },
+  "task": {
+    "jobId": "eindeutige-id",
+    "type": "summarization",
+    "complexity": "low",
+    "risk": "low",
+    "readOnly": true,
+    "contextComplete": true,
+    "instructions": "Kurze Zusammenfassung erzeugen",
+    "content": "Minimal notwendiger Inhalt"
+  }
 }
 ```
 
@@ -84,6 +112,9 @@ eskalieren standardmäßig.
 {
   "status": "completed|escalate|failed",
   "route": "deterministic|cheap_model|codex",
+  "mode": "automated_runtime",
+  "routingStatus": "ROUTE_SELECTED",
+  "requiredModel": "luna|terra|sol",
   "model": "provider/model-or-null",
   "confidence": 0.0,
   "risk": "low|medium|high",
@@ -124,7 +155,7 @@ von höchstens 20 EUR erhalten, sofern er dies unterstützt.
 - vermiedene Codex-Aufrufe,
 - Eskalationen und Eskalationsquote,
 - Fehler und Fehlerrate,
-- manuelle Eingriffe und mittlere Laufzeit.
+- manuelle Eingriffe, automatische Modell-/Route-Auswahlen und mittlere Laufzeit.
 
 Der persistente Zustand enthält ausschließlich Zähler, Modellnamen, Monat und
 Kostenwerte. Aufgabeninhalte, Prompts, Tokens, Credentials und personenbezogene
@@ -140,7 +171,9 @@ Daten werden nicht gespeichert.
 3. `docker compose config` prüfen und den Router-Dienst starten.
 4. `ops/n8n/workflows/task-router.json` importieren. Der Workflow bleibt bis
    zum internen Bridge-Test inaktiv und ist öffentlich durch Caddy blockiert.
-5. Je einen deterministischen, günstigen und eskalierenden Testfall senden.
+5. Je einen deterministischen, günstigen und automatisch zur Codex-/Sol-Route
+   eskalierenden Testfall senden; keiner darf eine manuelle Modellwechsel-Zeile
+   zurückgeben.
 6. Low-Confidence, Timeout/Providerfehler und ausgeschöpftes Budget prüfen.
 7. `/metrics` gegen die Testläufe plausibilisieren.
 

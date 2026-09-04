@@ -63,6 +63,7 @@ function initialState(month) {
         decisionsTotal: 0,
         continueCount: 0,
         switchRequiredCount: 0,
+        automaticSelections: 0,
         currentModels: {},
         requiredModels: {},
         reasonCategories: {},
@@ -270,8 +271,11 @@ export function createRouterEngine({
         modelRouting.switchRequiredCount += 1;
         state.metrics.manualInterventions += 1;
       }
-      modelRouting.currentModels[decision.currentModel] =
-        (modelRouting.currentModels[decision.currentModel] ?? 0) + 1;
+      if (decision.status === "ROUTE_SELECTED") modelRouting.automaticSelections += 1;
+      if (decision.currentModel) {
+        modelRouting.currentModels[decision.currentModel] =
+          (modelRouting.currentModels[decision.currentModel] ?? 0) + 1;
+      }
       modelRouting.requiredModels[decision.requiredModel] =
         (modelRouting.requiredModels[decision.requiredModel] ?? 0) + 1;
       modelRouting.reasonCategories[decision.reasonCategory] =
@@ -295,7 +299,11 @@ export function createRouterEngine({
 
   async function execute(task = {}) {
     const startedAt = Date.now();
-    const decision = classifyTask(task);
+    const policyDecision = classifyTask(task);
+    const decision =
+      task.requiredModel === "sol" && policyDecision.route !== "deterministic"
+        ? { route: "codex", risk: "high", reason: "required_model_sol" }
+        : policyDecision;
 
     if (decision.route === "deterministic") {
       await recordDecision(decision, Date.now() - startedAt);

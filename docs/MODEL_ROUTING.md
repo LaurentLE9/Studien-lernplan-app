@@ -55,9 +55,9 @@ Auf Sol eskalieren, wenn hohe Zuverlässigkeit oder komplexes Reasoning nötig i
 - sicherheitskritischer Analyse oder anspruchsvoller Codebewertung,
 - Aufgaben, für die Terra keine ausreichende Confidence erreicht.
 
-## Verbindliche manuelle Modellumschaltung
+## Temporary Manual Codex Routing
 
-Solange Codex das Modell im laufenden Chat nicht selbst zuverlässig umschalten kann, erfolgt ein erforderlicher Modellwechsel manuell durch den Benutzer.
+Diese Übergangsregel gilt ausschließlich für den direkten Codex-Entwicklungschat während der Umsetzung des KAN-110-Epics. Solange Codex das Modell in diesem Chat nicht selbst zuverlässig umschalten kann, erfolgt ein erforderlicher Modellwechsel manuell durch den Benutzer.
 
 Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, muss es **vor dem betreffenden Arbeitsschritt stoppen**. Die Benutzerhinweiszeile enthält ausschließlich den benötigten Modellnamen:
 
@@ -67,10 +67,10 @@ Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, mu
 
 Dabei keine Begründung, keinen Modellvergleich und keine lange Erklärung ausgeben. Nach der manuellen Umschaltung wird im bestehenden Arbeitskontext fortgesetzt; der Benutzer muss den Auftrag nicht erneut erklären.
 
-### Technische Kontrollschicht
+### Temporäre technische Kontrollschicht
 
-KAN-127 setzt die Entscheidung zusätzlich als technisches Pre-Step-Gate unter
-`ops/n8n/model-router.mjs` um. Vor dem vorgesehenen Executor entstehen nur die
+`ops/n8n/model-router.mjs` bildet diese Entscheidung für den direkten Codex-Modus
+als separates Pre-Step-Gate ab. Vor dem vorgesehenen Executor entstehen nur die
 Modell-Routingzustände `CONTINUE` oder `MODEL_SWITCH_REQUIRED`. Bei
 `MODEL_SWITCH_REQUIRED` wird der Arbeitsschritt nicht aufgerufen; der sichere
 Task-State bleibt für die Fortsetzung erhalten. Die Benutzeroberfläche gibt nur
@@ -80,6 +80,28 @@ Diese Zustände sind ausdrücklich von den Loop-Zuständen `PASS`, `RETRY`,
 `ASK_USER` und `ABORT` getrennt. Ein Modellwechsel ist weder `ASK_USER` noch ein
 allgemeiner `ESCALATE`-Zustand. Routing-Audits enthalten nur Modellstufen,
 Grundkategorie, Jira-Key und State-Revision, keine Aufgabeninhalte oder Secrets.
+
+## Automated Runtime Routing
+
+Der spätere n8n-/KAN-127-/KAN-147-Pfad verwendet **nicht** die manuelle
+Codex-Übergangslösung. Er bewertet Scope, Risiko, Komplexität, Confidence und
+Budget, setzt intern `requiredModel` und wählt automatisch die ausführende
+Route. Der Runtime-Zustand lautet `ROUTE_SELECTED`; ein `currentModel` oder eine
+Benutzer-Modellwahl ist dafür nicht erforderlich.
+
+- `requiredModel=luna|terra` führt automatisch in den dafür vorgesehenen
+  Modell-/Providerpfad, sofern die Aufgabenpolicy den Modellpfad erlaubt.
+- `requiredModel=sol` führt automatisch zur Sol-/Codex-Route; der günstige
+  Provider wird nicht aufgerufen.
+- Deterministische Aufgaben bleiben ohne LLM-Aufruf.
+- Modellbedarf allein erzeugt weder `MODEL_SWITCH_REQUIRED`, `userMessage` noch
+  `ASK_USER`.
+- `ASK_USER` ist ausschließlich für eine ausdrücklich markierte echte
+  menschliche Sachentscheidung oder Freigabe zulässig.
+
+Der interne n8n-Endpunkt `/controlled-execute` nutzt ausschließlich Automated
+Runtime Routing. Die manuelle Terra-/Sol-Zeile darf in seiner Antwort weder
+direkt noch verschachtelt vorkommen.
 
 ## Anti-Verschwendungs-Regeln
 
@@ -99,4 +121,6 @@ Für Aufgaben, bei denen Modellrouting relevant war, muss vor `technisch reviewb
 - [ ] Der Modellwechsel-Hinweis enthielt nur `Jetzt brauchen wir <Modellname>.`
 - [ ] Keine unnötigen Wiederholungsversuche mit einem zu schwachen Modell.
 - [ ] Vorhandener Kontext wurde nach dem Modellwechsel wiederverwendet.
+- [ ] Der automatisierte n8n-/KAN-147-Pfad hat Modell-/Route-Eskalationen ohne manuelle Benutzer-Modellwahl verarbeitet.
+- [ ] Reiner Modellbedarf hat im automatisierten Pfad weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.` erzeugt.
 - [ ] Modellwahl oder Nutzerlimit-Optimierung hat Qualität und Sicherheit nicht reduziert.

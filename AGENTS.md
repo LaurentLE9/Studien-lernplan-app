@@ -98,12 +98,15 @@ Der zentrale Router steht in `docs/agent-context/README.md`. Die wiederverwendba
 
 Die Detailregeln in `docs/MODEL_ROUTING.md` sind verbindlich.
 
+- Die folgenden Stop-/Hinweisregeln sind **Temporary Manual Codex Routing** und gelten ausschließlich für den direkten Codex-Entwicklungschat während der Umsetzung von KAN-110.
 - Jede neue Aufgabe startet mit dem kleinsten verfügbaren geeigneten Modell; grundsätzlich Luna → Terra → Sol.
 - Das Startmodell bestimmt zuerst Scope, Risiken, relevante Dateien und den nächsten Schritt.
 - Erkennt das aktuelle Modell, dass die nächste Modellstufe benötigt wird, muss es vor diesem Schritt stoppen.
 - Bei manueller Umschaltung darf die Benutzerhinweiszeile ausschließlich `Jetzt brauchen wir <Modellname>.` lauten.
 - Keine Begründung, kein Modellvergleich und kein wiederholter Versuch eines bereits als zu schwierig erkannten Schritts mit einem zu schwachen Modell.
 - Nach dem Wechsel den vorhandenen gültigen Kontext weiterverwenden und keinen unnötigen vollständigen Repository-Scan wiederholen.
+- Im späteren **Automated Runtime Routing** von n8n/KAN-127/KAN-147 wird die erforderliche Modellstufe beziehungsweise Route automatisch gewählt. Reiner Modellbedarf erzeugt dort weder `ASK_USER` noch eine Benutzer-Modellwahl oder die manuelle Hinweiszeile.
+- `ASK_USER` bleibt im automatisierten Pfad echten fachlichen Entscheidungen, Freigaben und Risiken vorbehalten, die eine menschliche Entscheidung erfordern.
 - Weitere freigegebene Modelle dürfen später als Sonderroute ergänzt werden; die Regel bleibt provider- und modellkonfigurierbar.
 
 ## 4. Kontrollierter Entwicklungs-Loop
@@ -278,12 +281,14 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 
 ### Modell-Routing
 
+- [ ] Temporary Manual Codex Routing und Automated Runtime Routing wurden nicht vermischt.
 - [ ] Die Aufgabe wurde mit dem kleinsten geeigneten verfügbaren Modell begonnen.
 - [ ] Luna, Terra und Sol wurden nur entsprechend dem tatsächlichen Bedarf verwendet.
 - [ ] Vor einer notwendigen Eskalation wurde der aktuelle Arbeitsschritt gestoppt.
 - [ ] Der Modellwechsel-Hinweis enthielt ausschließlich `Jetzt brauchen wir <Modellname>.`
 - [ ] Ein bereits als zu schwierig erkannter Schritt wurde nicht mehrfach mit einem zu schwachen Modell versucht.
 - [ ] Vorhandener, weiterhin gültiger Kontext wurde nach dem Modellwechsel wiederverwendet.
+- [ ] Der automatisierte n8n-/Bridge-Pfad erzeugt allein wegen eines Modellwechsels weder `ASK_USER` noch eine manuelle Benutzerhinweiszeile.
 - [ ] Modellwahl und Nutzerlimit-Optimierung haben Qualität und Sicherheit nicht reduziert.
 
 **Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden. Ein erforderlicher, aber nicht erfolgreich ausgeführter Browser-/E2E-Test blockiert `Erledigt` und damit die Fortsetzung eines davon abhängigen Sprints.
