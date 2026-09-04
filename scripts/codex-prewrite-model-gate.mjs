@@ -7,14 +7,27 @@ function normalizeLevel(value) {
   return match;
 }
 
+function parseIntegerFlag(value, name) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
 function parseArgs(argv) {
   const result = {
     current: null,
-    files: 1,
-    complexity: "low",
+    files: null,
+    complexity: null,
+    dependencies: 0,
+    failedAttempts: 0,
     integration: false,
     refactor: false,
     uncertainty: false,
+    strongCoupling: false,
+    difficultBug: false,
+    terraInsufficient: false,
     architecture: false,
     security: false,
     auth: false,
@@ -27,11 +40,16 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--current") result.current = argv[++index];
-    else if (arg === "--files") result.files = Number(argv[++index]);
+    else if (arg === "--files") result.files = parseIntegerFlag(argv[++index], "--files");
     else if (arg === "--complexity") result.complexity = String(argv[++index] ?? "").toLowerCase();
+    else if (arg === "--dependencies") result.dependencies = parseIntegerFlag(argv[++index], "--dependencies");
+    else if (arg === "--failed-attempts") result.failedAttempts = parseIntegerFlag(argv[++index], "--failed-attempts");
     else if (arg === "--integration") result.integration = true;
     else if (arg === "--refactor") result.refactor = true;
     else if (arg === "--uncertainty") result.uncertainty = true;
+    else if (arg === "--strong-coupling") result.strongCoupling = true;
+    else if (arg === "--difficult-bug") result.difficultBug = true;
+    else if (arg === "--terra-insufficient") result.terraInsufficient = true;
     else if (arg === "--architecture") result.architecture = true;
     else if (arg === "--security") result.security = true;
     else if (arg === "--auth") result.auth = true;
@@ -43,12 +61,19 @@ function parseArgs(argv) {
   }
 
   if (!result.current) throw new Error("--current is required");
-  if (!Number.isInteger(result.files) || result.files < 0) throw new Error("--files must be a non-negative integer");
-  if (!["low", "medium", "high"].includes(result.complexity)) throw new Error("--complexity must be low, medium or high");
+  if (result.files === null) throw new Error("--files is required");
+  if (result.complexity === null) throw new Error("--complexity is required");
+  if (!["low", "medium", "high"].includes(result.complexity)) {
+    throw new Error("--complexity must be low, medium or high");
+  }
   return result;
 }
 
 export function requiredModelForDirectCodexBlock(input) {
+  const files = Number.isInteger(input.files) ? input.files : 0;
+  const dependencies = Number.isInteger(input.dependencies) ? input.dependencies : 0;
+  const failedAttempts = Number.isInteger(input.failedAttempts) ? input.failedAttempts : 0;
+
   if (
     input.architecture ||
     input.security ||
@@ -56,7 +81,14 @@ export function requiredModelForDirectCodexBlock(input) {
     input.rls ||
     input.secrets ||
     input.migration ||
-    input.dataLoss
+    input.dataLoss ||
+    input.strongCoupling ||
+    input.difficultBug ||
+    input.terraInsufficient ||
+    failedAttempts >= 2 ||
+    (input.refactor && input.complexity === "high") ||
+    (files >= 8 && input.complexity === "high") ||
+    (dependencies >= 6 && input.complexity === "high")
   ) {
     return "sol";
   }
@@ -65,7 +97,9 @@ export function requiredModelForDirectCodexBlock(input) {
     input.integration ||
     input.refactor ||
     input.uncertainty ||
-    input.files > 1 ||
+    files > 1 ||
+    dependencies > 2 ||
+    failedAttempts > 0 ||
     input.complexity === "medium" ||
     input.complexity === "high"
   ) {
