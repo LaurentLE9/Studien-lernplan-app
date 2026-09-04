@@ -10,7 +10,8 @@ Vor Änderungen müssen Agenten mindestens lesen:
 2. `AGENTS.md`,
 3. `README.md`,
 4. `docs/LOOP_ENGINEERING.md`,
-5. relevante Quell- und Testdateien.
+5. `docs/MODEL_ROUTING.md`,
+6. relevante Quell- und Testdateien.
 
 Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope.
 
@@ -21,6 +22,7 @@ Verknüpfte Vorgänge:
 - KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
 - KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
 - KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
+- KAN-110 – n8n-Automatisierungs- und KI-Routing-Schicht mit Codex-Orchestrierung einführen
 
 ## 2. Git- und Branch-Regeln
 
@@ -91,6 +93,18 @@ Schema:
 - Der Abschlussbericht nennt kurz die untersuchten Dateien/Bereiche, ausgeführten Prüfungen, wiederverwendeten Nachweise und die Begründung für jeden vollständigen Repository-Scan.
 
 Die wiederverwendbare Repository-Kontextkarte und die Regeln zur Gültigkeit von Prüfnachweisen stehen in `docs/CONTEXT_EFFICIENCY.md`.
+
+### Verbindliches Modell-Routing
+
+Die Detailregeln in `docs/MODEL_ROUTING.md` sind verbindlich.
+
+- Jede neue Aufgabe startet mit dem kleinsten verfügbaren geeigneten Modell; grundsätzlich Luna → Terra → Sol.
+- Das Startmodell bestimmt zuerst Scope, Risiken, relevante Dateien und den nächsten Schritt.
+- Erkennt das aktuelle Modell, dass die nächste Modellstufe benötigt wird, muss es vor diesem Schritt stoppen.
+- Bei manueller Umschaltung darf die Benutzerhinweiszeile ausschließlich `Jetzt brauchen wir <Modellname>.` lauten.
+- Keine Begründung, kein Modellvergleich und kein wiederholter Versuch eines bereits als zu schwierig erkannten Schritts mit einem zu schwachen Modell.
+- Nach dem Wechsel den vorhandenen gültigen Kontext weiterverwenden und keinen unnötigen vollständigen Repository-Scan wiederholen.
+- Weitere freigegebene Modelle dürfen später als Sonderroute ergänzt werden; die Regel bleibt provider- und modellkonfigurierbar.
 
 ## 4. Kontrollierter Entwicklungs-Loop
 
@@ -261,6 +275,16 @@ Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindes
 - [ ] Die Optimierung des Nutzerlimits beeinträchtigt weder Qualität noch Sicherheit.
 - [ ] Neue Funktionen führen nicht ohne nachvollziehbaren Grund zu deutlich höherem Kontext- oder Nutzerverbrauch.
 - [ ] Bei auffällig hohem Ressourcenverbrauch wurde die Ursache dokumentiert.
+
+### Modell-Routing
+
+- [ ] Die Aufgabe wurde mit dem kleinsten geeigneten verfügbaren Modell begonnen.
+- [ ] Luna, Terra und Sol wurden nur entsprechend dem tatsächlichen Bedarf verwendet.
+- [ ] Vor einer notwendigen Eskalation wurde der aktuelle Arbeitsschritt gestoppt.
+- [ ] Der Modellwechsel-Hinweis enthielt ausschließlich `Jetzt brauchen wir <Modellname>.`
+- [ ] Ein bereits als zu schwierig erkannter Schritt wurde nicht mehrfach mit einem zu schwachen Modell versucht.
+- [ ] Vorhandener, weiterhin gültiger Kontext wurde nach dem Modellwechsel wiederverwendet.
+- [ ] Modellwahl und Nutzerlimit-Optimierung haben Qualität und Sicherheit nicht reduziert.
 
 **Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden. Ein erforderlicher, aber nicht erfolgreich ausgeführter Browser-/E2E-Test blockiert `Erledigt` und damit die Fortsetzung eines davon abhängigen Sprints.
 
