@@ -3,6 +3,11 @@
 		reverse_proxy webhook-verifier:3000
 	}
 
+	@blocked_webhooks path /webhook* /webhook-test*
+	handle @blocked_webhooks {
+		respond 404
+	}
+
 	handle {
 		reverse_proxy n8n:5678
 	}

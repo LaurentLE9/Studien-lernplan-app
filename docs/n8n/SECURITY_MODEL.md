@@ -53,8 +53,10 @@ Default read-only gegen isolierte Testdaten. Keine Service-Role im Browser. Änd
 
 - nur HTTPS
 - zufälliges Secret bzw. signierte Requests
-- der aktuelle, prozesslokale Duplikatschutz verwendet die optionale
-  GitHub-Delivery-ID
+- erwartetes Basis- und Head-Repository gegen eine serverseitige Allowlist
+  prüfen; Fork-Ursprünge nicht weiterleiten
+- GitHub-Delivery-ID vor der Weiterleitung atomar in einem persistenten Volume
+  reservieren
 - Payload-Schema validieren
 - unbekannte Felder ignorieren oder Request ablehnen
 - keine Secrets in Fehlerantworten
@@ -80,5 +82,8 @@ Webhook-Verifikation und n8n. Das GitHub-Webhook-Secret ist nur im
 Verifier-Container verfügbar; n8n erhält es nicht. Der Jira-Zugriff verwendet
 ein serverseitiges, zeitlich begrenztes Credential mit dem benötigten Scope.
 Die versionierte Konfiguration liegt unter `ops/n8n/`. Dauerhafte atomare
-Idempotenz ist noch nicht umgesetzt: Nach einem Verifier-Neustart oder bei
-parallelen identischen Anfragen können doppelte Jira-Kommentare entstehen.
+Idempotenz verwendet einen gehashten Dateinamen je GitHub-Delivery-ID. Die
+Reservierung bleibt über Container-Neustarts erhalten und wird bei einem
+bestätigten Upstream-Fehler freigegeben. Bleibt nach einem Prozessabbruch eine
+`pending`-Reservierung zurück, muss sie erst nach Prüfung des zugehörigen
+Jira-Nachweises kontrolliert bereinigt werden.

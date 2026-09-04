@@ -52,9 +52,10 @@ Vor dem ersten öffentlichen Betrieb sind zusätzlich abzuschließen:
 
 Der isolierte Webhook-Verifier empfängt ein GitHub-`workflow_run`-Ereignis,
 prüft dessen Signatur gegen die unveränderten Request-Bytes und leitet nur
-abgeschlossene Läufe intern an n8n weiter. Der Workflow extrahiert anschließend
-einen Jira-Key aus Branch oder Commit-Metadaten und beendet sich bei fehlendem
-Key ohne Schreibzugriff.
+abgeschlossene Läufe weiter, deren Basis- und Head-Repository der konfigurierten
+Allowlist entsprechen. Der Workflow extrahiert anschließend den ersten
+Jira-Key aus Branch oder Commit-Nachricht und beendet sich bei fehlendem Key
+ohne Schreibzugriff.
 Nur bei erfolgreicher Validierung wird ein strukturierter Jira-Kommentar mit
 Run-URL, Ergebnis und Commit erzeugt. Alle Schritte sind regelbasiert; der PoC
 ruft kein LLM und keine kostenpflichtige KI-API auf.
@@ -75,11 +76,13 @@ ohne Payloads oder Secrets zu protokollieren.
 ### Reproduzierbare Einrichtung
 
 1. Auf dem OCI-Host `GITHUB_WEBHOOK_SECRET` und `N8N_ENCRYPTION_KEY` nur in
-   der nicht versionierten `.env` setzen.
+   der nicht versionierten `.env` setzen. `GITHUB_EXPECTED_REPOSITORY` aus
+   dem Environment-Template auf das vertrauenswürdige Repository festlegen.
 2. Das Compose-Setup reicht `GITHUB_WEBHOOK_SECRET` ausschließlich an den
    gehärteten `webhook-verifier`-Container durch. Caddy leitet nur den Pfad
    `/webhook/github-ci-to-jira` an diesen Dienst. Nach erfolgreicher HMAC-
-   Prüfung wird der unveränderte JSON-Body intern an n8n weitergegeben.
+   Prüfung wird der unveränderte JSON-Body intern an n8n weitergegeben. Andere
+   öffentliche n8n-Webhook-Pfade werden durch Caddy blockiert.
 3. `ops/n8n/workflows/github-ci-to-jira.json` in n8n importieren.
 4. Einen Atlassian-API-Token mit Ablaufdatum und dem klassischen Scope
    `write:jira-work` erstellen. Im HTTP-Request-Knoten serverseitig das
@@ -90,6 +93,13 @@ ohne Payloads oder Secrets zu protokollieren.
 5. Den GitHub-Webhook auf den n8n-Webhook-Endpunkt mit `workflow_run` und
    Secret konfigurieren. Der Workflow bleibt zunächst inaktiv, bis der
    Signatur-, gültige-Key- und fehlende-Key-Test erfolgreich durchgeführt sind.
+
+Der Verifier reserviert jede GitHub-Delivery-ID atomar im persistenten
+`verifier_data`-Volume. n8n antwortet erst nach seinem letzten ausgeführten
+Knoten; nur ein erfolgreicher Jira-Pfad wird als abgeschlossen gespeichert.
+Bei einem Upstream-Fehler wird die Reservierung für eine Wiederholung
+freigegeben. Eine nach einem Prozessabbruch verbleibende `pending`-Datei darf
+erst nach Prüfung des Jira-Nachweises manuell entfernt werden.
 
 Die HMAC-Prüfung verwendet die unveränderten Request-Bytes im isolierten
 Verifier; ein erneut serialisiertes JSON-Objekt ist für GitHub-Signaturen nicht

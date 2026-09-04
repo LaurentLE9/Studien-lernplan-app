@@ -17,16 +17,20 @@ services:
       - n8n_data:/home/node/.n8n
 
   webhook-verifier:
-    image: node:22.19.0-alpine3.22
+    build:
+      context: .
+      dockerfile: webhook-verifier.Dockerfile
+    image: study-app-webhook-verifier:kan-156
     restart: unless-stopped
-    command: ["node", "/app/webhook-verifier.mjs"]
     expose:
       - "3000"
     environment:
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:?set the GitHub webhook secret}
+      - GITHUB_EXPECTED_REPOSITORY=${GITHUB_EXPECTED_REPOSITORY:?set the trusted owner/repository}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook/github-ci-to-jira
+      - DELIVERY_STORE_DIR=/var/lib/webhook-verifier/deliveries
     volumes:
-      - ./webhook-verifier.mjs:/app/webhook-verifier.mjs:ro
+      - verifier_data:/var/lib/webhook-verifier
     read_only: true
     tmpfs:
       - /tmp:size=16m,noexec,nosuid,nodev
@@ -55,5 +59,6 @@ services:
 
 volumes:
   n8n_data:
+  verifier_data:
   caddy_data:
   caddy_config:
