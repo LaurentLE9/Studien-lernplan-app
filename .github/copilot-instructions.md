@@ -7,9 +7,11 @@ Diese Regeln gelten für GitHub Copilot beim Arbeiten in diesem Repository.
 1. Aktiven Jira-Vorgang und Akzeptanzkriterien kennen.
 2. Vor einer Repository-Änderung das zugehörige GitHub Issue oder die in Jira dokumentierte Ausnahme prüfen; keine Duplikate erzeugen.
 3. `AGENTS.md` lesen und als verbindliche Arbeitsregel behandeln.
-4. `README.md` lesen.
-5. Bei nicht-trivialen Änderungen `docs/LOOP_ENGINEERING.md` lesen.
-6. Relevante bestehende Tests vor der Implementierung prüfen.
+4. `docs/agent-context/README.md` als zentralen Context Router lesen.
+5. Danach ausschließlich die für den Ticket-Scope notwendigen Domänen-Router und Quellen progressiv laden. `README.md`, `docs/LOOP_ENGINEERING.md`, `docs/CONTEXT_EFFICIENCY.md`, `docs/MODEL_ROUTING.md`, Confluence-Seiten sowie Quell- und Testdateien werden nur geladen, wenn Ticket, Router oder direkte Abhängigkeiten sie für den aktuellen Schritt erfordern.
+6. Relevante bestehende Tests vor der Implementierung prüfen, ohne unnötig breite Repository-Scans auszulösen.
+
+Sicherheits-, Stop-, Test- und Definition-of-Done-Regeln dürfen durch Progressive Context Loading niemals übersprungen werden.
 
 ## Copilot-Fallback bei erreichtem ChatGPT-/Codex-Limit
 
@@ -37,13 +39,13 @@ Dann gilt zusätzlich:
 ## Kontext- und Nutzerlimit-Effizienz
 
 - Jede Aufgabe mit dem kleinstmöglichen notwendigen Kontext durchführen; vollständige Repository-Analysen nur bei tatsächlich repositoryweitem Scope.
-- Mit Scope, `git status`, Git-Diff und geänderten Dateien beginnen. Unveränderte Dateien oder bereits geklärte Architektur nicht erneut analysieren.
-- `docs/CONTEXT_EFFICIENCY.md` als kompakte Kontextkarte verwenden und weiterhin gültige Nachweise desselben Arbeitslaufs wiederverwenden.
+- Nach Jira, `AGENTS.md` und `docs/agent-context/README.md` zuerst den passenden Domänen-Router wählen; anschließend mit Scope, `git status`, Git-Diff und geänderten Dateien arbeiten.
+- `docs/CONTEXT_EFFICIENCY.md` nur nachladen, wenn der Router, eine Ressourcenfrage oder der Abschlussnachweis es verlangt; weiterhin gültige Nachweise desselben Arbeitslaufs wiederverwenden.
 - Große Dateien, insbesondere `src/App.jsx`, über Suche, Symbole und relevante Zeilenbereiche untersuchen.
 - Lokale deterministische Prüfungen gegenüber KI-Analyse bevorzugen, wenn sie dieselbe Aussage zuverlässig liefern.
 - Zuerst gezielte Tests ausführen, danach alle Pflichtprüfungen einmal für den finalen Kandidaten. Nach Änderungen nur die dadurch ungültig gewordenen Nachweise erneuern.
 - Keine Ressourcenoptimierung darf notwendige Qualitäts-, Sicherheits-, Browser- oder Regressionstests auslassen.
-- Im Abschlussbericht untersuchte Bereiche, Prüfungen, wiederverwendete Nachweise und begründete Vollscans nennen.
+- Im Abschlussbericht verwendete Router, untersuchte Bereiche, Prüfungen, wiederverwendete Nachweise und begründete Vollscans nennen.
 
 ## Entwicklungs-Loop
 
@@ -66,7 +68,7 @@ PLAN → IMPLEMENT → VERIFY → EVALUATE
 - Vor der ersten Änderung `npm run integrity:start`, vor Tests/Evaluation `npm run integrity:verify` und nach dem Commit vor Push/PR `npm run integrity:finish` ausführen. Ein blockiertes Gate nicht durch verändernde Git-Befehle umgehen.
 - Bei `ABORT` `npm run integrity:abort` ausführen und den read-only JSON-Nachweis in Jira dokumentieren. Exit-Code `1` ist bei einem erkannten unsicheren Zustand erwartbar.
 
-Die vollständigen Regeln stehen in `docs/LOOP_ENGINEERING.md`.
+Die vollständigen Loop-Regeln werden nur bei Bedarf aus `docs/LOOP_ENGINEERING.md` nachgeladen.
 
 ## Qualität
 
@@ -85,7 +87,7 @@ Tests niemals löschen, überspringen oder abschwächen, nur um einen grünen St
 
 ## Browser-/E2E-Regeln
 
-`AGENTS.md` und `docs/BROWSER_E2E_POLICY.md` sind verbindlich.
+`AGENTS.md` und `docs/BROWSER_E2E_POLICY.md` sind verbindlich, sobald der Scope Browser-/E2E-Prüfungen erfordert.
 
 - Der isolierte Test-Account ist für erforderliche Browser-, E2E-, Smoke-, Regression- und Funktionstests vorab freigegeben.
 - **Nicht nachfragen**, ob der Test gestartet oder der Test-Account verwendet werden soll.
@@ -129,11 +131,13 @@ Ein erfolgreiches Copilot-Ergebnis bedeutet nur **technisch reviewbereit**, nich
 ## Verknüpfte Dokumente
 
 - `AGENTS.md` – verbindliche Agentenregeln
-- `docs/LOOP_ENGINEERING.md` – Loop-, Evaluations-, Retry- und Stop-Regeln
+- `docs/agent-context/README.md` – zentraler Agent Context Router
+- `docs/LOOP_ENGINEERING.md` – Loop-, Evaluations-, Retry- und Stop-Regeln bei Bedarf
+- `docs/CONTEXT_EFFICIENCY.md` – ergänzende Kontextkarte und Nachweisregeln bei Bedarf
 - `docs/BROWSER_E2E_POLICY.md` – Browser-/E2E-Kernregression und Testkonto-Regeln
 - `docs/EXPEDITE_POLICY.md` – Expedite-/P0-Notfallprozess
-- `README.md` – Repository-Überblick
-- Jira KAN-30 / KAN-72 / KAN-73 / KAN-74 / KAN-109
+- `README.md` – Repository-Überblick bei Bedarf
+- Jira KAN-30 / KAN-72 / KAN-73 / KAN-74 / KAN-109 / KAN-157
 - Confluence: „Arbeitsprozess und Definition of Done“
 - Confluence: „Expedite- und P0-Notfallprozess“
 - Confluence: „KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“
