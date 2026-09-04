@@ -5,7 +5,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "github-ci-to-jira",
-        "responseMode": "onReceived",
+        "responseMode": "lastNode",
         "options": {}
       },
       "id": "kan134-webhook",
@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $json.body ?? {};\nconst head = body.workflow_run?.head_branch ?? body.workflow_run?.head_commit?.message ?? body.workflow_run?.head_sha ?? '';\nconst jiraKey = String(head).match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
+        "jsCode": "const body = $json.body ?? {};\nconst candidates = [body.workflow_run?.head_branch, body.workflow_run?.head_commit?.message];\nconst jiraKey = candidates.map((value) => String(value ?? '').match(/\\b[A-Z][A-Z0-9]+-\\d+\\b/)?.[0] ?? null).find(Boolean) ?? null;\nconst runUrl = body.workflow_run?.html_url ?? null;\nreturn [{ json: { jiraKey, runUrl, conclusion: body.workflow_run?.conclusion ?? null, commitSha: body.workflow_run?.head_sha ?? null, runId: body.workflow_run?.id ?? null, ai_calls: 0 } }];"
       },
       "id": "kan134-validate",
       "name": "Jira-Key deterministisch extrahieren",

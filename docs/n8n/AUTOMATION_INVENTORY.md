@@ -26,8 +26,8 @@ Secrets/Tokens erzeugen oder Rechte erweitern | risikoreich | Integrationen | ne
 **Deterministischer GitHub-CI-zu-Jira-Nachweis.**
 
 Trigger: signiertes GitHub-`workflow_run`-Webhook-Ereignis. Der aktuelle PoC
-liest den Jira-Key aus dem Branch-Namen; Commit-Metadaten werden nur geprüft,
-wenn kein Branch-Name vorhanden ist.
+verwendet zuerst einen Jira-Key aus dem Branch-Namen und prüft anschließend die
+Commit-Nachricht, wenn der Branch keinen Schlüssel enthält.
 
 Ablauf:
 1. Eingaben syntaktisch validieren.
@@ -69,7 +69,7 @@ Für den ersten PoC gilt als Ziel: `ai_calls_after = 0` im deterministischen Pfa
 - Keine produktiven Secrets in Workflow-JSON, Repository, Jira oder Confluence.
 - Keine Auth-, Session-, RLS- oder Berechtigungsänderungen ohne menschliche Freigabe.
 - Keine automatische Freigabe/Merge-Aktion, solange Qualitätsgates oder Zielzustand unklar sind.
-- Der aktuelle Duplikatschutz verwendet die GitHub-Delivery-ID nur im
-  Arbeitsspeicher des Verifiers. Er verhindert weder parallele Duplikate sicher
-  noch Redeliveries nach einem Neustart; dauerhafte atomare Idempotenz ist eine
-  offene Härtungsaufgabe.
+- Der Verifier reserviert die GitHub-Delivery-ID atomar in einem persistenten
+  Volume. Parallele Duplikate und Redeliveries nach einem Neustart werden nicht
+  erneut an n8n weitergeleitet. Schlägt n8n beziehungsweise der abschließende
+  Jira-Schritt fehl, wird die Reservierung für GitHubs Wiederholung freigegeben.
