@@ -33,6 +33,7 @@ function cheapTask(overrides = {}) {
 function provider(overrides = {}) {
   return {
     model: "test/cheap-model",
+    modelLevel: "luna",
     estimateMaximumCost: () => 0.1,
     complete: vi.fn(async () => ({ confidence: 0.9, result: { ok: true }, costEur: 0.04 })),
     ...overrides,
@@ -138,6 +139,38 @@ describe("KAN-127 execution, budget, and metrics", () => {
     });
     expect(result).not.toHaveProperty("userMessage");
     expect(model.complete).not.toHaveBeenCalled();
+  });
+
+  it("routes Terra requirements to Codex when only a Luna provider is configured", async () => {
+    const model = provider();
+    const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: model });
+    const result = await engine.execute({
+      ...cheapTask(),
+      requiredModel: "terra",
+    });
+
+    expect(result).toMatchObject({
+      status: "escalate",
+      route: "codex",
+      reason: "required_model_provider_unavailable",
+    });
+    expect(model.complete).not.toHaveBeenCalled();
+  });
+
+  it("uses a declared Terra-capable provider for Terra requirements", async () => {
+    const model = provider({ modelLevel: "terra" });
+    const engine = createRouterEngine({ stateStore: createMemoryStateStore(), provider: model });
+    const result = await engine.execute({
+      ...cheapTask(),
+      requiredModel: "terra",
+    });
+
+    expect(result).toMatchObject({
+      status: "completed",
+      route: "cheap_model",
+      model: "test/cheap-model",
+    });
+    expect(model.complete).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes a successful cheap-model result and reports safe metrics", async () => {
@@ -251,6 +284,7 @@ describe("KAN-127 execution, budget, and metrics", () => {
       apiKey: "test-only-key",
       baseUrl: "https://provider.invalid/v1",
       model: "cheap-model",
+      modelLevel: "terra",
       inputEurPerMillionTokens: 0.1,
       outputEurPerMillionTokens: 0.4,
       timeoutMs: 1,
@@ -330,6 +364,7 @@ describe("KAN-127 provider and n8n contracts", () => {
       apiKey: "test-only-key",
       baseUrl: "https://provider.invalid/v1",
       model: "cheap-model",
+      modelLevel: "terra",
       inputEurPerMillionTokens: 0.1,
       outputEurPerMillionTokens: 0.4,
       fetchImpl,
@@ -339,6 +374,7 @@ describe("KAN-127 provider and n8n contracts", () => {
     expect(response).toMatchObject({ confidence: 0.88, result: { label: "ok" }, costEur: 0.000018 });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(adapter)).not.toContain("test-only-key");
+    expect(adapter.modelLevel).toBe("terra");
   });
 
   it("keeps the router internal, authenticated, persistent, and capped at 20 EUR", () => {
@@ -350,6 +386,7 @@ describe("KAN-127 provider and n8n contracts", () => {
     expect(request.parameters.url).toBe("http://ai-router:3001/controlled-execute");
     expect(request.credentials).toEqual({ httpHeaderAuth: { name: "aiRouterInternalAuth" } });
     expect(compose).toContain("LLM_MONTHLY_BUDGET_EUR=20");
+    expect(compose).toContain("LLM_MODEL_LEVEL=${LLM_MODEL_LEVEL:-luna}");
     expect(compose).toContain("router_data:/var/lib/ai-router");
     expect(compose).not.toContain('"3001:3001"');
     expect(envTemplate).not.toMatch(/LLM_API_KEY=\S+/);
@@ -398,7 +435,7 @@ describe("KAN-127 provider and n8n contracts", () => {
         requiredModel: "terra",
         status: "escalate",
         route: "codex",
-        reason: "provider_unavailable",
+        reason: "required_model_provider_unavailable",
       });
       expect(body).not.toHaveProperty("userMessage");
       expect(body).not.toHaveProperty("loopStatus", "ASK_USER");

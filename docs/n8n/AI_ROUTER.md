@@ -58,7 +58,9 @@ Runtime bestimmt `requiredModel=luna|terra|sol` intern und führt den Task danac
 automatisch über `deterministic`, `cheap_model` oder `codex` weiter.
 
 - Luna/Terra werden ohne Benutzerintervention an den erlaubten Modellpfad
-  weitergegeben.
+  weitergegeben. Der konfigurierte Provider deklariert seine Stufe über
+  `LLM_MODEL_LEVEL=luna|terra`; eine Terra-Anforderung fällt ohne
+  Terra-fähigen Provider kontrolliert auf die Codex-Route zurück.
 - Sol-pflichtige nicht-deterministische Aufgaben gehen automatisch an die
   Codex-/Sol-Route; ein günstiger Provider wird dafür nicht aufgerufen.
 - Ein Modellwechsel erzeugt keine `userMessage` und kein `ASK_USER`.

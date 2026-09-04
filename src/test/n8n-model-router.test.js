@@ -306,6 +306,18 @@ describe("Automated Runtime Routing", () => {
     );
   });
 
+  it("rejects a manual switch message embedded in surrounding provider text", async () => {
+    const executor = createAutomatedRuntimeExecutor({
+      executeStep: vi.fn(async () => ({
+        result: { notice: "Hinweis: Jetzt brauchen wir Terra. Bitte manuell wechseln." },
+      })),
+    });
+
+    await expect(executor({ step: {}, taskState })).rejects.toThrow(
+      "automated_runtime_must_not_emit_manual_switch_message",
+    );
+  });
+
   it("rejects ASK_USER from an executor when no human decision was requested", async () => {
     const executor = createAutomatedRuntimeExecutor({
       executeStep: vi.fn(async () => ({ loopStatus: "ASK_USER" })),

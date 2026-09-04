@@ -27,6 +27,7 @@ function configuredProvider(env, fetchImpl) {
     apiKey: env.LLM_API_KEY,
     baseUrl: env.LLM_BASE_URL,
     model: env.LLM_MODEL,
+    modelLevel: env.LLM_MODEL_LEVEL ?? "luna",
     inputEurPerMillionTokens: env.LLM_INPUT_EUR_PER_MILLION_TOKENS,
     outputEurPerMillionTokens: env.LLM_OUTPUT_EUR_PER_MILLION_TOKENS,
     maxOutputTokens: Number(env.LLM_MAX_OUTPUT_TOKENS ?? 512),
