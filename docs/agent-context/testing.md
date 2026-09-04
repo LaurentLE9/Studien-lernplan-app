@@ -10,7 +10,7 @@ Nutzen bei Unit-, Integration-, Regression-, Browser-/E2E- und CI-Themen.
 
 ## Reihenfolge
 
-1. kleinster aussagekräftiger Test/statistischer Check,
+1. kleinster aussagekräftiger Test/statischer Check,
 2. nach Reparaturen nur invalidierte Nachweise erneuern,
 3. vollständige Pflichtprüfungen einmal für den finalen Kandidaten gemäß `AGENTS.md`.
 
