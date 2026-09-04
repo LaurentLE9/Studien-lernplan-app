@@ -91,7 +91,7 @@ Der bisherige verbindliche Einstieg verlangte mindestens:
 - `docs/MODEL_ROUTING.md`,
 - relevante Quell- und Testdateien.
 
-Damit wurden unabhängig vom eigentlichen Dashboard-Scope mehrere große allgemeine Prozessquellen bereits vor der fachlichen Eingrenzung geladen.
+Damit wurden unabhängig vom eigentlichen Dashboard-Scope drei allgemeine Prozessdokumente bereits vor der fachlichen Eingrenzung geladen und anschließend zusätzlich relevante Quell-/Testdateien gesucht.
 
 ### Mit KAN-157
 
@@ -103,7 +103,7 @@ Für denselben KAN-108-Einstieg reicht zunächst:
 - `docs/agent-context/frontend.md`,
 - anschließend nur die dort für den Dashboard-/Timer-Scope identifizierten Quell- und Teststellen.
 
-`docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md`, Backend-/Supabase-Router oder vollständige Confluence-Seiten werden erst nachgeladen, wenn der konkrete Schritt sie benötigt. Dadurch sinkt die Zahl der vorab verpflichtend geladenen allgemeinen Repository-Dokumente von vier (`README.md`, `LOOP_ENGINEERING.md`, `MODEL_ROUTING.md` plus allgemeine relevante Dateien-Suche) auf einen zentralen Router plus einen passenden Domänen-Router. Die vollständigen Qualitäts- und Sicherheitsprüfungen am Ende bleiben unverändert.
+`docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md`, Backend-/Supabase-Router oder vollständige Confluence-Seiten werden erst nachgeladen, wenn der konkrete Schritt sie benötigt. Statt drei allgemeiner Pflichtdokumente (`README.md`, `docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md`) vor der fachlichen Eingrenzung wird zunächst nur der zentrale Router und anschließend der passende Domänen-Router geladen. Die vollständigen Qualitäts- und Sicherheitsprüfungen am Ende bleiben unverändert.
 
 Dieser Vergleich misst bewusst die **Kontextquellen und Ladebreite**, nicht geschätzte Modell-Tokens, da Tokenisierung modellabhängig ist. Ziel ist reproduzierbar weniger unnötig vorab geladener Kontext ohne Informationsverlust.
 
