@@ -18,3 +18,7 @@ Nutzen bei Jira-, GitHub-, Confluence-, DoD-, Branch-, PR-, Review- und Handover
 ## Fortsetzung
 
 Bei „mit KAN-XX weitermachen“ zuerst vorhandenen `docs/ai-handoffs/KAN-XX-status.md` oder gleichwertigen Task-State prüfen. Danach nur seit diesem Stand geänderte oder als offen markierte Quellen nachladen.
+
+## Merge-Readiness
+
+Vor „merge-ready“ müssen finaler Diff, alle für den finalen Head erforderlichen automatisierten Prüfungen und offene Review-Hinweise geklärt sein. Der endgültige Confluence-Abgleich und Jira-Status `Erledigt` erfolgen weiterhin erst nach bestätigtem Merge gemäß `AGENTS.md`.
