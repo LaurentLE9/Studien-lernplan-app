@@ -67,6 +67,20 @@ Sobald das aktuelle Modell erkennt, dass die nächste Stufe erforderlich ist, mu
 
 Dabei keine Begründung, keinen Modellvergleich und keine lange Erklärung ausgeben. Nach der manuellen Umschaltung wird im bestehenden Arbeitskontext fortgesetzt; der Benutzer muss den Auftrag nicht erneut erklären.
 
+### Technische Kontrollschicht
+
+KAN-127 setzt die Entscheidung zusätzlich als technisches Pre-Step-Gate unter
+`ops/n8n/model-router.mjs` um. Vor dem vorgesehenen Executor entstehen nur die
+Modell-Routingzustände `CONTINUE` oder `MODEL_SWITCH_REQUIRED`. Bei
+`MODEL_SWITCH_REQUIRED` wird der Arbeitsschritt nicht aufgerufen; der sichere
+Task-State bleibt für die Fortsetzung erhalten. Die Benutzeroberfläche gibt nur
+`Jetzt brauchen wir Terra.` beziehungsweise `Jetzt brauchen wir Sol.` aus.
+
+Diese Zustände sind ausdrücklich von den Loop-Zuständen `PASS`, `RETRY`,
+`ASK_USER` und `ABORT` getrennt. Ein Modellwechsel ist weder `ASK_USER` noch ein
+allgemeiner `ESCALATE`-Zustand. Routing-Audits enthalten nur Modellstufen,
+Grundkategorie, Jira-Key und State-Revision, keine Aufgabeninhalte oder Secrets.
+
 ## Anti-Verschwendungs-Regeln
 
 - Ein kleineres Modell darf einen bereits als zu schwierig erkannten Schritt nicht mehrfach versuchen.

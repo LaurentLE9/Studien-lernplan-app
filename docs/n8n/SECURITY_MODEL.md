@@ -78,7 +78,11 @@ Nicht erlaubt: Access Tokens, Refresh Tokens, Cookies, Authorization Header, vol
 ## Umsetzungsstand
 
 Die produktive n8n-Basis verwendet getrennte Container für Reverse Proxy,
-Webhook-Verifikation und n8n. Das GitHub-Webhook-Secret ist nur im
+Webhook-Verifikation, KI-Router und n8n. Der KI-Router ist nur im internen
+Compose-Netz erreichbar, authentifiziert n8n-Aufrufe mit einem separaten
+serverseitigen Credential und speichert ausschließlich aggregierte Kosten- und
+Routingmetriken. Provider-Keys sind nur im Router-Container verfügbar. Das
+GitHub-Webhook-Secret ist nur im
 Verifier-Container verfügbar; n8n erhält es nicht. Der Jira-Zugriff verwendet
 ein serverseitiges, zeitlich begrenztes Credential mit dem benötigten Scope.
 Die versionierte Konfiguration liegt unter `ops/n8n/`. Dauerhafte atomare
