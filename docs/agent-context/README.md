@@ -69,3 +69,5 @@ Im Abschlussbericht kurz festhalten:
 - zusätzlich nachgeladene Quellen und Grund,
 - ob ein Vollscan stattfand und warum,
 - welche vorhandenen Nachweise wiederverwendet wurden.
+
+Der reproduzierbare Vorher-/Nachher-Vergleich für KAN-157 ist in `docs/CONTEXT_EFFICIENCY.md` dokumentiert.
