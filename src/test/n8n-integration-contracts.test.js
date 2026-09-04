@@ -3,8 +3,12 @@ import {
   createIntegrationIdempotencyKey,
   getRetryDelayMs,
   INTEGRATION_CONTRACTS,
+  INTEGRATION_PROBE_OPERATIONS,
   isRetryableIntegrationStatus,
+  probeIntegration,
 } from "../../ops/n8n/integration-contracts.mjs";
+import fs from "node:fs";
+import path from "node:path";
 
 describe("KAN-131 integration contracts", () => {
   it("defines only free, least-privilege PoC access", () => {
@@ -23,8 +27,8 @@ describe("KAN-131 integration contracts", () => {
 
     expect(INTEGRATION_CONTRACTS.github.writes).toEqual([]);
     expect(INTEGRATION_CONTRACTS.supabase.writes).toEqual([]);
+    expect(INTEGRATION_CONTRACTS.confluence.writes).toEqual([]);
     expect(INTEGRATION_CONTRACTS.jira.writes).toEqual(["comment"]);
-    expect(INTEGRATION_CONTRACTS.confluence.writes).toEqual(["footer-comment"]);
   });
 
   it("classifies transient statuses and applies capped exponential backoff", () => {
@@ -44,5 +48,67 @@ describe("KAN-131 integration contracts", () => {
     expect(first).toMatch(/^[a-f0-9]{64}$/);
     expect(first).not.toContain("delivery-1");
     expect(first).not.toContain("abc123");
+  });
+
+  it("probes only allowed read operations with deterministic retry handling", async () => {
+    const requests = [];
+    const delays = [];
+    const result = await probeIntegration({
+      system: "jira",
+      request: async (request) => {
+        requests.push(request);
+        return requests.length === 1 ? { ok: false, status: 429 } : { ok: true, status: 200 };
+      },
+      delay: async (milliseconds) => delays.push(milliseconds),
+    });
+
+    expect(result).toEqual({
+      system: "jira",
+      operation: INTEGRATION_PROBE_OPERATIONS.jira,
+      status: 200,
+      outcome: "completed",
+      attempts: 2,
+    });
+    expect(requests).toEqual([
+      { system: "jira", operation: "issue-read" },
+      { system: "jira", operation: "issue-read" },
+    ]);
+    expect(delays).toEqual([250]);
+  });
+
+  it("rejects undeclared operations and returns a secret-free failure result", async () => {
+    await expect(
+      probeIntegration({ system: "supabase", operation: "delete-user", request: async () => ({ ok: true, status: 200 }) }),
+    ).rejects.toThrow("integration operation is not allowed by the contract");
+
+    await expect(
+      probeIntegration({ system: "confluence", request: async () => ({ ok: false, status: 403 }) }),
+    ).resolves.toEqual({
+      system: "confluence",
+      operation: "page-read",
+      status: 403,
+      outcome: "failed",
+      attempts: 1,
+    });
+  });
+
+  it("keeps the executable probe inactive, read-only, retried and credential-value-free", () => {
+    const workflowPath = path.resolve(process.cwd(), "ops/n8n/workflows/integration-contract-probe.json");
+    const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
+
+    expect(workflow.active).toBe(false);
+    expect(workflow.nodes.map((node) => node.name)).toEqual([
+      "Manuell starten",
+      "GitHub Repository-Metadaten lesen",
+      "Jira-Vorgang lesen",
+      "Confluence-Seite lesen",
+      "Isolierte Supabase-Testdaten lesen",
+    ]);
+    for (const node of workflow.nodes.slice(1)) {
+      expect(node.parameters.method).toBe("GET");
+      expect(node.retryOnFail).toBe(true);
+      expect(node.maxTries).toBe(3);
+      expect(JSON.stringify(node)).not.toMatch(/Bearer\s|gh[pous]_|sbp_|eyJ[a-z0-9_-]{10,}/i);
+    }
   });
 });

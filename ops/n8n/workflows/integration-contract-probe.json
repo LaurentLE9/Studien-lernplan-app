@@ -1,0 +1,94 @@
+{
+  "name": "KAN-131 – Minimalberechtigte Integrationsprobe",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "kan131-manual-trigger",
+      "name": "Manuell starten",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{$vars.GITHUB_EXPECTED_REPOSITORY}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "kan131-github-read",
+      "name": "GitHub Repository-Metadaten lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [260, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": { "httpHeaderAuth": { "name": "githubReadOnly" } }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.JIRA_API_BASE_URL + '/issue/' + $vars.JIRA_PROBE_ISSUE_KEY}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "kan131-jira-read",
+      "name": "Jira-Vorgang lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [520, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": { "httpBasicAuth": { "name": "jiraApiToken" } }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.CONFLUENCE_API_BASE_URL + '/pages/' + $vars.CONFLUENCE_PROBE_PAGE_ID}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {}
+      },
+      "id": "kan131-confluence-read",
+      "name": "Confluence-Seite lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [780, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": { "httpBasicAuth": { "name": "confluenceReadOnly" } }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.SUPABASE_TEST_REST_URL + '/user_plans?select=user_id&limit=1'}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "kan131-supabase-read",
+      "name": "Isolierte Supabase-Testdaten lesen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1040, 0],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "credentials": { "httpHeaderAuth": { "name": "supabaseTestReadOnly" } }
+    }
+  ],
+  "connections": {
+    "Manuell starten": { "main": [[{ "node": "GitHub Repository-Metadaten lesen", "type": "main", "index": 0 }]] },
+    "GitHub Repository-Metadaten lesen": { "main": [[{ "node": "Jira-Vorgang lesen", "type": "main", "index": 0 }]] },
+    "Jira-Vorgang lesen": { "main": [[{ "node": "Confluence-Seite lesen", "type": "main", "index": 0 }]] },
+    "Confluence-Seite lesen": { "main": [[{ "node": "Isolierte Supabase-Testdaten lesen", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "tags": []
+}
