@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const CAPABILITIES = ["low", "medium", "high"];
 const LEGACY_MODEL_TO_CAPABILITY = {
@@ -12,8 +13,10 @@ const CAPABILITY_TO_LEGACY_MODEL = {
   high: "sol",
 };
 
-const mappingUrl = new URL("../config/manual-model-routing.json", import.meta.url);
-export const MANUAL_MODEL_ROUTING_CONFIG = JSON.parse(readFileSync(mappingUrl, "utf8"));
+const mappingPath = resolve(
+  process.env.MANUAL_MODEL_ROUTING_CONFIG_PATH ?? "config/manual-model-routing.json",
+);
+export const MANUAL_MODEL_ROUTING_CONFIG = JSON.parse(readFileSync(mappingPath, "utf8"));
 
 export function normalizeCapability(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
