@@ -2,7 +2,7 @@
 
 Diese Datei ist die verbindliche **Kernel-/Betriebssystem-Regelbasis** für Codex, Claude und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
 
-Sie beschreibt **was** ein Agent in welcher Reihenfolge tun muss. Detailregeln stehen in spezialisierten Router-/Policy-Dateien und werden nur geladen, wenn der aktuelle Scope sie benötigt.
+Sie beschreibt **was** ein Agent in welcher Reihenfolge tun muss. Wiederkehrende Verfahren liegen in Agent Skills; Detailregeln stehen in spezialisierten Router-/Policy-Dateien und werden nur geladen, wenn der aktuelle Scope sie benötigt.
 
 ## 1. Sources of Truth
 
@@ -11,9 +11,10 @@ Für Entwicklungsarbeit gelten diese Quellen in dieser Reihenfolge:
 1. **Jira** – operativer Scope, Status, Sprint, Priorität, Akzeptanzkriterien und Abhängigkeiten.
 2. **AGENTS.md** – verbindliche Agent-OS-/Kernel-Regeln.
 3. **`docs/agent-context/README.md`** – zentraler Context Router für Progressive Context Loading.
-4. **Spezialisierte Policies/Router** – nur laden, wenn der Scope sie benötigt.
-5. **Confluence-Projekt-Hub** – dauerhafte Prozess-, Architektur- und Wissensdokumentation.
-6. **Repository-Code und Tests** – technische Ist-Quelle für das tatsächlich implementierte Verhalten.
+4. **Passende Agent Skills unter `.agents/skills/`** – nur für wiederkehrende Verfahren laden, wenn Name/Beschreibung zum aktuellen Workflow passen.
+5. **Spezialisierte Policies/Router** – nur laden, wenn der Scope sie benötigt.
+6. **Confluence-Projekt-Hub** – dauerhafte Prozess-, Architektur- und Wissensdokumentation.
+7. **Repository-Code und Tests** – technische Ist-Quelle für das tatsächlich implementierte Verhalten.
 
 Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**.
 
@@ -26,9 +27,10 @@ Vor jeder nicht-trivialen Entwicklungsaufgabe:
 3. Branch, HEAD, Remote und `git status` prüfen,
 4. `docs/agent-context/README.md` laden,
 5. Scope, Nicht-Ziele, Risiken, betroffene Schichten und benötigte Nachweise bestimmen,
-6. ausschließlich die dafür notwendigen Domänen-Router, Policies, Dateien und Tests laden,
-7. erforderliche Fähigkeitsstufe bestimmen,
-8. `PLAN` starten.
+6. anhand der Skill-Metadaten nur passende Skills auswählen; nicht alle Skill-Bodies laden,
+7. ausschließlich die dafür notwendigen Skill-Bodies, Domänen-Router, Policies, Dateien und Tests laden,
+8. erforderliche Fähigkeitsstufe bestimmen,
+9. `PLAN` starten.
 
 Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn Ticket-Scope, Fehlerbild oder Architekturänderung ihn konkret erfordern. Der Grund muss im Abschlussnachweis genannt werden.
 
@@ -50,6 +52,27 @@ Typische Detailquellen werden nur bei Bedarf geladen:
 - n8n/Modelle/Provider → AI-/n8n-Router + `docs/MODEL_ROUTING.md`.
 
 Große unveränderte Dateien nicht vollständig laden, wenn Suche, Symbole, relevante Zeilenbereiche, Git-Diff oder direkte Abhängigkeiten ausreichen.
+
+### 3.1 Agent Skills
+
+Die Skill-Konvention in `.agents/skills/README.md` ist verbindlich.
+
+Aktuelle kanonische Workflow-Skills:
+
+- `task-bootstrap` – Jira-Arbeit starten/fortsetzen,
+- `repository-analysis` – gezielte Read-only-Analyse,
+- `ticket-implementation` – bestätigten Ticket-Scope umsetzen,
+- `change-verification` – Tests/Pflichtprüfungen/Evaluation,
+- `handover-completion` – Review-Readiness, Handover und Post-Merge-Abschluss,
+- `n8n-delegation` – n8n-Delegation und Ergebnisvalidierung.
+
+Skills werden anhand von `name` und `description` ausgewählt; der Body wird nur geladen, wenn der Workflow passt. Skills dürfen Jira, diesen Kernel, Safety-/Verification-/Publishing-Gates oder die Definition of Done niemals überschreiben.
+
+Skills bleiben providerneutral und verwenden für Leistungsbedarf nur `requiredCapability=low|medium|high`. Konkrete Modell-/Providernamen werden ausschließlich durch `docs/MODEL_ROUTING.md` und das zentrale Mapping aufgelöst.
+
+Für Code Review wird kein zweiter allgemeiner Skill angelegt; KAN-83 bleibt die einzige projektspezifische Review-Skill-Quelle.
+
+Claude-Code-Adapter unter `.claude/skills/` dürfen nur auf die kanonischen `.agents/skills/` verweisen und keine abweichende Workflow-Logik enthalten.
 
 ## 4. Model Routing
 
@@ -269,7 +292,7 @@ Zentrale Anleitung:
 Der Abschlussbericht nennt kurz:
 
 - Jira-Key und GitHub Issue,
-- verwendete Context Router/Policies,
+- verwendete Skills und Context Router/Policies,
 - untersuchte Dateien/Bereiche,
 - ausgeführte und wiederverwendete Prüfungen,
 - verwendeten Routing-Modus,
@@ -290,4 +313,5 @@ Der Abschlussbericht nennt kurz:
 - KAN-127 – KI-Router, Modellwahl, Eskalation und Kostenmetriken für n8n umsetzen
 - KAN-147 – Modell-Routing-Betriebsmodi verbindlich trennen
 - KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
+- KAN-158 – Wiederverwendbare Agent Skills für Entwicklungsaufgaben standardisieren
 - KAN-161 – AGENTS.md als Agent Operating System refaktorieren und manuelles Modell-Routing providerunabhängig machen
