@@ -45,11 +45,37 @@ export function normalizeProvider(value, config = MANUAL_MODEL_ROUTING_CONFIG) {
   return normalized;
 }
 
-export function providerModelForCapability(provider, capability, config = MANUAL_MODEL_ROUTING_CONFIG) {
+function normalizeModelSpec(entry) {
+  if (typeof entry === "string" && entry.trim()) {
+    return { id: entry.trim(), label: entry.trim(), aliases: [] };
+  }
+  if (!entry || typeof entry !== "object") return null;
+
+  const id = typeof entry.id === "string" && entry.id.trim() ? entry.id.trim() : null;
+  const label = typeof entry.label === "string" && entry.label.trim() ? entry.label.trim() : id;
+  const aliases = Array.isArray(entry.aliases)
+    ? entry.aliases.filter((alias) => typeof alias === "string" && alias.trim()).map((alias) => alias.trim())
+    : [];
+
+  if (!id && !label) return null;
+  return { id: id ?? label, label: label ?? id, aliases };
+}
+
+export function providerModelSpecForCapability(provider, capability, config = MANUAL_MODEL_ROUTING_CONFIG) {
   const normalizedProvider = normalizeProvider(provider, config);
   const normalizedCapability = normalizeCapability(capability);
-  const model = config.providers?.[normalizedProvider]?.models?.[normalizedCapability];
-  return typeof model === "string" && model.trim() ? model.trim() : null;
+  return normalizeModelSpec(config.providers?.[normalizedProvider]?.models?.[normalizedCapability]);
+}
+
+export function providerModelForCapability(provider, capability, config = MANUAL_MODEL_ROUTING_CONFIG) {
+  return providerModelSpecForCapability(provider, capability, config)?.label ?? null;
+}
+
+function canonicalModelName(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function capabilityForProviderModel(provider, model, config = MANUAL_MODEL_ROUTING_CONFIG) {
@@ -68,15 +94,16 @@ export function capabilityForProviderModel(provider, model, config = MANUAL_MODE
       ? Object.entries(config.providers ?? {})
       : [[normalizedProvider, config.providers?.[normalizedProvider]]];
 
+  const inputCanonical = canonicalModelName(normalizedModel);
   const matches = [];
+
   for (const [, definition] of providers) {
     if (!definition) continue;
     for (const capability of CAPABILITIES) {
-      const configuredModel = definition.models?.[capability];
-      if (
-        typeof configuredModel === "string" &&
-        configuredModel.trim().toLowerCase() === normalizedModel.toLowerCase()
-      ) {
+      const spec = normalizeModelSpec(definition.models?.[capability]);
+      if (!spec) continue;
+      const knownNames = [spec.id, spec.label, ...spec.aliases];
+      if (knownNames.some((name) => canonicalModelName(name) === inputCanonical)) {
         matches.push(capability);
       }
     }
@@ -156,7 +183,10 @@ function parseArgs(argv) {
   if (result.legacyActive !== null && result.activeCapability === "unknown") {
     try {
       result.activeCapability = normalizeActiveCapability(result.legacyActive);
-      if (result.provider === "unknown" && ["luna", "terra", "sol"].includes(String(result.legacyActive).toLowerCase())) {
+      if (
+        result.provider === "unknown" &&
+        ["luna", "terra", "sol"].includes(String(result.legacyActive).toLowerCase())
+      ) {
         result.provider = "openai";
       }
     } catch {
@@ -225,7 +255,7 @@ export function evaluateManualPreWriteGate(input) {
     activeCapability = capabilityForProviderModel(provider, activeModel);
   }
 
-  const targetModel = providerModelForCapability(provider, requiredCapability);
+  const targetModelSpec = providerModelSpecForCapability(provider, requiredCapability);
 
   if (activeCapability === "unknown") {
     return {
@@ -235,7 +265,8 @@ export function evaluateManualPreWriteGate(input) {
       activeModel,
       activeCapability: "unknown",
       requiredCapability,
-      targetModel,
+      targetModel: targetModelSpec?.label ?? null,
+      targetModelId: targetModelSpec?.id ?? null,
     };
   }
 
@@ -247,7 +278,8 @@ export function evaluateManualPreWriteGate(input) {
     activeModel,
     activeCapability,
     requiredCapability,
-    targetModel,
+    targetModel: targetModelSpec?.label ?? null,
+    targetModelId: targetModelSpec?.id ?? null,
   };
 }
 
