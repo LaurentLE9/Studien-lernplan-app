@@ -59,14 +59,18 @@ Payloads mit personenbezogenen Daten und Service-Keys sind ausgeschlossen.
 ## Manuelle Serverkonfiguration vor der Live-Probe
 
 Der Workflow bleibt bis zur bewussten, einmaligen Einrichtung in n8n inaktiv.
-Er benötigt dort ausschließlich diese nicht-geheimen Variablen:
+Die Community Edition stellt keine n8n-Custom-Variables bereit. Die folgenden
+nicht-geheimen Zielwerte werden deshalb vor der Live-Probe im Set-Knoten
+`Probe-Konfiguration` eingetragen:
 
-- `GITHUB_EXPECTED_REPOSITORY`
-- `JIRA_API_BASE_URL` und `JIRA_PROBE_ISSUE_KEY`
-- `CONFLUENCE_API_BASE_URL` und `CONFLUENCE_PROBE_PAGE_ID`
-- `SUPABASE_TEST_REST_URL`
+- `githubExpectedRepository`
+- `jiraApiBaseUrl` und `jiraProbeIssueKey`
+- `confluenceApiBaseUrl` und `confluenceProbePageId`
+- `supabaseTestRestUrl`
 
-Die n8n-Credential-Namen sind `githubReadOnly`, `jiraApiToken`,
+Der Workflow verwendet weder `$vars` noch `$env`. Das verhindert, dass für die
+Probe der globale Zugriff von Workflow-Expressions auf Prozessvariablen
+freigeschaltet werden muss. Die n8n-Credential-Namen sind `githubReadOnly`, `jiraApiToken`,
 `confluenceReadOnly` und `supabaseTestReadOnly`. Ihre Werte werden weder im
 Repository noch in Workflow-Exporten gespeichert. Die Live-Probe darf erst nach
 separater Prüfung der tatsächlichen Rechte, des isolierten Supabase-Testpfads
@@ -76,8 +80,8 @@ und der Audit-Ausgabe manuell gestartet werden.
 
 Die maschinenlesbaren Verträge und die deterministischen Retry-/Idempotenz-
 Hilfsfunktionen liegen in `ops/n8n/integration-contracts.mjs`. Der inaktive
-Probe-Workflow referenziert ausschließlich serverseitige n8n-Variablen und
-Credential-Namen, nie Credential-Werte. Die bestehende GitHub-CI-zu-Jira-
+Probe-Workflow referenziert ausschließlich workflow-lokale, nicht-geheime
+Zielkonfiguration und Credential-Namen, nie Credential-Werte. Die bestehende GitHub-CI-zu-Jira-
 Workflowdefinition und der isolierte Webhook-Verifier bleiben der einzige
 automatische Write-Pfad; ihre Secret- und Duplikatschutzregeln werden durch
 `src/test/n8n-integration-contracts.test.js` gegen diesen Vertrag geprüft.

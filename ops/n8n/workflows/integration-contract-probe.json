@@ -11,8 +11,29 @@
     },
     {
       "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            { "name": "githubExpectedRepository", "value": "LaurentLE9/Studien-lernplan-app" },
+            { "name": "jiraApiBaseUrl", "value": "https://api.atlassian.com/ex/jira/<cloud-id>/rest/api/3" },
+            { "name": "jiraProbeIssueKey", "value": "KAN-131" },
+            { "name": "confluenceApiBaseUrl", "value": "https://<site>.atlassian.net/wiki/api/v2" },
+            { "name": "confluenceProbePageId", "value": "<existing-page-id>" },
+            { "name": "supabaseTestRestUrl", "value": "https://<project-ref>.supabase.co/rest/v1" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "kan131-probe-config",
+      "name": "Probe-Konfiguration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
         "method": "GET",
-        "url": "=https://api.github.com/repos/{{$vars.GITHUB_EXPECTED_REPOSITORY}}",
+        "url": "=https://api.github.com/repos/{{$node[\"Probe-Konfiguration\"].json[\"githubExpectedRepository\"]}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -21,7 +42,7 @@
       "name": "GitHub Repository-Metadaten lesen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [260, 0],
+      "position": [520, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000,
@@ -30,7 +51,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{$vars.JIRA_API_BASE_URL + '/issue/' + $vars.JIRA_PROBE_ISSUE_KEY}}",
+        "url": "={{$node[\"Probe-Konfiguration\"].json[\"jiraApiBaseUrl\"] + '/issue/' + $node[\"Probe-Konfiguration\"].json[\"jiraProbeIssueKey\"]}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {}
@@ -39,7 +60,7 @@
       "name": "Jira-Vorgang lesen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [520, 0],
+      "position": [780, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000,
@@ -48,7 +69,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{$vars.CONFLUENCE_API_BASE_URL + '/pages/' + $vars.CONFLUENCE_PROBE_PAGE_ID}}",
+        "url": "={{$node[\"Probe-Konfiguration\"].json[\"confluenceApiBaseUrl\"] + '/pages/' + $node[\"Probe-Konfiguration\"].json[\"confluenceProbePageId\"]}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBasicAuth",
         "options": {}
@@ -57,7 +78,7 @@
       "name": "Confluence-Seite lesen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [780, 0],
+      "position": [1040, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000,
@@ -66,7 +87,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{$vars.SUPABASE_TEST_REST_URL + '/user_plans?select=user_id&limit=1'}}",
+        "url": "={{$node[\"Probe-Konfiguration\"].json[\"supabaseTestRestUrl\"] + '/user_plans?select=user_id&limit=1'}}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {}
@@ -75,7 +96,7 @@
       "name": "Isolierte Supabase-Testdaten lesen",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1040, 0],
+      "position": [1300, 0],
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 1000,
@@ -83,7 +104,8 @@
     }
   ],
   "connections": {
-    "Manuell starten": { "main": [[{ "node": "GitHub Repository-Metadaten lesen", "type": "main", "index": 0 }]] },
+    "Manuell starten": { "main": [[{ "node": "Probe-Konfiguration", "type": "main", "index": 0 }]] },
+    "Probe-Konfiguration": { "main": [[{ "node": "GitHub Repository-Metadaten lesen", "type": "main", "index": 0 }]] },
     "GitHub Repository-Metadaten lesen": { "main": [[{ "node": "Jira-Vorgang lesen", "type": "main", "index": 0 }]] },
     "Jira-Vorgang lesen": { "main": [[{ "node": "Confluence-Seite lesen", "type": "main", "index": 0 }]] },
     "Confluence-Seite lesen": { "main": [[{ "node": "Isolierte Supabase-Testdaten lesen", "type": "main", "index": 0 }]] }

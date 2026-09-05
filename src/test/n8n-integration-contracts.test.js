@@ -99,16 +99,21 @@ describe("KAN-131 integration contracts", () => {
     expect(workflow.active).toBe(false);
     expect(workflow.nodes.map((node) => node.name)).toEqual([
       "Manuell starten",
+      "Probe-Konfiguration",
       "GitHub Repository-Metadaten lesen",
       "Jira-Vorgang lesen",
       "Confluence-Seite lesen",
       "Isolierte Supabase-Testdaten lesen",
     ]);
-    for (const node of workflow.nodes.slice(1)) {
+    for (const node of workflow.nodes.slice(2)) {
       expect(node.parameters.method).toBe("GET");
+      expect(node.parameters.url).toContain('$node["Probe-Konfiguration"]');
       expect(node.retryOnFail).toBe(true);
       expect(node.maxTries).toBe(3);
       expect(JSON.stringify(node)).not.toMatch(/Bearer\s|gh[pous]_|sbp_|eyJ[a-z0-9_-]{10,}/i);
     }
+    const serializedWorkflow = JSON.stringify(workflow);
+    expect(serializedWorkflow).not.toContain("$vars.");
+    expect(serializedWorkflow).not.toContain("$env.");
   });
 });
