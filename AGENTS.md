@@ -68,8 +68,10 @@ Dieser Modus ist ausschließlich eine **providerunabhängige Übergangslösung**
 - `activeCapability`, `activeProvider` und `activeModel` sind optionale Laufzeit-Metadaten und dürfen `unknown` sein.
 - Ein Agent darf aktiven Provider, Modellnamen oder Capability niemals raten oder erfinden.
 - Ist die aktive Fähigkeitsstufe zuverlässig bekannt und schwächer als `requiredCapability`, muss der Agent **vor dem ersten Write des betreffenden Implementierungsblocks** stoppen.
+- Provider-Mappings werden ausschließlich in `config/manual-model-routing.json` gepflegt.
 - Für OpenAI bleibt das Mapping rückwärtskompatibel: `low → Luna`, `medium → Terra`, `high → Sol`.
-- Weitere Provider wie Anthropic/Claude werden ausschließlich über Mapping/Adapter ergänzt; der Kernel wird dafür nicht umgebaut.
+- Für Anthropic/Claude ist aktuell definiert: `low → Claude Haiku 4.5`, `medium → Claude Sonnet 5`, `high → Claude Opus 5`.
+- Weitere Provider werden ausschließlich über Mapping/Adapter ergänzt; der Kernel wird dafür nicht umgebaut.
 - Ist für den aktiven Provider ein konkretes Zielmodell konfiguriert, lautet der manuelle Hinweis ausschließlich `Jetzt brauchen wir <Modellname>.`.
 - Ist kein konkretes Zielmodell konfiguriert, lautet der Hinweis ausschließlich `Jetzt brauchen wir ein Modell der Stufe <MEDIUM|HIGH>.`.
 - Nach dem manuellen Wechsel wird vorhandener gültiger Kontext weiterverwendet; kein unnötiger Vollscan.
