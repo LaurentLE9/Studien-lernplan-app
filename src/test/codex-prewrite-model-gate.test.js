@@ -6,17 +6,17 @@ import {
   runCli,
 } from "../../scripts/codex-prewrite-model-gate.mjs";
 
-describe("Temporary Manual Codex Pre-Write Gate", () => {
+describe("Temporary Manual Codex Compatibility Gate", () => {
   it("allows Luna for one bounded low-risk file", () => {
     expect(
       evaluateDirectCodexPreWriteGate({ active: "gpt-5.6-luna", files: 1, complexity: "low" }),
-    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeModel: "luna" });
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeCapability: "low" });
   });
 
   it("does not require active-model metadata to calculate a low-risk Luna block", () => {
     expect(
       evaluateDirectCodexPreWriteGate({ files: 1, complexity: "low" }),
-    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeModel: "unknown" });
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeCapability: "unknown" });
   });
 
   it("requires explicit scope inputs before the CLI can return CONTINUE", () => {
@@ -31,13 +31,13 @@ describe("Temporary Manual Codex Pre-Write Gate", () => {
     expect(directCodexSwitchMessage("terra")).toBe("Jetzt brauchen wir Terra.");
   });
 
-  it("returns ACTIVE_MODEL_UNKNOWN when a stronger model is required but runtime metadata is unavailable", () => {
+  it("returns ACTIVE_CAPABILITY_UNKNOWN when a stronger model is required but runtime metadata is unavailable", () => {
     expect(
       evaluateDirectCodexPreWriteGate({ files: 4, complexity: "low" }),
     ).toMatchObject({
-      status: "ACTIVE_MODEL_UNKNOWN",
+      status: "ACTIVE_CAPABILITY_UNKNOWN",
       requiredModel: "terra",
-      activeModel: "unknown",
+      activeCapability: "unknown",
     });
   });
 
@@ -79,14 +79,14 @@ describe("Temporary Manual Codex Pre-Write Gate", () => {
   it("keeps --current as a compatibility alias for --active", () => {
     expect(
       evaluateDirectCodexPreWriteGate({ current: "terra", files: 3, complexity: "medium" }),
-    ).toMatchObject({ status: "CONTINUE", requiredModel: "terra", activeModel: "terra" });
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "terra", activeCapability: "medium" });
   });
 
   it("prints only the exact switch line for a blocked known-active CLI decision", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
       expect(
-        runCli(["--active", "luna", "--files", "4", "--complexity", "medium"]),
+        runCli(["--provider", "openai", "--active", "luna", "--files", "4", "--complexity", "medium"]),
       ).toBe(42);
       expect(write).toHaveBeenCalledTimes(1);
       expect(write).toHaveBeenCalledWith("Jetzt brauchen wir Terra.\n");
@@ -95,10 +95,10 @@ describe("Temporary Manual Codex Pre-Write Gate", () => {
     }
   });
 
-  it("prints the required target model even when activeModel is unknown", () => {
+  it("prints the required target model even when active capability is unknown", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
-      expect(runCli(["--files", "1", "--complexity", "low", "--security"])).toBe(42);
+      expect(runCli(["--provider", "openai", "--files", "1", "--complexity", "low", "--security"])).toBe(42);
       expect(write).toHaveBeenCalledTimes(1);
       expect(write).toHaveBeenCalledWith("Jetzt brauchen wir Sol.\n");
     } finally {
