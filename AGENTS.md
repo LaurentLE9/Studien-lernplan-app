@@ -1,117 +1,101 @@
-# AGENTS.md
+# AGENTS.md — Agent Operating System
 
-Diese Datei ist die verbindliche Repository-Regelbasis für Codex und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
+Diese Datei ist die verbindliche **Kernel-/Betriebssystem-Regelbasis** für Codex und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
 
-## 1. Verbindliche Quellen
+Sie beschreibt **was** ein Agent in welcher Reihenfolge tun muss. Detailregeln stehen in spezialisierten Router-/Policy-Dateien und werden nur geladen, wenn der aktuelle Scope sie benötigt.
 
-Vor Änderungen müssen Agenten mindestens lesen:
+## 1. Sources of Truth
 
-1. den aktiven Jira-Vorgang mit Akzeptanzkriterien,
-2. `AGENTS.md`,
-3. `docs/agent-context/README.md`.
+Für Entwicklungsarbeit gelten diese Quellen in dieser Reihenfolge:
 
-Danach wird der notwendige Kontext **progressiv** über den zentralen Agent Context Router geladen. `README.md`, `docs/LOOP_ENGINEERING.md`, `docs/MODEL_ROUTING.md`, Confluence-Seiten sowie Quell- und Testdateien werden nur geladen, wenn Ticket-Scope, Router oder direkte Abhängigkeiten sie für den aktuellen Schritt benötigen. Sicherheits-, Stop-, Test- und Definition-of-Done-Regeln dürfen dadurch niemals übersprungen werden.
+1. **Jira** – operativer Scope, Status, Sprint, Priorität, Akzeptanzkriterien und Abhängigkeiten.
+2. **AGENTS.md** – verbindliche Agent-OS-/Kernel-Regeln.
+3. **`docs/agent-context/README.md`** – zentraler Context Router für Progressive Context Loading.
+4. **Spezialisierte Policies/Router** – nur laden, wenn der Scope sie benötigt.
+5. **Confluence-Projekt-Hub** – dauerhafte Prozess-, Architektur- und Wissensdokumentation.
+6. **Repository-Code und Tests** – technische Ist-Quelle für das tatsächlich implementierte Verhalten.
 
-Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope.
+Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**.
 
-Verknüpfte Vorgänge:
+## 2. Boot Sequence
 
-- KAN-30 – Entwicklungs- und Jira-Workflow dokumentieren
-- KAN-72 – Isolierten Testnutzer und Browser-End-to-End-Tests einführen
-- KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
-- KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
-- KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
-- KAN-110 – n8n-Automatisierungs- und KI-Routing-Schicht mit Codex-Orchestrierung einführen
-- KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
+Vor jeder nicht-trivialen Entwicklungsaufgabe:
 
-## 2. Git- und Branch-Regeln
+1. aktiven Jira-Vorgang vollständig lesen,
+2. `AGENTS.md` lesen,
+3. Branch, HEAD, Remote und `git status` prüfen,
+4. `docs/agent-context/README.md` laden,
+5. Scope, Nicht-Ziele, Risiken, betroffene Schichten und benötigte Nachweise bestimmen,
+6. ausschließlich die dafür notwendigen Domänen-Router, Policies, Dateien und Tests laden,
+7. erforderliche Modellstufe bestimmen,
+8. `PLAN` starten.
 
-- Niemals direkt auf `main` entwickeln oder pushen.
-- Vor Änderungen Branch, HEAD, Remote und `git status` prüfen.
-- Fremde oder unklare uncommittierte Änderungen nicht überschreiben oder mitcommitten.
-- Aufgaben-Branch vom aktuellen `main` erstellen.
-- Branch-Namen enthalten den Jira-Key.
+Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn Ticket-Scope, Fehlerbild oder Architekturänderung ihn konkret erfordern. Der Grund muss im Abschlussnachweis genannt werden.
 
-### Worktree-Integritätskontrollen
+## 3. Context Routing
 
-Die Phasenübergänge des Entwicklungs-Loops werden zusätzlich durch read-only Prüfungen abgesichert:
+Progressive Context Loading ist verbindlich.
 
-```bash
-npm run integrity:start
-npm run integrity:verify
-npm run integrity:finish
-```
+Der zentrale Router ist:
 
-- `integrity:start` vor der ersten Änderung ausführen. Der Ausgangs-Worktree muss sauber sein.
-- `integrity:verify` vor Tests und Evaluation ausführen. Änderungen auf `main`/`master`, ungelöste Indexkonflikte, Konfliktmarker und ein fehlgeschlagenes `git diff --check` blockieren den Loop.
-- `integrity:finish` nach dem ticketbezogenen Commit und vor Push/PR ausführen. Erlaubt ist nur ein sauberer Aufgaben-Branch.
-- Bei einer irregulären Beendigung `npm run integrity:abort` ausführen und dessen JSON-Nachweis im Jira-Vorgang dokumentieren. Der Befehl verändert weder Worktree noch Index oder Stash und kann bei einem unsicheren Zustand erwartungsgemäß mit Exit-Code `1` enden.
-- Ein blockiertes Gate darf nicht durch Stash, Reset, Checkout, Löschen oder Überschreiben fremder Änderungen umgangen werden. Zustand zuerst sichern, Herkunft und Scope klären und gemäß `ASK_USER` oder `ABORT` dokumentieren.
+- `docs/agent-context/README.md`
 
-Schema:
+Typische Detailquellen werden nur bei Bedarf geladen:
 
-- Feature: `feature/KAN-XX-kurzer-name`
-- Bugfix: `fix/KAN-XX-kurzer-name`
-- Refactoring: `refactor/KAN-XX-kurzer-name`
-- Tests: `test/KAN-XX-kurzer-name`
-- Dokumentation: `docs/KAN-XX-kurzer-name`
+- Architektur/Refactoring → Domänen-Router + relevante Architekturquellen,
+- Frontend/UI → relevante Feature-/UI-Dateien und Tests,
+- Supabase/Auth/RLS → Backend-/Supabase-Router + Sicherheitsregeln,
+- Tests/E2E/CI → `docs/BROWSER_E2E_POLICY.md` und Testing-Router,
+- Prozess/Jira/GitHub/Confluence → Prozess-Router,
+- n8n/Modelle/Provider → AI-/n8n-Router + `docs/MODEL_ROUTING.md`.
 
-### Jira-/GitHub-Issue-Abgleich
+Große unveränderte Dateien nicht vollständig laden, wenn Suche, Symbole, relevante Zeilenbereiche, Git-Diff oder direkte Abhängigkeiten ausreichen.
 
-- Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope. GitHub Issues spiegeln die repositorynahe technische Nachverfolgung.
-- Für jeden eigenständig bearbeitbaren Jira-Vorgang, der einen Aufgaben-Branch und Pull Request erfordert, ist vor der Implementierung ein GitHub Issue erforderlich. Dies gilt insbesondere für Tasks, Features, Stories, Bugs und eigenständig umgesetzte Sub-Tasks.
-- Vor dem Anlegen müssen offene und geschlossene GitHub Issues nach Jira-Key und Inhalt durchsucht werden. Ein passendes Issue wird weiterverwendet; Duplikate sind unzulässig.
-- Das GitHub Issue enthält den Jira-Key und einen Jira-Link. Der Jira-Vorgang enthält den Link zum GitHub Issue. Branch, Commits und Pull Request enthalten den Jira-Key; der Pull Request referenziert das Issue mit `Refs #<Nummer>`.
-- Automatische Schließformeln wie `Closes #<Nummer>` dürfen nicht verwendet werden, weil der Merge allein die Definition of Done noch nicht erfüllt. Das GitHub Issue wird erst nach bestätigtem Merge, vollständiger Nachprüfung, abgeschlossenem Confluence-Abgleich und Jira-Status `Erledigt` mit einem Abschlussnachweis geschlossen.
-- Dokumentierte Ausnahmen gelten für reine Epics/Sammelvorgänge ohne eigene Implementierung, reine Planungs- oder Verwaltungsarbeit ohne Repository-Änderung, Duplikate oder verworfene Vorgänge sowie Inhalte, die aus Sicherheits- oder Datenschutzgründen nicht in GitHub stehen dürfen. Die Ausnahme und ihr Grund müssen vor Arbeitsbeginn im Jira-Vorgang stehen.
-- Vor KAN-85 bereits erledigte Vorgänge erhalten nach dokumentierter Inventur nicht rückwirkend leere GitHub Issues. Bei Wiederaufnahme oder neuem Repository-Änderungsbedarf gilt die Issue-Pflicht.
-- Abweichende Jira-/GitHub-Status werden dokumentiert und ausgehend von Jira kontrolliert bereinigt. Ein GitHub Issue zu einem noch offenen Jira-Vorgang darf nicht allein wegen eines vorhandenen Merges geschlossen werden.
-- Secrets, Zugangsdaten, Testpasswörter und unnötige personenbezogene Daten gehören weder in Jira noch in GitHub Issues.
-
-## 3. Scope-Regeln
-
-- Nur Änderungen durchführen, die für den aktiven Jira-Vorgang erforderlich sind.
-- Keine zusätzlichen Features, Paket-Upgrades oder Nebenbaustellen ohne eigenen Jira-Vorgang aufnehmen.
-- Bestehendes Design, Verhalten und Datenmodell erhalten, sofern das Ticket keine Änderung verlangt.
-- Keine unnötigen Dateien verändern.
-- Keine Tests abschwächen, überspringen oder löschen, nur damit Prüfungen grün werden.
-
-### Kontext- und Nutzerlimit-Effizienz
-
-> Jede Aufgabe muss mit dem kleinstmöglichen notwendigen Kontext durchgeführt werden. Vollständige Repository-Analysen dürfen nur erfolgen, wenn die Aufgabe sie tatsächlich erfordert.
-
-- Vor jeder Analyse zuerst Scope, Nicht-Ziele, betroffene Schichten und benötigte Nachweise bestimmen.
-- Standardmäßig mit `git status`, Git-Diff beziehungsweise den seit dem bestätigten Ausgangs-HEAD geänderten Dateien beginnen. Ein vollständiger Repository-Scan braucht eine konkrete Begründung aus dem Ticket.
-- Unveränderte Dateien und bereits geklärte Architektur nicht erneut analysieren. Weiterhin gültige Dokumentation und belegte Ergebnisse aus demselben Arbeitslauf wiederverwenden.
-- Große Dateien nur über Suche, Symbole, relevante Zeilenbereiche und direkte Abhängigkeiten untersuchen. Das gilt besonders für `src/App.jsx`; eine vollständige Verarbeitung ist nur bei dateiweitem Scope zulässig.
-- Zuerst lokale, deterministische Mittel wie `rg`, Git-Diff, Typecheck, Lint, gezielte Tests oder vorhandene Skripte nutzen, wenn sie dieselbe Frage zuverlässig beantworten.
-- Prompts und Tool-Ausgaben auf Ticket, geänderte Dateien, fehlende Evidenz und konkrete Fehler begrenzen. Große unveränderte Inhalte nicht wiederholt übertragen.
-- Tests anhand des tatsächlichen Änderungsumfangs auswählen: zuerst kleine relevante Prüfungen, danach die nach Definition of Done erforderlichen vollständigen Regressionstests für den finalen Kandidaten.
-- Build, Typecheck, Lint, Test- und Analysebefehle nicht ohne technischen Grund identisch wiederholen. Ein Prüfergebnis darf nur wiederverwendet werden, wenn geprüfter Commit beziehungsweise Arbeitsbaum und alle dafür relevanten Quellen, Konfigurationen und Abhängigkeiten unverändert sind.
-- Nach einer Reparatur nur die dadurch ungültig gewordenen gezielten Nachweise sofort erneuern. Vor Veröffentlichung bleiben alle vollständigen Pflichtprüfungen für den finalen Stand verbindlich.
-- Ressourcenoptimierung darf niemals notwendige Sicherheits-, Qualitäts-, Datenintegritäts-, Browser- oder Regressionstests auslassen oder deren Aussagekraft verringern.
-- Der Abschlussbericht nennt kurz die untersuchten Dateien/Bereiche, ausgeführten Prüfungen, wiederverwendeten Nachweise und die Begründung für jeden vollständigen Repository-Scan.
-
-Der zentrale Router steht in `docs/agent-context/README.md`. Die wiederverwendbare Repository-Kontextkarte und die Regeln zur Gültigkeit von Prüfnachweisen stehen ergänzend in `docs/CONTEXT_EFFICIENCY.md`.
-
-### Verbindliches Modell-Routing
+## 4. Model Routing
 
 Die Detailregeln in `docs/MODEL_ROUTING.md` sind verbindlich.
 
-- Die folgenden Stop-/Hinweisregeln sind **Temporary Manual Codex Routing** und gelten ausschließlich für den direkten Codex-Entwicklungschat während der Umsetzung von KAN-110.
-- Jede neue Aufgabe startet mit dem kleinsten verfügbaren geeigneten Modell; grundsätzlich Luna → Terra → Sol.
-- Das Startmodell bestimmt zuerst Scope, Risiken, relevante Dateien und den nächsten Schritt.
-- Erkennt das aktuelle Modell, dass die nächste Modellstufe benötigt wird, muss es vor diesem Schritt stoppen.
-- Bei manueller Umschaltung darf die Benutzerhinweiszeile ausschließlich `Jetzt brauchen wir <Modellname>.` lauten.
-- Keine Begründung, kein Modellvergleich und kein wiederholter Versuch eines bereits als zu schwierig erkannten Schritts mit einem zu schwachen Modell.
-- Nach dem Wechsel den vorhandenen gültigen Kontext weiterverwenden und keinen unnötigen vollständigen Repository-Scan wiederholen.
-- Im späteren **Automated Runtime Routing** von n8n/KAN-127/KAN-147 wird die erforderliche Modellstufe beziehungsweise Route automatisch gewählt. Reiner Modellbedarf erzeugt dort weder `ASK_USER` noch eine Benutzer-Modellwahl oder die manuelle Hinweiszeile.
-- `ASK_USER` bleibt im automatisierten Pfad echten fachlichen Entscheidungen, Freigaben und Risiken vorbehalten, die eine menschliche Entscheidung erfordern.
-- Weitere freigegebene Modelle dürfen später als Sonderroute ergänzt werden; die Regel bleibt provider- und modellkonfigurierbar.
+Es existieren **zwei strikt getrennte Betriebsmodi**:
 
-## 4. Kontrollierter Entwicklungs-Loop
+### 4.1 `TEMPORARY_MANUAL_CODEX_ROUTING`
 
-Für nicht-triviale Änderungen gilt:
+Dieser Modus ist ausschließlich eine **Übergangslösung**, solange das automatische n8n-Routing noch nicht produktiv und verbindlich für den direkten Entwicklungsworkflow aktiv ist.
+
+- `requiredModel` wird aus Scope, Risiko, Komplexität und Unsicherheit bestimmt.
+- `requiredModel` darf **nicht** davon abhängen, dass das aktive Modell bekannt ist.
+- `activeModel` ist lediglich optionale Laufzeit-Metadaten und darf `unknown` sein.
+- Ein Agent darf das aktive Modell niemals raten oder erfinden.
+- Ist das aktive Modell zuverlässig bekannt und schwächer als `requiredModel`, muss der Agent **vor dem ersten Write des betreffenden Implementierungsblocks** stoppen.
+- Bei notwendiger manueller Umschaltung darf die Benutzerhinweiszeile ausschließlich lauten:
+  - `Jetzt brauchen wir Terra.`
+  - `Jetzt brauchen wir Sol.`
+- Nach dem manuellen Wechsel wird vorhandener gültiger Kontext weiterverwendet; kein unnötiger Vollscan.
+
+### 4.2 `AUTOMATED_N8N_ROUTING`
+
+Dieser Modus ist das **dauerhafte Zielsystem**.
+
+- n8n bestimmt `requiredModel` bzw. die Ausführungsroute automatisch.
+- Modell-/Providerwahl erfolgt ohne manuelle Benutzerentscheidung.
+- Reiner Modellbedarf erzeugt weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.`.
+- Der Benutzer muss nicht mitteilen, welches Modell verwendet werden soll.
+- Das automatische System darf den manuellen Übergangsmodus nicht simulieren oder mit ihm vermischen.
+
+### 4.3 Abschaltbedingung der Übergangslösung
+
+Sobald der produktive n8n-Router für den direkten Entwicklungsworkflow nachweislich:
+
+1. Scope/Risiko/Komplexität bewertet,
+2. `requiredModel`/Route zuverlässig bestimmt,
+3. den ausführenden Modell-/Providerpfad automatisch auswählt,
+4. die erforderlichen Qualitäts- und Sicherheits-Gates einhält,
+5. und dieser Pfad als verbindlicher Standard freigegeben wurde,
+
+wird `TEMPORARY_MANUAL_CODEX_ROUTING` deaktiviert. Danach ist für diesen Workflow ausschließlich `AUTOMATED_N8N_ROUTING` zulässig.
+
+## 5. Execution Loop
+
+Für nicht-triviale Änderungen gilt verbindlich:
 
 ```text
 PLAN → IMPLEMENT → VERIFY → EVALUATE
@@ -121,64 +105,69 @@ PLAN → IMPLEMENT → VERIFY → EVALUATE
                          └─ ABORT → sicher stoppen und dokumentieren
 ```
 
-Details stehen in `docs/LOOP_ENGINEERING.md`.
+Detailregeln: `docs/LOOP_ENGINEERING.md`.
 
 ### PLAN
 
 - `npm run integrity:start` ausführen und nur bei `PASS` fortfahren.
 - Ticket, Scope, Akzeptanzkriterien und Nicht-Ziele erfassen.
-- relevante Dateien und Abhängigkeiten identifizieren.
-- Risiken und benötigte Tests bestimmen.
-- Projekt-Hub und fachlich möglicherweise betroffene Confluence-Seiten für den späteren Abschlussabgleich identifizieren.
+- relevante Dateien, Abhängigkeiten, Risiken und Tests bestimmen.
+- erforderliche Modellstufe bestimmen.
+- für den späteren Abschlussabgleich betroffene Confluence-Seiten identifizieren.
 
 ### IMPLEMENT
 
 - kleinste sinnvolle Änderung umsetzen.
 - bei Bugs nach Möglichkeit zuerst Regression reproduzierbar machen.
 - Architektur- und Modulgrenzen respektieren.
+- keine zusätzlichen Features, Paket-Upgrades oder Nebenbaustellen ohne eigenen Jira-Vorgang.
 
 ### VERIFY
 
-Vor den fachlichen Prüfungen `npm run integrity:verify` ausführen.
-
-Zuerst gezielte Tests, danach grundsätzlich:
-
-```bash
-npm test
-npm run test:coverage
-npx tsc --noEmit
-npm run build
-```
-
-Bei UI-/Interaktionsänderungen zusätzlich Preview-/Browserprüfung durchführen und Branch + Commit des geprüften Deployments eindeutig bestätigen.
-
-Die vollständigen Pflichtprüfungen werden einmal für den finalen Kandidaten ausgeführt. Ändert sich der Stand danach, werden alle durch die Änderung ungültig gewordenen Prüfungen erneut ausgeführt; unveränderte, eindeutig einem Stand zuordenbare Nachweise werden nicht ohne Grund wiederholt.
+- vor fachlichen Prüfungen `npm run integrity:verify` ausführen,
+- zuerst gezielte Tests,
+- danach die laut DoD und Scope erforderlichen vollständigen Prüfungen,
+- UI-/Interaktionsänderungen zusätzlich gemäß `docs/BROWSER_E2E_POLICY.md` prüfen.
 
 ### EVALUATE
 
 Mindestens bewerten:
 
-- correctness
-- acceptance criteria
-- scope
-- regression risk
-- security
-- data integrity
-- test quality
-- documentation
-- evidence
+- correctness,
+- acceptance criteria,
+- scope,
+- regression risk,
+- security,
+- data integrity,
+- test quality,
+- documentation,
+- evidence.
 
-Entscheidung muss `PASS`, `RETRY`, `ASK_USER` oder `ABORT` sein.
+Ergebnis: `PASS`, `RETRY`, `ASK_USER` oder `ABORT`.
 
-### RETRY
+Maximal drei Reparaturversuche pro zusammenhängender Fehlerursache. Eine nachweislich fehlgeschlagene Strategie nicht unverändert wiederholen.
 
-- Maximal drei Reparaturversuche pro zusammenhängender Fehlerursache.
-- Keine bereits nachweislich fehlgeschlagene Strategie unverändert wiederholen.
-- Nach jeder Reparatur relevante Tests erneut ausführen.
-- Nach drei erfolglosen Versuchen stoppen und Ursache dokumentieren.
-- Bei `ABORT` zusätzlich `npm run integrity:abort` ausführen und den unveränderten Zustandsnachweis im Jira-Vorgang hinterlegen.
+## 6. Git- und Publishing-Regeln
 
-## 5. Sicherheits- und Stop-Regeln
+- Niemals direkt auf `main` entwickeln oder pushen.
+- Aufgaben-Branch vom aktuellen `main` erstellen.
+- Branch-Namen enthalten den Jira-Key.
+- Fremde oder unklare uncommittierte Änderungen niemals überschreiben, löschen, resetten, stashen oder mitcommitten, um ein Gate zu umgehen.
+- Vor der Implementierung muss für eigenständig bearbeitbare Repository-Arbeit ein passendes GitHub Issue existieren, sofern keine dokumentierte Ausnahme gilt.
+- Jira und GitHub Issue gegenseitig verknüpfen.
+- Branch, Commits und Pull Request enthalten den Jira-Key.
+- Pull Request referenziert das GitHub Issue mit `Refs #<Nummer>`; keine automatische Schließformel allein durch Merge.
+- Vor Push/PR `npm run integrity:finish` ausführen.
+
+Branch-Schema:
+
+- Feature: `feature/KAN-XX-kurzer-name`
+- Bugfix: `fix/KAN-XX-kurzer-name`
+- Refactoring: `refactor/KAN-XX-kurzer-name`
+- Tests: `test/KAN-XX-kurzer-name`
+- Dokumentation: `docs/KAN-XX-kurzer-name`
+
+## 7. Safety / Stop Conditions
 
 Sofort stoppen bzw. menschliche Freigabe verlangen bei:
 
@@ -189,171 +178,103 @@ Sofort stoppen bzw. menschliche Freigabe verlangen bei:
 - Secrets, API-Keys, Tokens oder produktiven Zugangsdaten,
 - wesentlich erweitertem Scope,
 - untrennbaren fremden Änderungen,
-- drei erfolglosen Reparaturversuchen.
+- drei erfolglosen Reparaturversuchen,
+- fachlichen Entscheidungen oder Freigaben, die nicht sicher aus Jira/DoD/Repository ableitbar sind.
 
-Secrets dürfen niemals in Code, Logs, Tests, Commits oder Dokumentation aufgenommen werden.
+Secrets dürfen niemals in Code, Logs, Tests, Commits, Jira, GitHub oder Confluence aufgenommen werden.
 
-## 6. Browser- und End-to-End-Prüfung
+Bei irregulärer Beendigung `npm run integrity:abort` ausführen und den unveränderten Zustandsnachweis im Jira-Vorgang dokumentieren.
 
-Soweit eine Änderung sichtbares oder interaktives Verhalten betrifft, ist die Browser-/E2E-Prüfung ein verbindlicher Teil der Verifikation. Die Detailregeln stehen in `docs/BROWSER_E2E_POLICY.md`.
+## 8. Verification Policies
 
-### Test-Account-Policy – keine zusätzliche Rückfrage
+Die vollständigen Detailanforderungen stehen in den jeweiligen Policies und in der Definition of Done.
 
-Der vorgesehene isolierte Test-Account ist für Browser-, E2E-, Smoke-, Regression- und Funktionsprüfungen vorab freigegeben.
+Grundsätzlich für den finalen Kandidaten, soweit im Projekt verfügbar und laut Scope erforderlich:
 
-Wenn ein Test aufgrund des Jira-Scopes, einer Codeänderung, eines Bugs oder der Definition of Done erforderlich ist:
+```bash
+npm test
+npm run test:coverage
+npx tsc --noEmit
+npm run build
+```
 
-1. Test-Account selbstständig verwenden.
-2. erforderliche E2E-Testdaten selbstständig erstellen.
-3. Test selbstständig ausführen.
-4. Ergebnis auswerten.
-5. eindeutig erzeugte Testdaten nach Erfolg oder Fehler bereinigen.
-6. **nicht** fragen, ob der Browser-Test gestartet oder das Testkonto verwendet werden soll.
+Zusätzlich:
 
-Diese Freigabe gilt ausschließlich für den isolierten Test-Account und eindeutig mit `E2E-<Run-ID>-...` markierte Testdaten. Sie gilt nicht für echte Benutzerkonten oder fremde Produktivdaten. Testpasswörter, Tokens und sonstige Zugangsdaten dürfen ausschließlich über Secrets/Umgebungsvariablen bereitgestellt werden und gehören weder in Code noch Logs, Jira oder Confluence.
+- `git diff --check`,
+- relevante Lint-/Integrity-Prüfungen,
+- Browser-/E2E-Prüfung gemäß `docs/BROWSER_E2E_POLICY.md` bei sichtbarem/interaktivem Verhalten,
+- Sicherheits-/Datenintegritätsprüfung im betroffenen Scope.
 
-Fehlende Testkonto-/Supabase-Secrets sind ein **Blocker**. Der E2E-Test darf in diesem Fall nicht still übersprungen, als PASS gewertet oder durch eine manuelle Sichtprüfung ersetzt werden.
+Prüfungen nicht abschwächen, überspringen oder löschen, nur damit der Stand grün erscheint. Weiterhin gültige Nachweise dürfen wiederverwendet werden, wenn Commit/Arbeitsbaum und relevante Quellen unverändert sind.
 
-### Verbindlicher Kern-Regressionsumfang
+## 9. Completion / Definition of Done
 
-Der Browser-Test muss für den vollständigen Kernregressionslauf mindestens abdecken:
+`technisch reviewbereit` ist **nicht** gleich Jira `Erledigt`.
 
-- Login mit Testkonto und Dashboard-Ladevorgang,
-- zwei Semester anlegen,
-- Semester A → B → A wechseln und Datentrennung prüfen,
-- Fach anlegen,
-- Aufgabe anlegen und Fach/Semester-Zuordnung prüfen,
-- Projekt und Unteraufgabe anlegen,
-- Timer direkt aus einer Aufgabe starten,
-- globalen Timer starten,
-- Timer pausieren, fortsetzen und beenden,
-- laufenden Timer mindestens auf Dashboard, Aufgaben, Projekte, Statistik, Lernplan, Fächer und Semesterkonfiguration prüfen,
-- Reload bei laufendem Timer prüfen,
-- Persistenz nach Reload prüfen,
-- Statistik gegen die erzeugte Lernzeit fachlich plausibilisieren und Semestertrennung prüfen,
-- `console.error`, ungefangene Exceptions, fehlgeschlagene Requests, API-4xx und HTTP-5xx auswerten,
-- E2E-Testdaten nach Abschluss bereinigen.
+Vor `technisch reviewbereit` müssen mindestens erfüllt sein:
 
-Agenten wählen anhand des tatsächlichen Diffs selbstständig den erforderlichen Testumfang. Der Benutzer muss nicht entscheiden, welcher Browser-Test nötig ist. Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- und Synchronisationsänderungen lösen mindestens die jeweils betroffenen Kernabläufe aus.
+- Akzeptanzkriterien erfüllt,
+- Scope eingehalten,
+- erforderliche Tests/Build/Typecheck erfolgreich,
+- erforderliche Browser-/E2E-Prüfung tatsächlich erfolgreich ausgeführt,
+- Sicherheits- und Datenintegritätsregeln eingehalten,
+- finaler Diff geprüft,
+- GitHub Issue/Jira/Branch/Commit/PR korrekt verknüpft,
+- Modell-Routing-Betriebsmodus korrekt angewendet,
+- offene Risiken und Repair-Loops dokumentiert.
 
-Für automatisierte Regressionen ist der Branch-Build zu testen. Die GitHub-Action `.github/workflows/e2e-regression.yml` baut den aktuellen Branch, startet den Branch-Build lokal und führt Playwright dagegen aus. Bei Fehlern werden soweit verfügbar Trace, Screenshot, Video, Report und Logs als Nachweis aufbewahrt.
+Vor Jira `Erledigt` zusätzlich:
 
-## 7. Definition of Done
+1. Pull Request erfolgreich reviewt und nach `main` gemerged,
+2. erforderliche Nachprüfung abgeschlossen,
+3. Projekt-Hub und fachlich betroffene Confluence-Seiten geprüft/aktualisiert,
+4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis,
+5. GitHub Issue mit Abschlussnachweis schließen.
 
-Ein Agent darf eine Änderung nur als technisch reviewbereit melden, wenn mindestens:
+Die vollständige Definition of Done im Confluence-Projekt-Hub bleibt verbindlich.
 
-- Akzeptanzkriterien erfüllt sind,
-- Scope eingehalten ist,
-- relevante Tests erfolgreich sind,
-- Regressionstests erfolgreich sind,
-- `npm test` erfolgreich ist,
-- `npm run test:coverage` erfolgreich ist,
-- `npx tsc --noEmit` erfolgreich ist,
-- `npm run build` erfolgreich ist,
-- bei sichtbaren/interaktiven Kernfunktionen der relevante Browser-/E2E-Test **tatsächlich erfolgreich ausgeführt** wurde,
-- der isolierte Test-Account ohne zusätzliche Benutzer-Rückfrage verwendet wurde, sofern ein Browser-/E2E-Test erforderlich war,
-- erforderliche E2E-Testdaten eindeutig markiert, erstellt und anschließend bereinigt wurden,
-- Timeränderungen mit Start/Pause/Fortsetzen/Beenden, Seitenwechsel, Dashboard, Reload und Statistik geprüft wurden,
-- Semesteränderungen mindestens mit A → B → A und Datentrennung geprüft wurden,
-- Aufgaben-/Projekt-/Statistikänderungen mit den zugehörigen echten Benutzerabläufen geprüft wurden,
-- Browser-Console, ungefangene Exceptions und relevante Request-Fehler geprüft wurden,
-- ein fehlender Testlauf oder fehlende E2E-Secrets nicht als PASS behandelt wurden,
-- Sicherheitsregeln eingehalten sind,
-- keine Tests manipuliert, abgeschwächt oder übersprungen wurden, um Erfolg vorzutäuschen,
-- Repair-Loops und offene Risiken dokumentiert sind,
-- finaler Diff geprüft wurde,
-- erforderliches GitHub Issue und Jira-Vorgang gegenseitig verknüpft sind oder eine zulässige Ausnahme im Jira-Vorgang dokumentiert ist,
-- Commit und Pull Request den Jira-Key enthalten,
-- Projekt-Hub und alle fachlich betroffenen Confluence-Seiten geprüft und erforderliche Aktualisierungen vorgenommen sind,
-- bei aktiviertem `[COPILOT-FALLBACK]` Jira-Scope und Akzeptanzkriterien vor der ersten Codeänderung vollständig geladen und geprüft wurden; fehlender Kontext führt zwingend zu `ASK_USER`, und bei später fehlendem Atlassian-Schreibzugriff wurde eine vollständige Übergabe unter `docs/ai-handoffs/` erstellt.
+## 10. Browser-/E2E-Policy
 
-### Ressourcen- und Kontext-Effizienz
+Bei UI-, Interaktions-, Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- oder Synchronisationsänderungen die verbindliche Detailpolicy laden:
 
-- [ ] Es wurden nur die für die Aufgabe notwendigen Dateien und Bereiche analysiert.
-- [ ] Es wurde kein unnötiger vollständiger Repository-Scan durchgeführt.
-- [ ] Bereits vorhandener und weiterhin gültiger Kontext wurde wiederverwendet.
-- [ ] Wiederholte identische Analysen wurden vermieden.
-- [ ] Tests wurden entsprechend dem tatsächlichen Änderungsumfang ausgewählt.
-- [ ] Große Dateien wurden möglichst gezielt statt vollständig verarbeitet.
-- [ ] Die Optimierung des Nutzerlimits beeinträchtigt weder Qualität noch Sicherheit.
-- [ ] Neue Funktionen führen nicht ohne nachvollziehbaren Grund zu deutlich höherem Kontext- oder Nutzerverbrauch.
-- [ ] Bei auffällig hohem Ressourcenverbrauch wurde die Ursache dokumentiert.
+- `docs/BROWSER_E2E_POLICY.md`
 
-### Modell-Routing
+Der isolierte Test-Account ist für erforderliche Browser-/E2E-/Smoke-/Regressionstests vorab freigegeben. Nicht erneut fragen, ob der Test oder das Testkonto verwendet werden soll. Fehlende erforderliche Test-Secrets sind ein Blocker und dürfen nicht als PASS behandelt werden.
 
-- [ ] Temporary Manual Codex Routing und Automated Runtime Routing wurden nicht vermischt.
-- [ ] Die Aufgabe wurde mit dem kleinsten geeigneten verfügbaren Modell begonnen.
-- [ ] Luna, Terra und Sol wurden nur entsprechend dem tatsächlichen Bedarf verwendet.
-- [ ] Vor einer notwendigen Eskalation wurde der aktuelle Arbeitsschritt gestoppt.
-- [ ] Der Modellwechsel-Hinweis enthielt ausschließlich `Jetzt brauchen wir <Modellname>.`
-- [ ] Ein bereits als zu schwierig erkannter Schritt wurde nicht mehrfach mit einem zu schwachen Modell versucht.
-- [ ] Vorhandener, weiterhin gültiger Kontext wurde nach dem Modellwechsel wiederverwendet.
-- [ ] Der automatisierte n8n-/Bridge-Pfad erzeugt allein wegen eines Modellwechsels weder `ASK_USER` noch eine manuelle Benutzerhinweiszeile.
-- [ ] Modellwahl und Nutzerlimit-Optimierung haben Qualität und Sicherheit nicht reduziert.
+## 11. Copilot Fallback
 
-**Technisch reviewbereit ist nicht gleich Jira `Erledigt`.** Jira darf erst nach abgeschlossenem Review, erforderlichem Test, erfolgreichem Pull Request, bestätigtem Merge nach `main` und abgeschlossenem Confluence-Abgleich auf `Erledigt` gesetzt werden. Ein erforderlicher, aber nicht erfolgreich ausgeführter Browser-/E2E-Test blockiert `Erledigt` und damit die Fortsetzung eines davon abhängigen Sprints.
+Der GitHub-Copilot-Fallback ist **kein normaler Routing-Modus** und wird nur aktiviert, wenn der Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt.
 
-## 8. Verbindlicher Confluence-Abgleich
+Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt. Ohne expliziten Marker bleibt der normale Codex-/n8n-Entwicklungsworkflow aktiv.
 
-Für jeden Jira-Vorgang gilt vor dem Status `Erledigt`:
-
-1. Nach dem Merge den Projekt-Hub und alle in PLAN identifizierten, fachlich betroffenen Confluence-Seiten erneut prüfen.
-2. Änderungen an Architektur, Datenmodell, Arbeitsprozess, Roadmap, Sprint, Qualität oder Anleitungen unmittelbar in den jeweiligen Seiten nachziehen.
-3. Beschädigte, widersprüchliche oder nachweislich veraltete Inhalte im betroffenen Scope korrigieren; bekannte Dokumentationswidersprüche blockieren `Erledigt`.
-4. Wenn keine Confluence-Inhaltsänderung erforderlich ist, im Jira-Abschlusskommentar ausdrücklich `Confluence geprüft – keine Aktualisierung erforderlich` dokumentieren.
-5. Jira bleibt die operative Quelle für Status, Sprint, Priorität und Scope; Confluence darf diese Angaben nicht widersprüchlich wiedergeben.
-6. Zugangsdaten, Secrets und Testpasswörter niemals in Confluence oder Jira-Nachweisen dokumentieren.
-
-## 9. GitHub-Copilot-Fallback
-
-Der Fallback wird nur aktiviert, wenn ein Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt. Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt.
-
-Zentrale Anleitung und kopierbarer Prompt:
+Zentrale Anleitung:
 
 - Confluence: **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“**
-- https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025
+- `https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025`
 
-Bei aktiviertem Fallback gilt:
+## 12. Abschlussnachweis
 
-1. Der Minimalauftrag `[COPILOT-FALLBACK] KAN-XX` ist ausreichend, sobald der Atlassian-Rovo-MCP-Server einmalig per OAuth verbunden wurde. Die Repository-Konfiguration liegt in `.vscode/mcp.json`; Secrets oder Tokens dürfen dort nicht gespeichert werden.
-2. Vor jeder Codeänderung über Atlassian Rovo MCP den aktuellen Jira-Vorgang vollständig laden: Titel, Beschreibung, Akzeptanzkriterien, Nicht-Ziele/Constraints, Status und Abhängigkeiten. Danach GitHub Issue, `AGENTS.md`, `.github/copilot-instructions.md`, `README.md` und bei nicht-trivialen Aufgaben `docs/LOOP_ENGINEERING.md` lesen.
-3. Erst implementieren, wenn Jira-Scope und Akzeptanzkriterien vollständig und widerspruchsfrei vorliegen. Fehlen Angaben, ist das Ergebnis `ASK_USER`; vor der Antwort dürfen keine Code-, Commit- oder Push-Änderungen erfolgen.
-4. Falls Atlassian Rovo MCP nicht verfügbar ist, darf nur dann gearbeitet werden, wenn der Benutzerprompt oder ein vertrauenswürdig verknüpftes GitHub Issue einen ausdrücklich aktuellen, vollständigen Jira-Snapshot mit Titel, Beschreibung, Akzeptanzkriterien, Nicht-Zielen/Constraints, Status und Abhängigkeiten enthält. Vollständigkeit und Widerspruchsfreiheit müssen vor der Implementierung geprüft werden.
-5. Fehlt dieser vollständige Offline-Snapshot, gilt zwingend `ASK_USER` und Arbeitsstopp. Eine erst nach der Implementierung erzeugte Übergabedatei ersetzt die vorherige Scope-Prüfung nicht.
-6. Mit Atlassian-Zugriff Jira und fachlich betroffene Confluence-Seiten vor der Änderung lesen und nach der Umsetzung aktualisieren. Die vorhandene zentrale Workflow-Seite verwenden und niemals eine gleichnamige zweite Seite anlegen.
-7. Sind nach der Implementierung Jira-/Confluence-Schreibzugriffe nicht verfügbar, `docs/ai-handoffs/<JIRA-ID>-atlassian-update.md` erstellen. Diese Übergabe dokumentiert ausschließlich ausstehende Aktualisierungen; sie ist keine Freigabe, ohne vorher geladene Kriterien zu programmieren.
-8. Die Übergabe muss Jira-Kommentar, empfohlenen Jira-Status, geprüfte Akzeptanzkriterien, geänderte Dateien, Prüfungen, Branch, Commit, vollständigen Confluence-Text, Zielseite, Einfügestelle, Risiken, offene Punkte und nächsten Schritt enthalten. Dieselben Informationen zusätzlich kopierfertig in der Abschlussantwort ausgeben.
-9. Keine Secrets, Tokens, Passwörter oder Testzugangsdaten in Konfiguration oder Übergaben aufnehmen.
-10. Ein erfolgreicher Commit oder Push bedeutet nur technisch reviewbereit und setzt Jira nicht automatisch auf `Erledigt`.
-11. Ausschließlich den Aufgaben-Branch committen und pushen; nicht direkt nach `main` pushen oder mergen.
+Der Abschlussbericht nennt kurz:
 
-Der Abschlussbericht nennt Umsetzung, Dateien, Prüfungen, Akzeptanzkriterien, Jira-/Confluence-Status, Branch, Commit, Risiken, offene Punkte und nächsten Schritt.
+- Jira-Key und GitHub Issue,
+- verwendete Context Router/Policies,
+- untersuchte Dateien/Bereiche,
+- ausgeführte und wiederverwendete Prüfungen,
+- verwendeten Routing-Modus,
+- `requiredModel`; `activeModel` nur wenn zuverlässig bekannt, sonst `unknown`,
+- Vollscan ja/nein und gegebenenfalls Begründung,
+- Commit/PR/Review-/Merge-Status,
+- offene Risiken oder Blocker.
 
-## 10. Commit, Push, PR und Merge
+## Verknüpfte Vorgänge
 
-Nach erfolgreichen Prüfungen:
-
-1. `git diff` und `git status` kontrollieren.
-2. nur Ticket-Scope committen.
-3. Commit-Nachricht mit Jira-Key verwenden.
-4. Pull Request mit Jira-Key, Jira-Link und `Refs #<GitHub-Issue>` vorbereiten.
-5. ausschließlich Aufgaben-Branch pushen.
-6. keinen direkten Push nach `main` durchführen.
-7. Pull Request nach dem dokumentierten Workflow erstellen/prüfen.
-8. Review-Hinweise vollständig bewerten und nötige Änderungen erneut testen.
-9. Merge nur nach den festgelegten Freigaberegeln.
-10. GitHub Issue erst nach Merge, vollständiger Definition of Done und Jira `Erledigt` mit Abschlussnachweis schließen.
-
-Der Abschlussbericht enthält Branch, Ausgangs-HEAD, Commit, geänderte Dateien, Prüfungen, Browserergebnis, Repair-Loops, Risiken und offene Punkte.
-
-## 11. KI-/Agenten-Code in der App
-
-Neue AI-/Agentenlogik nicht weiter in `src/App.jsx` konzentrieren. Bevorzugte Zuständigkeiten:
-
-- `src/features/ai/` – UI/Feature-Orchestrierung
-- `src/domain/ai/` – fachliche Modelle/Regeln
-- `src/infrastructure/ai/` – Provider-, Tool- und Persistenzadapter
-
-Provider-Secrets gehören niemals in clientseitigen React-Code. Serverseitige Provider-Aufrufe, Policies, RLS-konforme Datenzugriffe, Audit Logging, Tool-Schemas und Loop-Budgets müssen getrennt umgesetzt werden.
-
-Weitere Architekturregeln: `docs/LOOP_ENGINEERING.md`.
+- KAN-30 – Entwicklungs- und Jira-Workflow dokumentieren
+- KAN-72 – Isolierten Testnutzer und Browser-End-to-End-Tests einführen
+- KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
+- KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
+- KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
+- KAN-110 – n8n-Automatisierungs- und KI-Routing-Schicht mit Codex-Orchestrierung einführen
+- KAN-127 – KI-Router, Modellwahl, Eskalation und Kostenmetriken für n8n umsetzen
+- KAN-147 – Modell-Routing-Betriebsmodi verbindlich trennen
+- KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
+- KAN-161 – AGENTS.md als Agent Operating System refaktorieren und manuelles Modell-Routing klar vom n8n-Zielsystem trennen
