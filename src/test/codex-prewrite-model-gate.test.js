@@ -95,6 +95,19 @@ describe("Temporary Manual Codex Compatibility Gate", () => {
     }
   });
 
+  it("infers OpenAI for legacy prefixed model names", () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(
+        runCli(["--active", "gpt-5.6-luna", "--files", "2", "--complexity", "medium"]),
+      ).toBe(42);
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith("Jetzt brauchen wir Terra.\n");
+    } finally {
+      write.mockRestore();
+    }
+  });
+
   it("prints the required target model even when active capability is unknown", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
