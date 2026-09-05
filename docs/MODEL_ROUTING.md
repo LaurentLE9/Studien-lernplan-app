@@ -1,138 +1,211 @@
 # Verbindliche Modell-Routing-Regel
 
-Diese Regel gilt für Codex und andere Entwicklungs-Agenten im normalen Entwicklungsworkflow. Ziel ist, Nutzerlimit und Rechenbudget zu schonen, ohne Qualität oder Sicherheit zu verschlechtern.
+Diese Policy gilt für Entwicklungs-Agenten im normalen Entwicklungsworkflow. `AGENTS.md` ist das Agent Operating System und legt fest, **wann** diese Policy geladen wird. Diese Datei beschreibt **wie** Routing entschieden wird.
 
-`AGENTS.md` ist das Agent Operating System und legt fest, **wann** diese Policy geladen und angewendet wird. Diese Datei beschreibt **wie** die erforderliche Modellstufe bestimmt und je nach Betriebsmodus umgesetzt wird.
+Wichtig: Es existieren zwei strikt getrennte Betriebsmodi. Die Provider-Verallgemeinerung in KAN-161 betrifft **nur den manuellen Übergangsmodus**. Der n8n-Runtime-Router bleibt vollautomatisch und wird durch diese Änderung nicht in einen manuellen Workflow umgebaut.
 
-## 1. Zentrale Begriffe
+## 1. Betriebsmodi
 
-Die Routing-Entscheidung verwendet drei getrennte Zustände:
+### `TEMPORARY_MANUAL_MODEL_ROUTING`
 
-### `requiredModel`
+Providerunabhängige Übergangslösung für direkte Entwicklungsclients wie Codex, Claude Code oder weitere Agenten, solange n8n den direkten Entwicklungsworkflow noch nicht vollständig automatisch routet.
 
-Die für den nächsten Implementierungsblock erforderliche Mindeststufe.
+Der Benutzer kann bei Bedarf manuell auf ein stärkeres Modell umschalten. Der Agent darf keine automatische Umschaltung vortäuschen.
 
-Werte:
+Historischer Kompatibilitätsname: `TEMPORARY_MANUAL_CODEX_ROUTING`. Neue Regeln und neue Dokumentation verwenden ausschließlich `TEMPORARY_MANUAL_MODEL_ROUTING`.
 
-- `luna`
-- `terra`
-- `sol`
+### `AUTOMATED_N8N_ROUTING`
 
-`requiredModel` wird ausschließlich aus **Scope, Risiko, Komplexität und Unsicherheit** bestimmt. Es darf nicht davon abhängen, welches Modell aktuell aktiv ist oder ob diese Information überhaupt verfügbar ist.
+Dauerhaftes Zielsystem für KAN-110/KAN-127/KAN-147. n8n entscheidet intern und automatisch über Route, Provider und Modell. Reiner Modellbedarf erzeugt keine Benutzer-Modellwahl und keinen manuellen Wechselhinweis.
 
-### `activeModel`
-
-Optionales Laufzeit-Metadatum des tatsächlich aktiven Modells.
-
-Werte:
-
-- `luna`
-- `terra`
-- `sol`
-- `unknown`
-
-`activeModel` darf nur gesetzt werden, wenn der Client bzw. die Laufzeit diese Information zuverlässig bereitstellt. Ein Agent darf das aktive Modell niemals raten, aus seiner vermuteten Fähigkeit ableiten oder erfinden.
-
-### `routingAction`
-
-Die aus Betriebsmodus, `requiredModel` und gegebenenfalls `activeModel` resultierende Aktion.
-
-Mögliche Zustände:
-
-- `CONTINUE`
-- `MODEL_SWITCH_REQUIRED`
-- `ROUTE_SELECTED`
-- `ACTIVE_MODEL_UNKNOWN`
-
-`ACTIVE_MODEL_UNKNOWN` bedeutet im manuellen Übergangsmodus: Die erforderliche Modellstufe ist bekannt, aber die tatsächliche aktive Modellstufe kann nicht zuverlässig verifiziert werden. Dieser Zustand darf nicht durch Raten aufgelöst werden.
-
-## 2. Ermittlung von `requiredModel`
-
-Jede neue Aufgabe startet konzeptionell mit der kleinsten geeigneten Stufe. Das Startmodell liest zuerst den aktiven Jira-Vorgang, `AGENTS.md`, den Agent Context Router und nur den für den Scope notwendigen Repository-Kontext.
-
-Die Eskalationsleiter lautet:
-
-1. **GPT-5.6 Luna** – kostensensitive, häufige und klar abgegrenzte Arbeit.
-2. **GPT-5.6 Terra** – mehr Zuverlässigkeit/Reasoning bei mittlerer Komplexität.
-3. **GPT-5.6 Sol** – komplexes Reasoning, Architektur, schwieriges Debugging und erhöhte Sicherheits-/Risikofälle.
-
-### Luna
-
-`requiredModel=luna`, insbesondere bei:
-
-- Jira-/GitHub-/Confluence-Kontext zusammenfassen,
-- Scope, Nicht-Ziele und relevante Dateien bestimmen,
-- einfacher Repository-Recherche,
-- einer klar abgegrenzten risikoarmen Änderung,
-- einfacher Test-/Log-Auswertung,
-- Dokumentations-/Statusaufgaben,
-- klar strukturierten Klassifizierungsaufgaben,
-- Vorprüfung für eine mögliche Eskalation.
-
-### Terra
-
-`requiredModel=terra`, insbesondere bei:
-
-- mehreren zusammenhängenden Dateien mit überschaubaren Abhängigkeiten,
-- Integrationslogik zwischen mehreren Systemen oder Verträgen,
-- mittlerem Refactoring,
-- nichttrivialer Fehleranalyse,
-- komplexerer Testauswertung,
-- fachlicher Logik mit mehreren Randfällen,
-- erhöhter Unsicherheit oder widersprüchlichen Ergebnissen.
-
-### Sol
-
-`requiredModel=sol`, insbesondere bei:
-
-- Architektur- und Modulgrenzen,
-- großen oder stark gekoppelten Refactorings,
-- schwierigen oder wiederholt nicht gelösten Bugs,
-- Authentifizierung, Sessions, RLS, Secrets, Berechtigungen und Security-relevanten Änderungen,
-- Datenbankmigrationen oder erhöhtem Datenverlustrisiko,
-- komplexen Repository-Änderungen mit vielen Abhängigkeiten,
-- sicherheitskritischer Analyse oder anspruchsvoller Codebewertung,
-- Aufgaben, für die Terra keine ausreichende Zuverlässigkeit erreicht.
-
-## 3. Zwei strikt getrennte Betriebsmodi
-
-Die beiden folgenden Modi dürfen niemals vermischt werden.
+Die beiden Modi dürfen nicht vermischt werden.
 
 ---
 
-## 3.1 `TEMPORARY_MANUAL_CODEX_ROUTING`
+## 2. Providerneutrale Begriffe des manuellen Modus
 
-### Zweck
+### `requiredCapability`
 
-Dieser Modus ist ausschließlich eine **Übergangslösung** für den direkten Codex-Entwicklungschat, solange das automatische n8n-Routing noch nicht produktiv und verbindlich für diesen Workflow aktiv ist.
+Die für den nächsten Implementierungsblock erforderliche Mindest-Fähigkeitsstufe.
 
-Der Benutzer wechselt bei Bedarf das Modell manuell. Der Agent selbst darf keine automatische Modellumschaltung vortäuschen.
+Werte:
 
-### Pre-Write-Gate
+- `low`
+- `medium`
+- `high`
+
+`requiredCapability` wird ausschließlich aus **Scope, Risiko, Komplexität und Unsicherheit** bestimmt. Die Entscheidung kennt zunächst weder Provider noch konkreten Modellnamen.
+
+### Laufzeit-Metadaten
+
+Optional und nur verwenden, wenn zuverlässig bekannt:
+
+- `activeCapability`: `low|medium|high|unknown`
+- `activeProvider`: z. B. `openai|anthropic|unknown`
+- `activeModel`: konkreter Modellname oder `unknown`
+
+Ein Agent darf Provider, Modell oder Capability niemals raten oder erfinden.
+
+### `routingAction`
+
+Mögliche Zustände des manuellen Gates:
+
+- `CONTINUE`
+- `MODEL_SWITCH_REQUIRED`
+- `ACTIVE_CAPABILITY_UNKNOWN`
+
+Diese Zustände gehören ausschließlich zum manuellen Übergangsmodus.
+
+---
+
+## 3. Capability-Klassifikation
+
+### LOW
+
+Typische Fälle:
+
+- Jira-/GitHub-/Confluence-Kontext zusammenfassen,
+- Scope und relevante Dateien bestimmen,
+- einfache Repository-Recherche,
+- eine klar abgegrenzte risikoarme Änderung,
+- einfache Test-/Log-Auswertung,
+- Dokumentations-/Statusaufgaben,
+- klar strukturierte Klassifizierung.
+
+### MEDIUM
+
+Typische Fälle:
+
+- mehrere zusammenhängende Dateien,
+- Integrationslogik zwischen überschaubaren Systemen/Verträgen,
+- mittleres Refactoring,
+- nichttriviale Fehleranalyse,
+- komplexere Testauswertung,
+- fachliche Logik mit mehreren Randfällen,
+- erhöhte Unsicherheit oder erster fehlgeschlagener Reparaturversuch.
+
+### HIGH
+
+Typische Fälle:
+
+- Architektur- und Modulgrenzen,
+- große oder stark gekoppelte Refactorings,
+- schwierige oder wiederholt nicht gelöste Bugs,
+- Authentifizierung, Sessions, RLS, Secrets, Berechtigungen und Security,
+- Datenbankmigrationen oder Datenverlustrisiko,
+- komplexe Repository-Änderungen mit vielen Abhängigkeiten,
+- Fälle, in denen die mittlere Stufe nachweislich nicht ausreicht.
+
+Die Capability wird neu bewertet, wenn Scope, Dateianzahl, Abhängigkeiten, Komplexität, Risiko oder Unsicherheit deutlich steigen.
+
+---
+
+## 4. Zentrales Provider-Mapping
+
+Die providergebundene Übersetzung steht ausschließlich in:
+
+- `config/manual-model-routing.json`
+
+Die Kernlogik kennt nur `low|medium|high`. Konkrete Modelle werden erst danach aufgelöst.
+
+### OpenAI / Codex
+
+Rückwärtskompatibles Mapping:
+
+| Capability | Modell |
+| --- | --- |
+| LOW | GPT-5.6 Luna |
+| MEDIUM | GPT-5.6 Terra |
+| HIGH | GPT-5.6 Sol |
+
+Provider-Alias: `codex`.
+
+### Anthropic / Claude Code
+
+Aktuelles Mapping auf Basis der offiziellen Anthropic-Modellliste vom 05.09.2026:
+
+| Capability | Modell | API-/Modell-ID |
+| --- | --- | --- |
+| LOW | Claude Haiku 4.5 | `claude-haiku-4-5-20251001` |
+| MEDIUM | Claude Sonnet 5 | `claude-sonnet-5` |
+| HIGH | Claude Opus 5 | `claude-opus-5` |
+
+Provider-Aliase: `claude`, `claude-code`.
+
+Begründung der Zuordnung:
+
+- Haiku 4.5 ist die schnelle/leichte Claude-Stufe und eignet sich für klar abgegrenzte, kostensensitive Arbeit.
+- Sonnet 5 ist Anthrops aktuelle starke Workhorse-/Agenten- und Coding-Stufe und damit die Standardstufe für mittlere Entwicklungsaufgaben.
+- Opus 5 ist die stärkste reguläre Opus-Stufe für komplexe Coding-, Agenten- und Reasoning-Aufgaben.
+
+Neue Anthropic-Generationen werden durch Aktualisierung dieses Mappings aufgenommen; `AGENTS.md` und die Capability-Logik werden dafür nicht umgebaut.
+
+Weitere Provider werden genauso ergänzt.
+
+---
+
+## 5. Manuelles Pre-Write-Gate
 
 Read-only-Arbeit ist vor dem Gate erlaubt: Jira-/GitHub-/Confluence-Kontext lesen, `git status`/Diff prüfen, Scope bestimmen und gezielt Dateien inspizieren.
 
-**Vor dem ersten Edit/Patch/Write eines Implementierungsblocks muss das Modell-Gate abgeschlossen sein.**
+**Vor dem ersten Edit/Patch/Write eines relevanten Implementierungsblocks muss das Gate abgeschlossen sein.**
 
-Die erforderliche Modellstufe wird deterministisch aus dem geplanten Block bestimmt:
+Neutrale Verwendung:
 
 ```bash
 npm run model:gate -- --files <anzahl> --complexity <low|medium|high> [Signale]
 ```
 
-Optional darf das aktive Modell angegeben werden, **nur wenn es zuverlässig bekannt ist**:
+Mit bekanntem Provider und aktiver Capability:
 
 ```bash
-npm run model:gate -- --active <luna|terra|sol|unknown> --files <anzahl> --complexity <low|medium|high> [Signale]
+npm run model:gate -- \
+  --provider <openai|anthropic|weiterer-provider> \
+  --active-capability <low|medium|high|unknown> \
+  --files <anzahl> \
+  --complexity <low|medium|high> \
+  [Signale]
 ```
 
-Kompatibilität: Solange alte lokale Aufrufe noch existieren, darf der Guard `--current` als Alias für `--active` akzeptieren. Neue Dokumentation und neue Aufrufe verwenden ausschließlich `--active`.
+Mit bekanntem konkreten Modell:
 
-Verfügbare Signale sind insbesondere:
+```bash
+npm run model:gate -- \
+  --provider <provider> \
+  --active-model <modell-id-oder-name> \
+  --files <anzahl> \
+  --complexity <low|medium|high>
+```
+
+Das Modell wird nur dann in eine Capability übersetzt, wenn das zentrale Mapping eindeutig passt.
+
+### Rückwärtskompatibilität
+
+Alte OpenAI-/Codex-Aufrufe bleiben vorerst gültig:
+
+- `--active luna|terra|sol`
+- `--current luna|terra|sol`
+- `--terra-insufficient`
+- `scripts/codex-prewrite-model-gate.mjs`
+
+Neue Aufrufe verwenden:
+
+- `--provider`
+- `--active-capability`
+- `--active-model`
+- `--medium-insufficient`
+- `scripts/manual-prewrite-model-gate.mjs`
+
+### Signale
+
+Insbesondere:
 
 - `--integration`
 - `--refactor`
 - `--uncertainty`
+- `--strong-coupling`
+- `--difficult-bug`
+- `--medium-insufficient`
 - `--architecture`
 - `--security`
 - `--auth`
@@ -141,120 +214,119 @@ Verfügbare Signale sind insbesondere:
 - `--migration`
 - `--data-loss`
 
-### Gate-Ausgaben
+---
 
-Der Guard bestimmt immer zuerst `requiredModel`.
+## 6. Gate-Verhalten
 
-#### Fall A – aktive Modellstufe zuverlässig bekannt und ausreichend
+### Fall A – aktive Capability bekannt und ausreichend
 
 ```text
 routingAction=CONTINUE
-requiredModel=<luna|terra|sol>
-activeModel=<luna|terra|sol>
+requiredCapability=<low|medium|high>
+activeCapability=<low|medium|high>
 ```
 
 Der Implementierungsblock darf ausgeführt werden.
 
-#### Fall B – aktive Modellstufe zuverlässig bekannt, aber zu schwach
+### Fall B – aktive Capability bekannt, aber zu schwach
 
 ```text
 routingAction=MODEL_SWITCH_REQUIRED
-requiredModel=<terra|sol>
-activeModel=<luna|terra>
+requiredCapability=<medium|high>
+activeCapability=<low|medium>
 ```
 
-Der Block ist gesperrt. Die Benutzerhinweiszeile darf ausschließlich lauten:
+Der Agent stoppt vor dem Write.
 
-- `Jetzt brauchen wir Terra.`
-- `Jetzt brauchen wir Sol.`
-
-Danach muss der Agent stoppen. Keine Begründung, kein Modellvergleich und kein erneuter Write-Versuch mit der zu schwachen Stufe.
-
-#### Fall C – aktive Modellstufe nicht zuverlässig bekannt
+Wenn ein konkretes Zielmodell für den Provider konfiguriert ist, lautet der Hinweis ausschließlich:
 
 ```text
-routingAction=ACTIVE_MODEL_UNKNOWN
-requiredModel=<luna|terra|sol>
-activeModel=unknown
+Jetzt brauchen wir <Modellname>.
 ```
 
-Der Agent darf kein Modell erfinden.
+Beispiele:
 
-Für reine Read-only-Planung darf weitergearbeitet werden. Vor einem Implementierungsblock, der `requiredModel=terra` oder `requiredModel=sol` verlangt, muss die Modellstufe im direkten Codex-Client zuverlässig geklärt bzw. manuell passend gewählt werden. Die notwendige Zielstufe bleibt trotzdem deterministisch bekannt.
+```text
+Jetzt brauchen wir Terra.
+Jetzt brauchen wir Sol.
+Jetzt brauchen wir Claude Sonnet 5.
+Jetzt brauchen wir Claude Opus 5.
+```
 
-Für `requiredModel=luna` darf der Guard den risikoarmen Block als `CONTINUE` behandeln, sofern keine Sicherheits-/Stop-Regel greift; damit erzeugt fehlende Runtime-Metadaten nicht unnötig Blockaden bei einfachen Aufgaben.
+Wenn kein konkretes Zielmodell konfiguriert ist, lautet der Hinweis ausschließlich:
 
-### Konservative Mindeststufen
+```text
+Jetzt brauchen wir ein Modell der Stufe MEDIUM.
+```
 
-- genau eine klar abgegrenzte, risikoarme Datei mit niedriger Komplexität → Luna möglich,
-- mehrere zusammenhängende Dateien, Integrationslogik, mittleres Refactoring oder erhöhte Unsicherheit → mindestens Terra,
-- Architektur, Security, Auth, Session/RLS/Secrets, riskante Migrationen oder Datenverlustrisiko → Sol.
+oder
 
-### Abschaltbedingung
+```text
+Jetzt brauchen wir ein Modell der Stufe HIGH.
+```
 
-`TEMPORARY_MANUAL_CODEX_ROUTING` wird deaktiviert, sobald der produktive n8n-Router für den direkten Entwicklungsworkflow nachweislich:
+Kein Modellname darf erfunden werden.
+
+### Fall C – aktive Capability nicht zuverlässig bekannt
+
+```text
+routingAction=ACTIVE_CAPABILITY_UNKNOWN
+requiredCapability=<low|medium|high>
+activeCapability=unknown
+```
+
+Read-only-Planung darf fortgesetzt werden. Für `requiredCapability=medium|high` bleibt der Write blockiert, bis die passende Capability im direkten Client zuverlässig gewählt/angegeben wurde.
+
+Für `requiredCapability=low` darf der risikoarme Block fortgesetzt werden, sofern keine Safety-/Stop-Regel greift.
+
+---
+
+## 7. Automated n8n Routing bleibt unverändert getrennt
+
+KAN-161 generalisiert **nicht** den manuellen Mechanismus in n8n hinein.
+
+Für `AUTOMATED_N8N_ROUTING` gilt weiterhin:
+
+- n8n bewertet Scope, Risiko, Komplexität, Confidence und Budget intern,
+- n8n wählt Route, Provider und Modell automatisch,
+- deterministische Aufgaben bleiben ohne unnötigen LLM-Aufruf,
+- Modellbedarf erzeugt weder `MODEL_SWITCH_REQUIRED` noch Benutzerhinweis noch `ASK_USER`,
+- `ASK_USER` bleibt echten fachlichen Entscheidungen oder menschlichen Freigaben vorbehalten,
+- `/controlled-execute` und `ops/n8n/model-router.mjs` gehören ausschließlich zum automatisierten Modus.
+
+Die neutrale Capability-Klassifikation darf als gemeinsame semantische Grundlage dienen, aber das automatische n8n-System entscheidet weiterhin selbst über konkrete Ausführung und Provider.
+
+---
+
+## 8. Abschaltbedingung des manuellen Modus
+
+`TEMPORARY_MANUAL_MODEL_ROUTING` wird deaktiviert, sobald der produktive n8n-Router für den direkten Entwicklungsworkflow nachweislich:
 
 1. Scope, Risiko, Komplexität und Unsicherheit bewertet,
-2. `requiredModel`/Route zuverlässig bestimmt,
+2. erforderliche Route/Fähigkeitsklasse zuverlässig bestimmt,
 3. den ausführenden Modell-/Providerpfad automatisch auswählt,
 4. Qualitäts-, Sicherheits- und Stop-Gates einhält,
 5. und als verbindlicher Standard für diesen Workflow freigegeben wurde.
 
-Ab diesem Zeitpunkt darf der direkte Workflow nicht mehr wegen reinen Modellbedarfs den Benutzer zur Modellwahl auffordern. Der manuelle Übergangsmodus bleibt nur als historische/Notfall-Dokumentation erhalten oder wird vollständig entfernt, sobald seine Entfernung freigegeben wurde.
+Ab dann darf der direkte Workflow wegen reinen Modellbedarfs keine manuelle Modellwahl mehr verlangen.
 
 ---
 
-## 3.2 `AUTOMATED_N8N_ROUTING`
+## 9. Technische Grenze und DoD
 
-### Zweck
+`scripts/manual-prewrite-model-gate.mjs` ist der deterministische Pre-Write-Guard für den manuellen Übergangsmodus. `scripts/codex-prewrite-model-gate.mjs` bleibt lediglich als Legacy-Wrapper bestehen.
 
-Dies ist das **dauerhafte Zielsystem** für KAN-110/KAN-127/KAN-147 und die darauf aufbauende Orchestrierung.
+Der Guard ersetzt keine Sandbox und kann einen Agenten, der Regeln absichtlich umgeht, nicht auf Betriebssystemebene am Schreiben hindern.
 
-Der n8n-/Runtime-Router bewertet Scope, Risiko, Komplexität, Confidence und Budget, setzt intern `requiredModel` bzw. die Ausführungsroute und wählt automatisch den passenden Modell-/Providerpfad.
+Vor `technisch reviewbereit` muss bei relevantem Modellrouting dokumentiert sein:
 
-### Regeln
-
-- `requiredModel=luna|terra` führt automatisch in den vorgesehenen Modell-/Providerpfad, sofern die Aufgabenpolicy diesen Pfad erlaubt.
-- `requiredModel=sol` führt automatisch zur Sol-/Codex-Route; ein ungeeigneter günstiger Provider wird nicht aufgerufen.
-- Deterministische Aufgaben bleiben ohne LLM-Aufruf, wenn lokale Tools/n8n dieselbe Aussage zuverlässig liefern.
-- Modellbedarf allein erzeugt weder `MODEL_SWITCH_REQUIRED`, eine Benutzer-Modellwahl noch die manuelle Hinweiszeile.
-- `ASK_USER` ist ausschließlich für echte fachliche Entscheidungen, Freigaben oder Risiken zulässig, die eine menschliche Entscheidung erfordern.
-- Der interne n8n-Endpunkt `/controlled-execute` nutzt ausschließlich `AUTOMATED_N8N_ROUTING`.
-- `activeModel` ist für die Routingentscheidung nicht erforderlich. Die Runtime wählt die Route aus `requiredModel`/Policy; der fachliche Zustand lautet `ROUTE_SELECTED`.
-- Die manuelle Terra-/Sol-Zeile darf in automatisierten Antworten weder direkt noch verschachtelt vorkommen.
-
-## 4. Anti-Verschwendungs-Regeln
-
-- Ein kleineres Modell darf einen bereits als zu schwierig erkannten Schritt nicht mehrfach versuchen.
-- Nicht vorsorglich auf Sol wechseln, solange Luna oder Terra den nächsten Schritt zuverlässig erledigen kann.
-- Bereits gelesenen und weiterhin gültigen Kontext nach Modellwechsel wiederverwenden; keinen unnötigen vollständigen Repository-Scan wiederholen.
-- Deterministische Aufgaben bevorzugt ohne LLM erledigen, wenn lokale Tools oder n8n dieselbe Aussage zuverlässig liefern.
-- Modellrouting darf niemals notwendige Sicherheits-, Qualitäts-, Datenintegritäts-, Browser- oder Regressionstests ersetzen oder abschwächen.
-- `requiredModel` wird neu bewertet, wenn Scope, Dateianzahl, Komplexität, Risiko oder Unsicherheit deutlich ansteigen.
-
-## 5. Technische Grenze des manuellen Guards
-
-`scripts/codex-prewrite-model-gate.mjs` ist der deterministische Pre-Write-Guard für den direkten Codex-Modus. Er ersetzt keine Codex-Sandbox und kann einen Agenten, der Repository-Regeln absichtlich umgeht, nicht auf Betriebssystemebene am Schreiben hindern.
-
-Seine Ausführung ist deshalb zusammen mit `AGENTS.md` verbindlicher Bestandteil des temporären direkten Entwicklungsprozesses.
-
-Der n8n-Runtime-Router ist davon getrennt. `ops/n8n/model-router.mjs` und `/controlled-execute` gehören ausschließlich zu `AUTOMATED_N8N_ROUTING`.
-
-## 6. Definition-of-Done-Nachweis
-
-Für Aufgaben, bei denen Modellrouting relevant war, muss vor `technisch reviewbereit` geprüft werden:
-
-- [ ] Routing-Modus eindeutig als `TEMPORARY_MANUAL_CODEX_ROUTING` oder `AUTOMATED_N8N_ROUTING` bestimmt.
-- [ ] Beide Modi wurden nicht vermischt.
-- [ ] `requiredModel` unabhängig von `activeModel` aus Scope/Risiko/Komplexität/Unsicherheit bestimmt.
-- [ ] `activeModel` nur verwendet, wenn zuverlässig bekannt; andernfalls `unknown`.
-- [ ] Kein aktives Modell geraten oder erfunden.
-- [ ] Im manuellen Übergangsmodus wurde vor dem ersten Write jedes relevanten Implementierungsblocks das Pre-Write-Gate ausgeführt.
-- [ ] Vor notwendiger manueller Eskalation wurde der aktuelle Arbeitsschritt gestoppt.
-- [ ] Manueller Modellwechsel-Hinweis enthielt ausschließlich `Jetzt brauchen wir <Modellname>.`.
-- [ ] Keine unnötigen Wiederholungsversuche mit einer zu schwachen Modellstufe.
-- [ ] Vorhandener Kontext wurde nach einem Wechsel wiederverwendet.
-- [ ] Im automatisierten n8n-Pfad wurde die Route ohne Benutzer-Modellwahl bestimmt.
-- [ ] Reiner Modellbedarf hat im automatisierten Pfad weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.` erzeugt.
-- [ ] Modellwahl oder Nutzerlimit-Optimierung hat Qualität und Sicherheit nicht reduziert.
-- [ ] Abschaltbedingung des temporären Modus wurde beachtet, falls der n8n-Pfad bereits als verbindlicher Standard freigegeben ist.
+- [ ] Routing-Modus eindeutig bestimmt.
+- [ ] Manueller und automatisierter Modus nicht vermischt.
+- [ ] `requiredCapability` unabhängig vom aktiven Provider/Modell bestimmt.
+- [ ] Provider-/Modell-Metadaten nur verwendet, wenn zuverlässig bekannt.
+- [ ] Kein Modellname geraten oder erfunden.
+- [ ] Manueller Pre-Write-Guard vor relevanten Writes ausgeführt.
+- [ ] Bei notwendigem Wechsel vor dem Write gestoppt.
+- [ ] Provider-Mapping korrekt angewendet.
+- [ ] n8n hat im automatisierten Modus keine Benutzer-Modellwahl verlangt.
+- [ ] Nutzerlimit-/Kostenoptimierung hat Qualität und Sicherheit nicht reduziert.

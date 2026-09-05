@@ -15,7 +15,7 @@ Vor einer Aufgabe nur laden:
 
 Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn der Ticket-Scope ihn ausdrücklich erfordert. Fehlender notwendiger Kontext wird gezielt nachgeladen.
 
-Wenn mehr Modellleistung nötig ist, bestimmt `docs/MODEL_ROUTING.md` zuerst `requiredModel` unabhängig von eventuell vorhandenen `activeModel`-Metadaten. Im temporären direkten Codex-Modus erfolgt ein erforderlicher Wechsel manuell; im späteren automatisierten n8n-Modus wird die Route automatisch gewählt. Die beiden Modi dürfen nicht vermischt werden. `ASK_USER` bleibt echten menschlichen Entscheidungen/Freigaben vorbehalten.
+Wenn mehr Modellleistung nötig ist, bestimmt `docs/MODEL_ROUTING.md` im manuellen Übergangsmodus zuerst `requiredCapability=low|medium|high` unabhängig von Provider oder aktivem Modell. Erst danach wird über `config/manual-model-routing.json` auf OpenAI/Codex, Anthropic/Claude oder weitere Provider abgebildet. Das automatische n8n-Routing bleibt davon getrennt und wählt Route, Provider und Modell selbst. Beide Modi dürfen nicht vermischt werden. `ASK_USER` bleibt echten menschlichen Entscheidungen/Freigaben vorbehalten.
 
 ## Routing
 
@@ -26,7 +26,7 @@ Wenn mehr Modellleistung nötig ist, bestimmt `docs/MODEL_ROUTING.md` zuerst `re
 | Supabase, Persistenz, Repository-Adapter, Auth, RLS, Datenbank | `backend-supabase.md` | betroffene Infrastructure-/Migration-Dateien; Stop-Regeln beachten |
 | Tests, Regression, Browser/E2E, CI | `testing.md` | betroffene Tests, Policies, Workflow-Dateien |
 | Jira, GitHub, Confluence, DoD, Branch/PR, Handover | `process-jira.md` | Ticket, Task-State, Prozessdokumente |
-| n8n, KI-Router, Modelle, Agenten, Provider | `ai-n8n.md` | KAN-110-Familie, Modell-/Bridge-Doku |
+| n8n, KI-Router, Modelle, Agenten, Provider, Claude, Codex | `ai-n8n.md` | `docs/MODEL_ROUTING.md`, `config/manual-model-routing.json`, KAN-110-Familie, Modell-/Bridge-Doku |
 
 Mehrere Router dürfen kombiniert werden, aber nur wenn direkte Abhängigkeiten dies erfordern.
 
@@ -60,7 +60,8 @@ Für längere Tickets soll `docs/ai-handoffs/<JIRA-ID>-status.md` oder ein gleic
 - nächste konkrete Schritte,
 - geladene Router/Domänen,
 - verwendeter Routing-Modus,
-- `requiredModel` und `activeModel` nur soweit zuverlässig bekannt.
+- im manuellen Modus `requiredCapability` sowie `activeProvider`, `activeModel` und `activeCapability` nur soweit zuverlässig bekannt,
+- im automatisierten n8n-Modus nur die tatsächlich gewählte Route-/Provider-/Modellmetadaten, soweit vorhanden.
 
 Keine Secrets, Tokens, Passwörter oder produktiven Nutzerdaten speichern.
 
@@ -73,6 +74,7 @@ Im Abschlussbericht kurz festhalten:
 - zusätzlich nachgeladene Quellen und Grund,
 - ob ein Vollscan stattfand und warum,
 - welche vorhandenen Nachweise wiederverwendet wurden,
-- welcher Modell-Routing-Modus aktiv war.
+- welcher Modell-Routing-Modus aktiv war,
+- bei manuellem Routing die benötigte Capability und das angewendete Provider-Mapping.
 
 Der reproduzierbare Vorher-/Nachher-Vergleich für KAN-157 ist in `docs/CONTEXT_EFFICIENCY.md` dokumentiert.

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "capabilities": ["low", "medium", "high"],
+  "providers": {
+    "openai": {
+      "aliases": ["codex"],
+      "models": {
+        "low": {
+          "id": "gpt-5.6-luna",
+          "label": "Luna",
+          "aliases": ["luna"]
+        },
+        "medium": {
+          "id": "gpt-5.6-terra",
+          "label": "Terra",
+          "aliases": ["terra"]
+        },
+        "high": {
+          "id": "gpt-5.6-sol",
+          "label": "Sol",
+          "aliases": ["sol"]
+        }
+      }
+    },
+    "anthropic": {
+      "aliases": ["claude", "claude-code"],
+      "models": {
+        "low": {
+          "id": "claude-haiku-4-5-20251001",
+          "label": "Claude Haiku 4.5",
+          "aliases": ["haiku", "haiku-4.5", "claude-haiku-4.5"]
+        },
+        "medium": {
+          "id": "claude-sonnet-5",
+          "label": "Claude Sonnet 5",
+          "aliases": ["sonnet", "sonnet-5"]
+        },
+        "high": {
+          "id": "claude-opus-5",
+          "label": "Claude Opus 5",
+          "aliases": ["opus", "opus-5"]
+        }
+      }
+    }
+  },
+  "sourceNotes": {
+    "anthropic": {
+      "verifiedDate": "2026-09-05",
+      "source": "Official Anthropic model documentation",
+      "policy": "Review mappings when Anthropic releases or deprecates relevant model tiers."
+    }
+  }
+}

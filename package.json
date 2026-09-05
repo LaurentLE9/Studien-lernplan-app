@@ -11,7 +11,8 @@
     "integrity:verify": "node scripts/worktree-integrity.mjs verify",
     "integrity:finish": "node scripts/worktree-integrity.mjs finish",
     "integrity:abort": "node scripts/worktree-integrity.mjs abort",
-    "model:gate": "node scripts/codex-prewrite-model-gate.mjs",
+    "model:gate": "node scripts/manual-prewrite-model-gate.mjs",
+    "model:gate:codex-legacy": "node scripts/codex-prewrite-model-gate.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

@@ -1,6 +1,6 @@
 # AGENTS.md — Agent Operating System
 
-Diese Datei ist die verbindliche **Kernel-/Betriebssystem-Regelbasis** für Codex und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
+Diese Datei ist die verbindliche **Kernel-/Betriebssystem-Regelbasis** für Codex, Claude und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
 
 Sie beschreibt **was** ein Agent in welcher Reihenfolge tun muss. Detailregeln stehen in spezialisierten Router-/Policy-Dateien und werden nur geladen, wenn der aktuelle Scope sie benötigt.
 
@@ -27,7 +27,7 @@ Vor jeder nicht-trivialen Entwicklungsaufgabe:
 4. `docs/agent-context/README.md` laden,
 5. Scope, Nicht-Ziele, Risiken, betroffene Schichten und benötigte Nachweise bestimmen,
 6. ausschließlich die dafür notwendigen Domänen-Router, Policies, Dateien und Tests laden,
-7. erforderliche Modellstufe bestimmen,
+7. erforderliche Fähigkeitsstufe bestimmen,
 8. `PLAN` starten.
 
 Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn Ticket-Scope, Fehlerbild oder Architekturänderung ihn konkret erfordern. Der Grund muss im Abschlussnachweis genannt werden.
@@ -57,41 +57,49 @@ Die Detailregeln in `docs/MODEL_ROUTING.md` sind verbindlich.
 
 Es existieren **zwei strikt getrennte Betriebsmodi**:
 
-### 4.1 `TEMPORARY_MANUAL_CODEX_ROUTING`
+### 4.1 `TEMPORARY_MANUAL_MODEL_ROUTING`
 
-Dieser Modus ist ausschließlich eine **Übergangslösung**, solange das automatische n8n-Routing noch nicht produktiv und verbindlich für den direkten Entwicklungsworkflow aktiv ist.
+Dieser Modus ist ausschließlich eine **providerunabhängige Übergangslösung**, solange das automatische n8n-Routing noch nicht produktiv und verbindlich für den direkten Entwicklungsworkflow aktiv ist.
 
-- `requiredModel` wird aus Scope, Risiko, Komplexität und Unsicherheit bestimmt.
-- `requiredModel` darf **nicht** davon abhängen, dass das aktive Modell bekannt ist.
-- `activeModel` ist lediglich optionale Laufzeit-Metadaten und darf `unknown` sein.
-- Ein Agent darf das aktive Modell niemals raten oder erfinden.
-- Ist das aktive Modell zuverlässig bekannt und schwächer als `requiredModel`, muss der Agent **vor dem ersten Write des betreffenden Implementierungsblocks** stoppen.
-- Bei notwendiger manueller Umschaltung darf die Benutzerhinweiszeile ausschließlich lauten:
-  - `Jetzt brauchen wir Terra.`
-  - `Jetzt brauchen wir Sol.`
+- `requiredCapability` wird aus Scope, Risiko, Komplexität und Unsicherheit bestimmt.
+- Zulässige Fähigkeitsstufen sind `low`, `medium` und `high`.
+- `requiredCapability` darf **nicht** davon abhängen, welcher Anbieter oder welches Modell gerade aktiv ist.
+- Provider-spezifische Modellnamen werden erst **nach** der Capability-Entscheidung über ein zentrales Mapping aufgelöst.
+- `activeCapability`, `activeProvider` und `activeModel` sind optionale Laufzeit-Metadaten und dürfen `unknown` sein.
+- Ein Agent darf aktiven Provider, Modellnamen oder Capability niemals raten oder erfinden.
+- Ist die aktive Fähigkeitsstufe zuverlässig bekannt und schwächer als `requiredCapability`, muss der Agent **vor dem ersten Write des betreffenden Implementierungsblocks** stoppen.
+- Provider-Mappings werden ausschließlich in `config/manual-model-routing.json` gepflegt.
+- Für OpenAI bleibt das Mapping rückwärtskompatibel: `low → Luna`, `medium → Terra`, `high → Sol`.
+- Für Anthropic/Claude ist aktuell definiert: `low → Claude Haiku 4.5`, `medium → Claude Sonnet 5`, `high → Claude Opus 5`.
+- Weitere Provider werden ausschließlich über Mapping/Adapter ergänzt; der Kernel wird dafür nicht umgebaut.
+- Ist für den aktiven Provider ein konkretes Zielmodell konfiguriert, lautet der manuelle Hinweis ausschließlich `Jetzt brauchen wir <Modellname>.`.
+- Ist kein konkretes Zielmodell konfiguriert, lautet der Hinweis ausschließlich `Jetzt brauchen wir ein Modell der Stufe <MEDIUM|HIGH>.`.
 - Nach dem manuellen Wechsel wird vorhandener gültiger Kontext weiterverwendet; kein unnötiger Vollscan.
+
+`TEMPORARY_MANUAL_CODEX_ROUTING` ist nur noch ein historischer/technischer Kompatibilitätsname und darf nicht als dauerhafte Codex-Bindung interpretiert werden.
 
 ### 4.2 `AUTOMATED_N8N_ROUTING`
 
-Dieser Modus ist das **dauerhafte Zielsystem**.
+Dieser Modus ist das **dauerhafte Zielsystem** und bleibt vom manuellen Provider-Mapping getrennt.
 
-- n8n bestimmt `requiredModel` bzw. die Ausführungsroute automatisch.
+- n8n bestimmt Route, Provider und Modell automatisch.
 - Modell-/Providerwahl erfolgt ohne manuelle Benutzerentscheidung.
-- Reiner Modellbedarf erzeugt weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.`.
+- Reiner Modellbedarf erzeugt weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.` noch einen Capability-Wechselhinweis.
 - Der Benutzer muss nicht mitteilen, welches Modell verwendet werden soll.
 - Das automatische System darf den manuellen Übergangsmodus nicht simulieren oder mit ihm vermischen.
+- Eine Provider-Erweiterung des manuellen Übergangsmodus ändert die n8n-Runtime-Logik nicht.
 
 ### 4.3 Abschaltbedingung der Übergangslösung
 
 Sobald der produktive n8n-Router für den direkten Entwicklungsworkflow nachweislich:
 
 1. Scope/Risiko/Komplexität bewertet,
-2. `requiredModel`/Route zuverlässig bestimmt,
+2. erforderliche Route/Fähigkeitsklasse zuverlässig bestimmt,
 3. den ausführenden Modell-/Providerpfad automatisch auswählt,
 4. die erforderlichen Qualitäts- und Sicherheits-Gates einhält,
 5. und dieser Pfad als verbindlicher Standard freigegeben wurde,
 
-wird `TEMPORARY_MANUAL_CODEX_ROUTING` deaktiviert. Danach ist für diesen Workflow ausschließlich `AUTOMATED_N8N_ROUTING` zulässig.
+wird `TEMPORARY_MANUAL_MODEL_ROUTING` deaktiviert. Danach ist für diesen Workflow ausschließlich `AUTOMATED_N8N_ROUTING` zulässig.
 
 ## 5. Execution Loop
 
@@ -112,7 +120,7 @@ Detailregeln: `docs/LOOP_ENGINEERING.md`.
 - `npm run integrity:start` ausführen und nur bei `PASS` fortfahren.
 - Ticket, Scope, Akzeptanzkriterien und Nicht-Ziele erfassen.
 - relevante Dateien, Abhängigkeiten, Risiken und Tests bestimmen.
-- erforderliche Modellstufe bestimmen.
+- erforderliche Fähigkeitsstufe bestimmen.
 - für den späteren Abschlussabgleich betroffene Confluence-Seiten identifizieren.
 
 ### IMPLEMENT
@@ -228,8 +236,12 @@ Vor Jira `Erledigt` zusätzlich:
 1. Pull Request erfolgreich reviewt und nach `main` gemerged,
 2. erforderliche Nachprüfung abgeschlossen,
 3. Projekt-Hub und fachlich betroffene Confluence-Seiten geprüft/aktualisiert,
-4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis,
-5. GitHub Issue mit Abschlussnachweis schließen.
+4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis.
+
+Danach in dieser Reihenfolge abschließen:
+
+1. Jira auf `Erledigt` setzen,
+2. anschließend das GitHub Issue mit Abschlussnachweis schließen.
 
 Die vollständige Definition of Done im Confluence-Projekt-Hub bleibt verbindlich.
 
@@ -245,7 +257,7 @@ Der isolierte Test-Account ist für erforderliche Browser-/E2E-/Smoke-/Regressio
 
 Der GitHub-Copilot-Fallback ist **kein normaler Routing-Modus** und wird nur aktiviert, wenn der Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt.
 
-Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt. Ohne expliziten Marker bleibt der normale Codex-/n8n-Entwicklungsworkflow aktiv.
+Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt. Ohne expliziten Marker bleibt der normale Entwicklungsworkflow aktiv.
 
 Zentrale Anleitung:
 
@@ -261,7 +273,8 @@ Der Abschlussbericht nennt kurz:
 - untersuchte Dateien/Bereiche,
 - ausgeführte und wiederverwendete Prüfungen,
 - verwendeten Routing-Modus,
-- `requiredModel`; `activeModel` nur wenn zuverlässig bekannt, sonst `unknown`,
+- `requiredCapability`,
+- `activeProvider`, `activeModel` und `activeCapability` nur wenn zuverlässig bekannt, sonst `unknown`,
 - Vollscan ja/nein und gegebenenfalls Begründung,
 - Commit/PR/Review-/Merge-Status,
 - offene Risiken oder Blocker.
@@ -277,4 +290,4 @@ Der Abschlussbericht nennt kurz:
 - KAN-127 – KI-Router, Modellwahl, Eskalation und Kostenmetriken für n8n umsetzen
 - KAN-147 – Modell-Routing-Betriebsmodi verbindlich trennen
 - KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
-- KAN-161 – AGENTS.md als Agent Operating System refaktorieren und manuelles Modell-Routing klar vom n8n-Zielsystem trennen
+- KAN-161 – AGENTS.md als Agent Operating System refaktorieren und manuelles Modell-Routing providerunabhängig machen
