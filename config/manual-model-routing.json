@@ -11,11 +11,11 @@
       }
     },
     "anthropic": {
-      "aliases": ["claude"],
+      "aliases": ["claude", "claude-code"],
       "models": {
-        "low": null,
-        "medium": null,
-        "high": null
+        "low": "Claude Haiku 4.5",
+        "medium": "Claude Sonnet 5",
+        "high": "Claude Opus 5"
       }
     }
   }
