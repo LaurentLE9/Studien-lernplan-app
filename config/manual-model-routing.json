@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "capabilities": ["low", "medium", "high"],
+  "providers": {
+    "openai": {
+      "aliases": ["codex"],
+      "models": {
+        "low": "Luna",
+        "medium": "Terra",
+        "high": "Sol"
+      }
+    },
+    "anthropic": {
+      "aliases": ["claude"],
+      "models": {
+        "low": null,
+        "medium": null,
+        "high": null
+      }
+    }
+  }
+}
