@@ -1,21 +1,45 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "capabilities": ["low", "medium", "high"],
   "providers": {
     "openai": {
       "aliases": ["codex"],
       "models": {
-        "low": "Luna",
-        "medium": "Terra",
-        "high": "Sol"
+        "low": {
+          "id": "gpt-5.6-luna",
+          "label": "Luna",
+          "aliases": ["luna"]
+        },
+        "medium": {
+          "id": "gpt-5.6-terra",
+          "label": "Terra",
+          "aliases": ["terra"]
+        },
+        "high": {
+          "id": "gpt-5.6-sol",
+          "label": "Sol",
+          "aliases": ["sol"]
+        }
       }
     },
     "anthropic": {
       "aliases": ["claude", "claude-code"],
       "models": {
-        "low": "Claude Haiku 4.5",
-        "medium": "Claude Sonnet 5",
-        "high": "Claude Opus 5"
+        "low": {
+          "id": "claude-haiku-4-5-20251001",
+          "label": "Claude Haiku 4.5",
+          "aliases": ["haiku", "haiku-4.5", "claude-haiku-4.5"]
+        },
+        "medium": {
+          "id": "claude-sonnet-5",
+          "label": "Claude Sonnet 5",
+          "aliases": ["sonnet", "sonnet-5"]
+        },
+        "high": {
+          "id": "claude-opus-5",
+          "label": "Claude Opus 5",
+          "aliases": ["opus", "opus-5"]
+        }
       }
     }
   }
