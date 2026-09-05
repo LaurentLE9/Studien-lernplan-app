@@ -1,8 +1,8 @@
 # Agent Context Router
 
-**Jira:** KAN-157
+**Jira:** KAN-157, KAN-161
 
-Diese Datei ist der zentrale Router für Entwicklungs-Agenten. Sie ergänzt `AGENTS.md`, ersetzt aber weder Jira noch Definition of Done, Sicherheitsregeln oder Testpflichten.
+Diese Datei ist der zentrale Context Router für Entwicklungs-Agenten. `AGENTS.md` ist das Agent Operating System bzw. der Kernel; dieser Router ergänzt den Kernel um Progressive Context Loading, ersetzt aber weder Jira noch Definition of Done, Sicherheitsregeln oder Testpflichten.
 
 ## Startregel
 
@@ -13,7 +13,9 @@ Vor einer Aufgabe nur laden:
 3. diese Router-Datei,
 4. danach ausschließlich die für den ermittelten Scope notwendigen Domänen-Router und Quellen.
 
-Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn der Ticket-Scope ihn ausdrücklich erfordert. Fehlender notwendiger Kontext wird gezielt nachgeladen; wenn weiterhin unklar ist, wie sicher fortzufahren ist, wird gemäß `docs/MODEL_ROUTING.md` auf die erforderliche Modellstufe eskaliert oder – falls eine menschliche Entscheidung nötig ist – mit `ASK_USER` nach `AGENTS.md` gestoppt.
+Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn der Ticket-Scope ihn ausdrücklich erfordert. Fehlender notwendiger Kontext wird gezielt nachgeladen.
+
+Wenn mehr Modellleistung nötig ist, bestimmt `docs/MODEL_ROUTING.md` zuerst `requiredModel` unabhängig von eventuell vorhandenen `activeModel`-Metadaten. Im temporären direkten Codex-Modus erfolgt ein erforderlicher Wechsel manuell; im späteren automatisierten n8n-Modus wird die Route automatisch gewählt. Die beiden Modi dürfen nicht vermischt werden. `ASK_USER` bleibt echten menschlichen Entscheidungen/Freigaben vorbehalten.
 
 ## Routing
 
@@ -56,7 +58,9 @@ Für längere Tickets soll `docs/ai-handoffs/<JIRA-ID>-status.md` oder ein gleic
 - aktuell gültige Prüfnachweise,
 - offene Risiken/Blocker,
 - nächste konkrete Schritte,
-- geladene Router/Domänen.
+- geladene Router/Domänen,
+- verwendeter Routing-Modus,
+- `requiredModel` und `activeModel` nur soweit zuverlässig bekannt.
 
 Keine Secrets, Tokens, Passwörter oder produktiven Nutzerdaten speichern.
 
@@ -68,6 +72,7 @@ Im Abschlussbericht kurz festhalten:
 - geladene Primärquellen,
 - zusätzlich nachgeladene Quellen und Grund,
 - ob ein Vollscan stattfand und warum,
-- welche vorhandenen Nachweise wiederverwendet wurden.
+- welche vorhandenen Nachweise wiederverwendet wurden,
+- welcher Modell-Routing-Modus aktiv war.
 
 Der reproduzierbare Vorher-/Nachher-Vergleich für KAN-157 ist in `docs/CONTEXT_EFFICIENCY.md` dokumentiert.

@@ -9,22 +9,36 @@ import {
 describe("Temporary Manual Codex Pre-Write Gate", () => {
   it("allows Luna for one bounded low-risk file", () => {
     expect(
-      evaluateDirectCodexPreWriteGate({ current: "gpt-5.6-luna", files: 1, complexity: "low" }),
-    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna" });
+      evaluateDirectCodexPreWriteGate({ active: "gpt-5.6-luna", files: 1, complexity: "low" }),
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeModel: "luna" });
+  });
+
+  it("does not require active-model metadata to calculate a low-risk Luna block", () => {
+    expect(
+      evaluateDirectCodexPreWriteGate({ files: 1, complexity: "low" }),
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "luna", activeModel: "unknown" });
   });
 
   it("requires explicit scope inputs before the CLI can return CONTINUE", () => {
-    expect(() => runCli(["--current", "luna"])).toThrow("--files is required");
-    expect(() => runCli(["--current", "luna", "--files", "1"])).toThrow(
-      "--complexity is required",
-    );
+    expect(() => runCli([])).toThrow("--files is required");
+    expect(() => runCli(["--files", "1"])).toThrow("--complexity is required");
   });
 
-  it("requires Terra before multi-file implementation", () => {
+  it("requires Terra before multi-file implementation when Luna is known active", () => {
     expect(
-      evaluateDirectCodexPreWriteGate({ current: "luna", files: 4, complexity: "low" }),
+      evaluateDirectCodexPreWriteGate({ active: "luna", files: 4, complexity: "low" }),
     ).toMatchObject({ status: "MODEL_SWITCH_REQUIRED", requiredModel: "terra" });
     expect(directCodexSwitchMessage("terra")).toBe("Jetzt brauchen wir Terra.");
+  });
+
+  it("returns ACTIVE_MODEL_UNKNOWN when a stronger model is required but runtime metadata is unavailable", () => {
+    expect(
+      evaluateDirectCodexPreWriteGate({ files: 4, complexity: "low" }),
+    ).toMatchObject({
+      status: "ACTIVE_MODEL_UNKNOWN",
+      requiredModel: "terra",
+      activeModel: "unknown",
+    });
   });
 
   it("requires Terra before integration logic even in one file", () => {
@@ -55,21 +69,38 @@ describe("Temporary Manual Codex Pre-Write Gate", () => {
 
   it("lets Terra continue for medium/multi-file work but not Sol-only work", () => {
     expect(
-      evaluateDirectCodexPreWriteGate({ current: "terra", files: 3, complexity: "medium" }),
+      evaluateDirectCodexPreWriteGate({ active: "terra", files: 3, complexity: "medium" }),
     ).toMatchObject({ status: "CONTINUE", requiredModel: "terra" });
     expect(
-      evaluateDirectCodexPreWriteGate({ current: "terra", files: 1, complexity: "low", security: true }),
+      evaluateDirectCodexPreWriteGate({ active: "terra", files: 1, complexity: "low", security: true }),
     ).toMatchObject({ status: "MODEL_SWITCH_REQUIRED", requiredModel: "sol" });
   });
 
-  it("prints only the exact switch line for a blocked CLI decision", () => {
+  it("keeps --current as a compatibility alias for --active", () => {
+    expect(
+      evaluateDirectCodexPreWriteGate({ current: "terra", files: 3, complexity: "medium" }),
+    ).toMatchObject({ status: "CONTINUE", requiredModel: "terra", activeModel: "terra" });
+  });
+
+  it("prints only the exact switch line for a blocked known-active CLI decision", () => {
     const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     try {
       expect(
-        runCli(["--current", "luna", "--files", "4", "--complexity", "medium"]),
+        runCli(["--active", "luna", "--files", "4", "--complexity", "medium"]),
       ).toBe(42);
       expect(write).toHaveBeenCalledTimes(1);
       expect(write).toHaveBeenCalledWith("Jetzt brauchen wir Terra.\n");
+    } finally {
+      write.mockRestore();
+    }
+  });
+
+  it("prints the required target model even when activeModel is unknown", () => {
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      expect(runCli(["--files", "1", "--complexity", "low", "--security"])).toBe(42);
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(write).toHaveBeenCalledWith("Jetzt brauchen wir Sol.\n");
     } finally {
       write.mockRestore();
     }
