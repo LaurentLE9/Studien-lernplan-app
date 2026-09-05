@@ -228,8 +228,12 @@ Vor Jira `Erledigt` zusätzlich:
 1. Pull Request erfolgreich reviewt und nach `main` gemerged,
 2. erforderliche Nachprüfung abgeschlossen,
 3. Projekt-Hub und fachlich betroffene Confluence-Seiten geprüft/aktualisiert,
-4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis,
-5. GitHub Issue mit Abschlussnachweis schließen.
+4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis.
+
+Danach in dieser Reihenfolge abschließen:
+
+1. Jira auf `Erledigt` setzen,
+2. anschließend das GitHub Issue mit Abschlussnachweis schließen.
 
 Die vollständige Definition of Done im Confluence-Projekt-Hub bleibt verbindlich.
 
