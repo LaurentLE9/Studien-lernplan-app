@@ -7,6 +7,12 @@ function normalizeLevel(value) {
   return match;
 }
 
+function normalizeActiveLevel(value) {
+  const normalized = String(value ?? "unknown").trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "unknown";
+  return normalizeLevel(normalized);
+}
+
 function parseIntegerFlag(value, name) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 0) {
@@ -17,7 +23,7 @@ function parseIntegerFlag(value, name) {
 
 function parseArgs(argv) {
   const result = {
-    current: null,
+    active: "unknown",
     files: null,
     complexity: null,
     dependencies: 0,
@@ -39,7 +45,7 @@ function parseArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--current") result.current = argv[++index];
+    if (arg === "--active" || arg === "--current") result.active = argv[++index];
     else if (arg === "--files") result.files = parseIntegerFlag(argv[++index], "--files");
     else if (arg === "--complexity") result.complexity = String(argv[++index] ?? "").toLowerCase();
     else if (arg === "--dependencies") result.dependencies = parseIntegerFlag(argv[++index], "--dependencies");
@@ -60,12 +66,12 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${arg}`);
   }
 
-  if (!result.current) throw new Error("--current is required");
   if (result.files === null) throw new Error("--files is required");
   if (result.complexity === null) throw new Error("--complexity is required");
   if (!["low", "medium", "high"].includes(result.complexity)) {
     throw new Error("--complexity must be low, medium or high");
   }
+  result.active = normalizeActiveLevel(result.active);
   return result;
 }
 
@@ -110,12 +116,23 @@ export function requiredModelForDirectCodexBlock(input) {
 }
 
 export function evaluateDirectCodexPreWriteGate(input) {
-  const current = normalizeLevel(input.current);
   const required = requiredModelForDirectCodexBlock(input);
-  const allowed = LEVELS.indexOf(current) >= LEVELS.indexOf(required);
+  const active = normalizeActiveLevel(input.active ?? input.current);
+
+  if (active === "unknown") {
+    return {
+      status: required === "luna" ? "CONTINUE" : "ACTIVE_MODEL_UNKNOWN",
+      activeModel: "unknown",
+      currentModel: "unknown",
+      requiredModel: required,
+    };
+  }
+
+  const allowed = LEVELS.indexOf(active) >= LEVELS.indexOf(required);
   return {
     status: allowed ? "CONTINUE" : "MODEL_SWITCH_REQUIRED",
-    currentModel: current,
+    activeModel: active,
+    currentModel: active,
     requiredModel: required,
   };
 }
@@ -129,10 +146,12 @@ export function directCodexSwitchMessage(requiredModel) {
 export function runCli(argv = process.argv.slice(2)) {
   const input = parseArgs(argv);
   const decision = evaluateDirectCodexPreWriteGate(input);
-  if (decision.status === "MODEL_SWITCH_REQUIRED") {
+
+  if (decision.status === "MODEL_SWITCH_REQUIRED" || decision.status === "ACTIVE_MODEL_UNKNOWN") {
     process.stdout.write(`${directCodexSwitchMessage(decision.requiredModel)}\n`);
     return 42;
   }
+
   process.stdout.write("CONTINUE\n");
   return 0;
 }
