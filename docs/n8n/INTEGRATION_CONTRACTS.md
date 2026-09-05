@@ -70,9 +70,14 @@ nicht-geheimen Zielwerte werden deshalb vor der Live-Probe im Set-Knoten
 
 Der Workflow verwendet weder `$vars` noch `$env`. Das verhindert, dass für die
 Probe der globale Zugriff von Workflow-Expressions auf Prozessvariablen
-freigeschaltet werden muss. Die n8n-Credential-Namen sind `githubReadOnly`, `jiraApiToken`,
-`confluenceReadOnly` und `supabaseTestReadOnly`. Ihre Werte werden weder im
-Repository noch in Workflow-Exporten gespeichert. Die Live-Probe darf erst nach
+freigeschaltet werden muss. Der Read-Check des öffentlichen GitHub-Repositories
+läuft ohne Credential. Die n8n-Credential-Namen sind `jiraApiToken`,
+`confluenceReadOnly` und `supabaseTestReadOnly`; letzteres enthält ausschließlich
+einen aktiven Supabase Publishable Key im `apikey`-Header, niemals einen Secret-
+oder Service-Role-Key. Die vier Read-Probes laufen unabhängig voneinander, damit
+ein nicht eingerichtetes Zielsystem die übrigen Erreichbarkeitsnachweise nicht
+blockiert. Credential-Werte werden weder im Repository noch in Workflow-Exporten
+gespeichert. Die Live-Probe darf erst nach
 separater Prüfung der tatsächlichen Rechte, des isolierten Supabase-Testpfads
 und der Audit-Ausgabe manuell gestartet werden.
 

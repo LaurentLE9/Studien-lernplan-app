@@ -34,8 +34,7 @@
       "parameters": {
         "method": "GET",
         "url": "=https://api.github.com/repos/{{$node[\"Probe-Konfiguration\"].json[\"githubExpectedRepository\"]}}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "authentication": "none",
         "options": {}
       },
       "id": "kan131-github-read",
@@ -45,8 +44,7 @@
       "position": [520, 0],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 1000,
-      "credentials": { "httpHeaderAuth": { "name": "githubReadOnly" } }
+      "waitBetweenTries": 1000
     },
     {
       "parameters": {
@@ -105,10 +103,14 @@
   ],
   "connections": {
     "Manuell starten": { "main": [[{ "node": "Probe-Konfiguration", "type": "main", "index": 0 }]] },
-    "Probe-Konfiguration": { "main": [[{ "node": "GitHub Repository-Metadaten lesen", "type": "main", "index": 0 }]] },
-    "GitHub Repository-Metadaten lesen": { "main": [[{ "node": "Jira-Vorgang lesen", "type": "main", "index": 0 }]] },
-    "Jira-Vorgang lesen": { "main": [[{ "node": "Confluence-Seite lesen", "type": "main", "index": 0 }]] },
-    "Confluence-Seite lesen": { "main": [[{ "node": "Isolierte Supabase-Testdaten lesen", "type": "main", "index": 0 }]] }
+    "Probe-Konfiguration": {
+      "main": [[
+        { "node": "GitHub Repository-Metadaten lesen", "type": "main", "index": 0 },
+        { "node": "Jira-Vorgang lesen", "type": "main", "index": 0 },
+        { "node": "Confluence-Seite lesen", "type": "main", "index": 0 },
+        { "node": "Isolierte Supabase-Testdaten lesen", "type": "main", "index": 0 }
+      ]]
+    }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },

@@ -112,7 +112,24 @@ describe("KAN-131 integration contracts", () => {
       expect(node.maxTries).toBe(3);
       expect(JSON.stringify(node)).not.toMatch(/Bearer\s|gh[pous]_|sbp_|eyJ[a-z0-9_-]{10,}/i);
     }
+    const githubNode = workflow.nodes.find((node) => node.id === "kan131-github-read");
+    const supabaseNode = workflow.nodes.find((node) => node.id === "kan131-supabase-read");
+    expect(githubNode.parameters.authentication).toBe("none");
+    expect(githubNode.credentials).toBeUndefined();
+    expect(supabaseNode.credentials).toEqual({
+      httpHeaderAuth: { name: "supabaseTestReadOnly" },
+    });
+    expect(workflow.connections["Probe-Konfiguration"].main[0].map(({ node }) => node)).toEqual([
+      "GitHub Repository-Metadaten lesen",
+      "Jira-Vorgang lesen",
+      "Confluence-Seite lesen",
+      "Isolierte Supabase-Testdaten lesen",
+    ]);
+    expect(workflow.connections["GitHub Repository-Metadaten lesen"]).toBeUndefined();
+    expect(workflow.connections["Jira-Vorgang lesen"]).toBeUndefined();
+    expect(workflow.connections["Confluence-Seite lesen"]).toBeUndefined();
     const serializedWorkflow = JSON.stringify(workflow);
+    expect(serializedWorkflow).not.toContain("githubReadOnly");
     expect(serializedWorkflow).not.toContain("$vars.");
     expect(serializedWorkflow).not.toContain("$env.");
   });
