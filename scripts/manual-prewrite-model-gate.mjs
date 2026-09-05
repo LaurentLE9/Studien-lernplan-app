@@ -35,6 +35,13 @@ function normalizeActiveCapability(value) {
   return normalizeCapability(normalized);
 }
 
+function isLegacyOpenAiModelName(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return Object.keys(LEGACY_MODEL_TO_CAPABILITY).some(
+    (model) => normalized === model || normalized.endsWith(`-${model}`),
+  );
+}
+
 export function normalizeProvider(value, config = MANUAL_MODEL_ROUTING_CONFIG) {
   const normalized = String(value ?? "unknown").trim().toLowerCase();
   if (!normalized || normalized === "unknown") return "unknown";
@@ -186,10 +193,7 @@ function parseArgs(argv) {
   if (result.legacyActive !== null && result.activeCapability === "unknown") {
     try {
       result.activeCapability = normalizeActiveCapability(result.legacyActive);
-      if (
-        result.provider === "unknown" &&
-        ["luna", "terra", "sol"].includes(String(result.legacyActive).toLowerCase())
-      ) {
+      if (result.provider === "unknown" && isLegacyOpenAiModelName(result.legacyActive)) {
         result.provider = "openai";
       }
     } catch {
