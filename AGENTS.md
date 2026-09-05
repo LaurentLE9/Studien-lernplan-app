@@ -1,22 +1,22 @@
 # AGENTS.md — Agent Operating System
 
-Diese Datei ist die verbindliche **Kernel-/Betriebssystem-Regelbasis** für Codex, Claude und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
+Diese Datei ist die verbindliche **Kernel-Regelbasis** für Codex, Claude und andere Entwicklungs-Agenten in `LaurentLE9/Studien-lernplan-app`.
 
-Sie beschreibt **was** ein Agent in welcher Reihenfolge tun muss. Wiederkehrende Verfahren liegen in Agent Skills; Detailregeln stehen in spezialisierten Router-/Policy-Dateien und werden nur geladen, wenn der aktuelle Scope sie benötigt.
+Sie enthält nur Regeln, die für fast jede Entwicklungsaufgabe gelten. Wiederkehrende Verfahren liegen in `.agents/skills/`; fachliche Details in Routern/Policies. Diese Ebenen werden nur bei passendem Scope geladen.
 
 ## 1. Sources of Truth
 
-Für Entwicklungsarbeit gelten diese Quellen in dieser Reihenfolge:
+Reihenfolge für Entwicklungsarbeit:
 
-1. **Jira** – operativer Scope, Status, Sprint, Priorität, Akzeptanzkriterien und Abhängigkeiten.
-2. **AGENTS.md** – verbindliche Agent-OS-/Kernel-Regeln.
-3. **`docs/agent-context/README.md`** – zentraler Context Router für Progressive Context Loading.
-4. **Passende Agent Skills unter `.agents/skills/`** – nur für wiederkehrende Verfahren laden, wenn Name/Beschreibung zum aktuellen Workflow passen.
-5. **Spezialisierte Policies/Router** – nur laden, wenn der Scope sie benötigt.
+1. **Jira** – Scope, Status, Sprint, Priorität, Akzeptanzkriterien, Abhängigkeiten.
+2. **`AGENTS.md`** – verbindlicher Agent-OS-Kernel.
+3. **`docs/agent-context/README.md`** – Progressive Context Router.
+4. **Passende `.agents/skills/*/SKILL.md`** – nur für den aktuellen Workflow.
+5. **Passende Domänen-Router/Policies** – nur für den aktuellen fachlichen Scope.
 6. **Confluence-Projekt-Hub** – dauerhafte Prozess-, Architektur- und Wissensdokumentation.
-7. **Repository-Code und Tests** – technische Ist-Quelle für das tatsächlich implementierte Verhalten.
+7. **Repository-Code und Tests** – technische Ist-Quelle.
 
-Die dauerhafte Definition of Done und der Arbeitsprozess liegen im Confluence-Projekt-Hub auf der Seite **„Arbeitsprozess und Definition of Done“**.
+Die vollständige Definition of Done liegt im Confluence-Projekt-Hub auf **„Arbeitsprozess und Definition of Done“**.
 
 ## 2. Boot Sequence
 
@@ -24,294 +24,177 @@ Vor jeder nicht-trivialen Entwicklungsaufgabe:
 
 1. aktiven Jira-Vorgang vollständig lesen,
 2. `AGENTS.md` lesen,
-3. Branch, HEAD, Remote und `git status` prüfen,
+3. Branch, HEAD, Remote und Working Tree prüfen,
 4. `docs/agent-context/README.md` laden,
-5. Scope, Nicht-Ziele, Risiken, betroffene Schichten und benötigte Nachweise bestimmen,
-6. anhand der Skill-Metadaten nur passende Skills auswählen; nicht alle Skill-Bodies laden,
-7. ausschließlich die dafür notwendigen Skill-Bodies, Domänen-Router, Policies, Dateien und Tests laden,
-8. erforderliche Fähigkeitsstufe bestimmen,
-9. `PLAN` starten.
+5. Scope, Nicht-Ziele, Risiken und betroffene Domänen bestimmen,
+6. anhand von `name`/`description` nur passende Skills auswählen,
+7. nur benötigte Skill-Bodies, Router, Policies, Dateien und Tests nachladen,
+8. `requiredCapability=low|medium|high` bestimmen,
+9. `PLAN → IMPLEMENT → VERIFY → EVALUATE` ausführen.
 
-Ein vollständiger Repository-, Jira- oder Confluence-Scan ist nur zulässig, wenn Ticket-Scope, Fehlerbild oder Architekturänderung ihn konkret erfordern. Der Grund muss im Abschlussnachweis genannt werden.
+Vollscans von Repository, Jira oder Confluence sind nur bei konkreter Notwendigkeit zulässig; Grund im Abschlussnachweis nennen.
 
-## 3. Context Routing
+## 3. Progressive Context & Skills
 
-Progressive Context Loading ist verbindlich.
+Zentraler Router: `docs/agent-context/README.md`.
 
-Der zentrale Router ist:
+Skill-Konvention: `.agents/skills/README.md`.
 
-- `docs/agent-context/README.md`
-
-Typische Detailquellen werden nur bei Bedarf geladen:
-
-- Architektur/Refactoring → Domänen-Router + relevante Architekturquellen,
-- Frontend/UI → relevante Feature-/UI-Dateien und Tests,
-- Supabase/Auth/RLS → Backend-/Supabase-Router + Sicherheitsregeln,
-- Tests/E2E/CI → `docs/BROWSER_E2E_POLICY.md` und Testing-Router,
-- Prozess/Jira/GitHub/Confluence → Prozess-Router,
-- n8n/Modelle/Provider → AI-/n8n-Router + `docs/MODEL_ROUTING.md`.
-
-Große unveränderte Dateien nicht vollständig laden, wenn Suche, Symbole, relevante Zeilenbereiche, Git-Diff oder direkte Abhängigkeiten ausreichen.
-
-### 3.1 Agent Skills
-
-Die Skill-Konvention in `.agents/skills/README.md` ist verbindlich.
-
-Aktuelle kanonische Workflow-Skills:
+Kanonische Workflow-Skills:
 
 - `task-bootstrap` – Jira-Arbeit starten/fortsetzen,
 - `repository-analysis` – gezielte Read-only-Analyse,
-- `ticket-implementation` – bestätigten Ticket-Scope umsetzen,
-- `change-verification` – Tests/Pflichtprüfungen/Evaluation,
-- `handover-completion` – Review-Readiness, Handover und Post-Merge-Abschluss,
-- `n8n-delegation` – n8n-Delegation und Ergebnisvalidierung.
+- `ticket-implementation` – bestätigten Scope umsetzen,
+- `change-verification` – Prüfungen und Evaluation,
+- `handover-completion` – Review-Readiness/Handover/Post-Merge,
+- `n8n-delegation` – n8n-Delegation/Ergebnisvalidierung.
 
-Skills werden anhand von `name` und `description` ausgewählt; der Body wird nur geladen, wenn der Workflow passt. Skills dürfen Jira, diesen Kernel, Safety-/Verification-/Publishing-Gates oder die Definition of Done niemals überschreiben.
+Regeln:
 
-Skills bleiben providerneutral und verwenden für Leistungsbedarf nur `requiredCapability=low|medium|high`. Konkrete Modell-/Providernamen werden ausschließlich durch `docs/MODEL_ROUTING.md` und das zentrale Mapping aufgelöst.
-
-Für Code Review wird kein zweiter allgemeiner Skill angelegt; KAN-83 bleibt die einzige projektspezifische Review-Skill-Quelle.
-
-Claude-Code-Adapter unter `.claude/skills/` dürfen nur auf die kanonischen `.agents/skills/` verweisen und keine abweichende Workflow-Logik enthalten.
+- nicht alle Skill-Bodies vorladen; Discovery-Metadaten genügen bis zur Auswahl,
+- Skills dürfen Jira, Kernel, Safety-/Verification-/Publishing-Gates oder DoD nicht überschreiben,
+- große unveränderte Dateien nur ausschnittsweise laden, wenn Suche/Symbole/Diff genügen,
+- fehlenden Kontext gezielt nachladen statt raten,
+- für Code Review keinen zweiten allgemeinen Skill anlegen; **KAN-83** bleibt die projektspezifische Review-Skill-Quelle,
+- `.claude/skills/` enthält nur Adapter auf die kanonischen `.agents/skills/` und keine abweichende Workflow-Logik.
 
 ## 4. Model Routing
 
-Die Detailregeln in `docs/MODEL_ROUTING.md` sind verbindlich.
+Detailregeln: `docs/MODEL_ROUTING.md`. Provider-Mapping: `config/manual-model-routing.json`.
 
-Es existieren **zwei strikt getrennte Betriebsmodi**:
+Es gibt zwei strikt getrennte Modi:
 
-### 4.1 `TEMPORARY_MANUAL_MODEL_ROUTING`
+### `TEMPORARY_MANUAL_MODEL_ROUTING`
 
-Dieser Modus ist ausschließlich eine **providerunabhängige Übergangslösung**, solange das automatische n8n-Routing noch nicht produktiv und verbindlich für den direkten Entwicklungsworkflow aktiv ist.
+- reine Übergangslösung bis zum produktiven automatischen n8n-Routing,
+- `requiredCapability` ausschließlich aus Scope, Risiko, Komplexität und Unsicherheit bestimmen,
+- zuerst Capability bestimmen, erst danach über das zentrale Mapping einen Provider/Modellnamen auflösen,
+- aktiven Provider, Modellnamen oder Capability niemals raten; unbekannte Laufzeit-Metadaten bleiben `unknown`,
+- wenn die zuverlässig bekannte aktive Capability zu schwach ist: vor dem nächsten Write stoppen und den in `docs/MODEL_ROUTING.md` definierten Wechselhinweis verwenden,
+- nach einem Wechsel gültigen Kontext wiederverwenden; kein unnötiger Vollscan.
 
-- `requiredCapability` wird aus Scope, Risiko, Komplexität und Unsicherheit bestimmt.
-- Zulässige Fähigkeitsstufen sind `low`, `medium` und `high`.
-- `requiredCapability` darf **nicht** davon abhängen, welcher Anbieter oder welches Modell gerade aktiv ist.
-- Provider-spezifische Modellnamen werden erst **nach** der Capability-Entscheidung über ein zentrales Mapping aufgelöst.
-- `activeCapability`, `activeProvider` und `activeModel` sind optionale Laufzeit-Metadaten und dürfen `unknown` sein.
-- Ein Agent darf aktiven Provider, Modellnamen oder Capability niemals raten oder erfinden.
-- Ist die aktive Fähigkeitsstufe zuverlässig bekannt und schwächer als `requiredCapability`, muss der Agent **vor dem ersten Write des betreffenden Implementierungsblocks** stoppen.
-- Provider-Mappings werden ausschließlich in `config/manual-model-routing.json` gepflegt.
-- Für OpenAI bleibt das Mapping rückwärtskompatibel: `low → Luna`, `medium → Terra`, `high → Sol`.
-- Für Anthropic/Claude ist aktuell definiert: `low → Claude Haiku 4.5`, `medium → Claude Sonnet 5`, `high → Claude Opus 5`.
-- Weitere Provider werden ausschließlich über Mapping/Adapter ergänzt; der Kernel wird dafür nicht umgebaut.
-- Ist für den aktiven Provider ein konkretes Zielmodell konfiguriert, lautet der manuelle Hinweis ausschließlich `Jetzt brauchen wir <Modellname>.`.
-- Ist kein konkretes Zielmodell konfiguriert, lautet der Hinweis ausschließlich `Jetzt brauchen wir ein Modell der Stufe <MEDIUM|HIGH>.`.
-- Nach dem manuellen Wechsel wird vorhandener gültiger Kontext weiterverwendet; kein unnötiger Vollscan.
+### `AUTOMATED_N8N_ROUTING`
 
-`TEMPORARY_MANUAL_CODEX_ROUTING` ist nur noch ein historischer/technischer Kompatibilitätsname und darf nicht als dauerhafte Codex-Bindung interpretiert werden.
+- dauerhaftes Zielsystem,
+- n8n bestimmt Route, Provider und Modell automatisch,
+- keine manuelle Modellwahl und kein Modellwechsel-Hinweis an den Benutzer,
+- nicht mit dem manuellen Übergangsmodus vermischen.
 
-### 4.2 `AUTOMATED_N8N_ROUTING`
-
-Dieser Modus ist das **dauerhafte Zielsystem** und bleibt vom manuellen Provider-Mapping getrennt.
-
-- n8n bestimmt Route, Provider und Modell automatisch.
-- Modell-/Providerwahl erfolgt ohne manuelle Benutzerentscheidung.
-- Reiner Modellbedarf erzeugt weder `ASK_USER` noch `Jetzt brauchen wir <Modellname>.` noch einen Capability-Wechselhinweis.
-- Der Benutzer muss nicht mitteilen, welches Modell verwendet werden soll.
-- Das automatische System darf den manuellen Übergangsmodus nicht simulieren oder mit ihm vermischen.
-- Eine Provider-Erweiterung des manuellen Übergangsmodus ändert die n8n-Runtime-Logik nicht.
-
-### 4.3 Abschaltbedingung der Übergangslösung
-
-Sobald der produktive n8n-Router für den direkten Entwicklungsworkflow nachweislich:
-
-1. Scope/Risiko/Komplexität bewertet,
-2. erforderliche Route/Fähigkeitsklasse zuverlässig bestimmt,
-3. den ausführenden Modell-/Providerpfad automatisch auswählt,
-4. die erforderlichen Qualitäts- und Sicherheits-Gates einhält,
-5. und dieser Pfad als verbindlicher Standard freigegeben wurde,
-
-wird `TEMPORARY_MANUAL_MODEL_ROUTING` deaktiviert. Danach ist für diesen Workflow ausschließlich `AUTOMATED_N8N_ROUTING` zulässig.
+Sobald die in `docs/MODEL_ROUTING.md` dokumentierte Abschaltbedingung erfüllt ist, wird der manuelle Übergangsmodus deaktiviert.
 
 ## 5. Execution Loop
 
-Für nicht-triviale Änderungen gilt verbindlich:
+Für nicht-triviale Änderungen gilt:
 
 ```text
 PLAN → IMPLEMENT → VERIFY → EVALUATE
                          ├─ PASS → PUBLISH/REVIEW
                          ├─ RETRY → REPAIR → VERIFY
-                         ├─ ASK_USER → stoppen und Entscheidung einholen
+                         ├─ ASK_USER → menschliche Entscheidung/Freigabe
                          └─ ABORT → sicher stoppen und dokumentieren
 ```
 
-Detailregeln: `docs/LOOP_ENGINEERING.md`.
+Detailprozess: `docs/LOOP_ENGINEERING.md`.
 
-### PLAN
+- vor nicht-trivialer Implementierung `npm run integrity:start`,
+- kleinste sinnvolle ticketbezogene Änderung umsetzen,
+- zuerst gezielte, danach alle laut Scope/DoD erforderlichen Prüfungen,
+- `ASK_USER` nur für echte menschliche Entscheidungen/Freigaben,
+- maximal drei Reparaturversuche pro zusammenhängender Fehlerursache; fehlgeschlagene Strategie nicht unverändert wiederholen.
 
-- `npm run integrity:start` ausführen und nur bei `PASS` fortfahren.
-- Ticket, Scope, Akzeptanzkriterien und Nicht-Ziele erfassen.
-- relevante Dateien, Abhängigkeiten, Risiken und Tests bestimmen.
-- erforderliche Fähigkeitsstufe bestimmen.
-- für den späteren Abschlussabgleich betroffene Confluence-Seiten identifizieren.
+Die Workflow-Details stehen in `ticket-implementation` und `change-verification`.
 
-### IMPLEMENT
+## 6. Git & Publishing
 
-- kleinste sinnvolle Änderung umsetzen.
-- bei Bugs nach Möglichkeit zuerst Regression reproduzierbar machen.
-- Architektur- und Modulgrenzen respektieren.
-- keine zusätzlichen Features, Paket-Upgrades oder Nebenbaustellen ohne eigenen Jira-Vorgang.
-
-### VERIFY
-
-- vor fachlichen Prüfungen `npm run integrity:verify` ausführen,
-- zuerst gezielte Tests,
-- danach die laut DoD und Scope erforderlichen vollständigen Prüfungen,
-- UI-/Interaktionsänderungen zusätzlich gemäß `docs/BROWSER_E2E_POLICY.md` prüfen.
-
-### EVALUATE
-
-Mindestens bewerten:
-
-- correctness,
-- acceptance criteria,
-- scope,
-- regression risk,
-- security,
-- data integrity,
-- test quality,
-- documentation,
-- evidence.
-
-Ergebnis: `PASS`, `RETRY`, `ASK_USER` oder `ABORT`.
-
-Maximal drei Reparaturversuche pro zusammenhängender Fehlerursache. Eine nachweislich fehlgeschlagene Strategie nicht unverändert wiederholen.
-
-## 6. Git- und Publishing-Regeln
-
-- Niemals direkt auf `main` entwickeln oder pushen.
-- Aufgaben-Branch vom aktuellen `main` erstellen.
-- Branch-Namen enthalten den Jira-Key.
-- Fremde oder unklare uncommittierte Änderungen niemals überschreiben, löschen, resetten, stashen oder mitcommitten, um ein Gate zu umgehen.
-- Vor der Implementierung muss für eigenständig bearbeitbare Repository-Arbeit ein passendes GitHub Issue existieren, sofern keine dokumentierte Ausnahme gilt.
-- Jira und GitHub Issue gegenseitig verknüpfen.
-- Branch, Commits und Pull Request enthalten den Jira-Key.
-- Pull Request referenziert das GitHub Issue mit `Refs #<Nummer>`; keine automatische Schließformel allein durch Merge.
-- Vor Push/PR `npm run integrity:finish` ausführen.
+- niemals direkt auf `main` entwickeln oder pushen,
+- Aufgaben-Branch vom aktuellen `main`; Branch-Name enthält Jira-Key,
+- fremde/unklare Änderungen niemals überschreiben, löschen, resetten, stashen oder mitcommitten, um ein Gate zu umgehen,
+- vor eigenständig bearbeitbarer Repository-Arbeit passendes GitHub Issue sicherstellen, sofern keine dokumentierte Ausnahme gilt,
+- Jira ↔ GitHub Issue ↔ Branch ↔ Commit ↔ PR eindeutig verknüpfen,
+- PR referenziert das GitHub Issue mit `Refs #<Nummer>`,
+- vor Push/PR `npm run integrity:finish`.
 
 Branch-Schema:
 
-- Feature: `feature/KAN-XX-kurzer-name`
-- Bugfix: `fix/KAN-XX-kurzer-name`
-- Refactoring: `refactor/KAN-XX-kurzer-name`
-- Tests: `test/KAN-XX-kurzer-name`
-- Dokumentation: `docs/KAN-XX-kurzer-name`
+- `feature/KAN-XX-kurzer-name`
+- `fix/KAN-XX-kurzer-name`
+- `refactor/KAN-XX-kurzer-name`
+- `test/KAN-XX-kurzer-name`
+- `docs/KAN-XX-kurzer-name`
 
 ## 7. Safety / Stop Conditions
 
 Sofort stoppen bzw. menschliche Freigabe verlangen bei:
 
-- Authentifizierungs-/Session-Sicherheitsänderungen,
-- Änderungen an Supabase RLS oder Berechtigungsmodellen,
-- destruktiven oder riskanten Datenbankmigrationen,
-- möglichem Datenverlust,
+- Auth-/Session-Sicherheitsänderungen,
+- Supabase-RLS-/Berechtigungsänderungen,
+- destruktiven/riskanten Migrationen oder möglichem Datenverlust,
 - Secrets, API-Keys, Tokens oder produktiven Zugangsdaten,
 - wesentlich erweitertem Scope,
 - untrennbaren fremden Änderungen,
 - drei erfolglosen Reparaturversuchen,
-- fachlichen Entscheidungen oder Freigaben, die nicht sicher aus Jira/DoD/Repository ableitbar sind.
+- fachlichen Entscheidungen/Freigaben, die nicht sicher aus Jira/DoD/Repository ableitbar sind.
 
-Secrets dürfen niemals in Code, Logs, Tests, Commits, Jira, GitHub oder Confluence aufgenommen werden.
+Secrets niemals in Code, Logs, Tests, Commits, Jira, GitHub, Confluence oder Handover aufnehmen.
 
-Bei irregulärer Beendigung `npm run integrity:abort` ausführen und den unveränderten Zustandsnachweis im Jira-Vorgang dokumentieren.
+Bei irregulärer Beendigung `npm run integrity:abort` und Zustandsnachweis im Jira-Vorgang.
 
-## 8. Verification Policies
+## 8. Verification
 
-Die vollständigen Detailanforderungen stehen in den jeweiligen Policies und in der Definition of Done.
+Verwende `change-verification` plus die zum Scope passenden Policies.
 
-Grundsätzlich für den finalen Kandidaten, soweit im Projekt verfügbar und laut Scope erforderlich:
+Mindestens gilt:
 
-```bash
-npm test
-npm run test:coverage
-npx tsc --noEmit
-npm run build
-```
-
-Zusätzlich:
-
-- `git diff --check`,
-- relevante Lint-/Integrity-Prüfungen,
-- Browser-/E2E-Prüfung gemäß `docs/BROWSER_E2E_POLICY.md` bei sichtbarem/interaktivem Verhalten,
-- Sicherheits-/Datenintegritätsprüfung im betroffenen Scope.
-
-Prüfungen nicht abschwächen, überspringen oder löschen, nur damit der Stand grün erscheint. Weiterhin gültige Nachweise dürfen wiederverwendet werden, wenn Commit/Arbeitsbaum und relevante Quellen unverändert sind.
+- erforderliche Tests/Build/Typecheck/Lint/Integrity-Prüfungen tatsächlich ausführen,
+- `git diff --check` und finalen Diff prüfen,
+- bei sichtbarem/interaktivem Verhalten `docs/BROWSER_E2E_POLICY.md` anwenden,
+- Security und Datenintegrität im betroffenen Scope prüfen,
+- Tests/Gates niemals abschwächen, überspringen oder löschen, nur damit der Stand grün erscheint,
+- Nachweise nur wiederverwenden, wenn relevanter Commit/Arbeitsbaum und Quellen unverändert sind,
+- fehlende erforderliche Test-Secrets sind Blocker, kein PASS.
 
 ## 9. Completion / Definition of Done
 
-`technisch reviewbereit` ist **nicht** gleich Jira `Erledigt`.
+`technisch reviewbereit` ist nicht Jira `Erledigt`.
 
-Vor `technisch reviewbereit` müssen mindestens erfüllt sein:
+Verwende `handover-completion` und `docs/agent-context/process-jira.md`.
 
-- Akzeptanzkriterien erfüllt,
-- Scope eingehalten,
-- erforderliche Tests/Build/Typecheck erfolgreich,
-- erforderliche Browser-/E2E-Prüfung tatsächlich erfolgreich ausgeführt,
-- Sicherheits- und Datenintegritätsregeln eingehalten,
-- finaler Diff geprüft,
-- GitHub Issue/Jira/Branch/Commit/PR korrekt verknüpft,
-- Modell-Routing-Betriebsmodus korrekt angewendet,
-- offene Risiken und Repair-Loops dokumentiert.
+Vor Review-Readiness müssen Akzeptanzkriterien, Scope, Pflichtprüfungen, Security/Datenintegrität, finaler Diff und Verknüpfungen stimmen.
 
-Vor Jira `Erledigt` zusätzlich:
+Jira darf erst nach bestätigtem Merge, erforderlicher Nachprüfung, geklärtem maßgeblichem PR-/Copilot-Review und Confluence-Abgleich auf `Erledigt` gesetzt werden. Danach das GitHub Issue schließen.
 
-1. Pull Request erfolgreich reviewt und nach `main` gemerged,
-2. erforderliche Nachprüfung abgeschlossen,
-3. Projekt-Hub und fachlich betroffene Confluence-Seiten geprüft/aktualisiert,
-4. falls keine Confluence-Änderung nötig ist: `Confluence geprüft – keine Aktualisierung erforderlich` im Jira-Abschlussnachweis.
+## 10. Browser / E2E
 
-Danach in dieser Reihenfolge abschließen:
+Bei UI-, Interaktions-, Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- oder Synchronisationsänderungen `docs/BROWSER_E2E_POLICY.md` laden.
 
-1. Jira auf `Erledigt` setzen,
-2. anschließend das GitHub Issue mit Abschlussnachweis schließen.
-
-Die vollständige Definition of Done im Confluence-Projekt-Hub bleibt verbindlich.
-
-## 10. Browser-/E2E-Policy
-
-Bei UI-, Interaktions-, Timer-, Semester-, Aufgaben-, Projekt-, Statistik-, Dashboard-, Navigations-, Persistenz- oder Synchronisationsänderungen die verbindliche Detailpolicy laden:
-
-- `docs/BROWSER_E2E_POLICY.md`
-
-Der isolierte Test-Account ist für erforderliche Browser-/E2E-/Smoke-/Regressionstests vorab freigegeben. Nicht erneut fragen, ob der Test oder das Testkonto verwendet werden soll. Fehlende erforderliche Test-Secrets sind ein Blocker und dürfen nicht als PASS behandelt werden.
+Der isolierte Test-Account ist für erforderliche Browser-/E2E-/Smoke-/Regressionstests vorab freigegeben. Nicht erneut um Erlaubnis fragen.
 
 ## 11. Copilot Fallback
 
-Der GitHub-Copilot-Fallback ist **kein normaler Routing-Modus** und wird nur aktiviert, wenn der Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt.
+Nur aktiv, wenn der Benutzerauftrag mit `[COPILOT-FALLBACK]` beginnt. Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt.
 
-Ein erreichtes ChatGPT-/Codex-Nutzerlimit wird nicht automatisch erkannt. Ohne expliziten Marker bleibt der normale Entwicklungsworkflow aktiv.
-
-Zentrale Anleitung:
-
-- Confluence: **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“**
-- `https://studien-lernplan-app.atlassian.net/wiki/spaces/PROJEKTHUB/pages/13697025`
+Zentrale Anleitung: Confluence **„KI-Entwicklungsworkflow – Codex- und Copilot-Fallback“**.
 
 ## 12. Abschlussnachweis
 
-Der Abschlussbericht nennt kurz:
+Kurz dokumentieren:
 
 - Jira-Key und GitHub Issue,
-- verwendete Skills und Context Router/Policies,
+- verwendete Skills, Router und Policies,
 - untersuchte Dateien/Bereiche,
-- ausgeführte und wiederverwendete Prüfungen,
-- verwendeten Routing-Modus,
-- `requiredCapability`,
-- `activeProvider`, `activeModel` und `activeCapability` nur wenn zuverlässig bekannt, sonst `unknown`,
-- Vollscan ja/nein und gegebenenfalls Begründung,
+- ausgeführte/wiederverwendete Prüfungen,
+- Routing-Modus und `requiredCapability`,
+- `activeProvider`, `activeModel`, `activeCapability` nur wenn zuverlässig bekannt, sonst `unknown`,
+- Vollscan ja/nein und Grund,
 - Commit/PR/Review-/Merge-Status,
-- offene Risiken oder Blocker.
+- offene Risiken/Blocker.
 
 ## Verknüpfte Vorgänge
 
-- KAN-30 – Entwicklungs- und Jira-Workflow dokumentieren
-- KAN-72 – Isolierten Testnutzer und Browser-End-to-End-Tests einführen
-- KAN-73 – Kontrollierten Entwicklungs-Loop für Codex einführen
-- KAN-74 – AGENTS.md erstellen und mit Definition of Done verknüpfen
-- KAN-109 – Browser-/E2E-Regressionstest erweitern und Test-Account ohne Rückfrage verbindlich machen
-- KAN-110 – n8n-Automatisierungs- und KI-Routing-Schicht mit Codex-Orchestrierung einführen
-- KAN-127 – KI-Router, Modellwahl, Eskalation und Kostenmetriken für n8n umsetzen
-- KAN-147 – Modell-Routing-Betriebsmodi verbindlich trennen
-- KAN-157 – Agenten-Memory mit Router-Dateien und Progressive Context Loading einführen
-- KAN-158 – Wiederverwendbare Agent Skills für Entwicklungsaufgaben standardisieren
-- KAN-161 – AGENTS.md als Agent Operating System refaktorieren und manuelles Modell-Routing providerunabhängig machen
+- KAN-30 – Entwicklungs- und Jira-Workflow
+- KAN-72 / KAN-109 – isolierte Browser-/E2E-Tests
+- KAN-73 / KAN-74 – kontrollierter Loop und AGENTS.md
+- KAN-110 / KAN-127 / KAN-147 – n8n- und Modell-Routing
+- KAN-157 – Progressive Context Loading
+- KAN-158 – wiederverwendbare Agent Skills
+- KAN-161 – Agent-OS-/providerneutrales Routing
