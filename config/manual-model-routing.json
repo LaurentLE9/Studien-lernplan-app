@@ -42,5 +42,12 @@
         }
       }
     }
+  },
+  "sourceNotes": {
+    "anthropic": {
+      "verifiedDate": "2026-09-05",
+      "source": "Official Anthropic model documentation",
+      "policy": "Review mappings when Anthropic releases or deprecates relevant model tiers."
+    }
   }
 }
